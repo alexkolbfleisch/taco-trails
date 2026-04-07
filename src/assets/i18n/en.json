@@ -6,6 +6,7 @@
     "TAB_PLAY": "Play",
     "TAB_REACHABILITY": "Reachability Graph",
     "TAB_PROCESS": "Process Net",
+    "TAB_TOKEN_TRAIL": "Token Trail",
     "REACHABILITY_GRAPH": {
         "TOGGLE_VIEW": "Toggle View Mode",
         "BUTTON_VALIDATE_NET": "Validate Reachability Graph",
@@ -239,6 +240,27 @@
         "INSTRUCTION_VALIDATE_TOAST": "Click the checklist button to validate the process net.",
         "INSTRUCTION_AUTO_FIRING": "Auto Creation",
         "INSTRUCTION_AUTO_FIRING_TEXT": "In learn mode, clicking activated transitions in the Petri net automatically builds the process net."
+    },
+    "TOKEN_TRAIL": {
+        "VALIDATION": {
+            "RULE_ACTIVATION": {
+                "EVENT_WITHOUT_INCOMING_CONDITION": "Event {{event}} has no incoming connection from a condition.",
+                "INVALID_CONNECTION_TYPE": "Invalid connection type between {{source}} and {{target}}.",
+                "EVENT_LABEL_NOT_FOUND": "No transition in the Petri net matches event label {{event}}.",
+                "EVENT_LABEL_AMBIGUOUS": "Event label {{event}} is ambiguous ({{count}} transitions in the Petri net).",
+                "NOT_ENOUGH_PRESET_WEIGHT": "Event {{event}} at place {{place}} requires incoming arc weight {{expectedArcWeight}}, but trail provides {{actualArcWeight}}."
+            },
+            "RULE_RISE": {
+                "EVENT_WITHOUT_OUTGOING_CONDITION": "Event {{event}} has no outgoing connection to a condition.",
+                "RISE_MISMATCH": "Rise mismatch for event {{event}} at place {{place}}: expected {{expected}}, actual {{actual}}.",
+                "PLACE_NOT_FEASIBLE": "No feasible token trail construction found for place {{place}}.",
+                "MISSING_EVENT_FOR_TRANSITION": "Place {{place}} requires transition {{transition}} in the token trail, but no matching event exists."
+            },
+            "RULE_INITIALIZATION": {
+                "NO_START_CONDITION": "No start condition is defined.",
+                "MISSING_START_CONDITION_FOR_MARKED_PLACE": "Marked place {{place}} ({{expected}} token(s)) has no start condition in the token trail."
+            }
+        }
     },
     "EXAMPLE_MENU": {
         "TOOLTIP": "Open exam files",

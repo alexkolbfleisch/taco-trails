@@ -6,6 +6,7 @@
     "TAB_PLAY": "Schalten",
     "TAB_REACHABILITY": "Erreichbarkeitsgraph",
     "TAB_PROCESS": "Prozessnetz",
+    "TAB_TOKEN_TRAIL": "Token Trail",
     "REACHABILITY_GRAPH": {
         "TOGGLE_VIEW": "Ansichtsmodus umschalten",
         "BUTTON_VALIDATE_NET": "Erreichbarkeitsgraph validieren",
@@ -240,6 +241,27 @@
         "INSTRUCTION_VALIDATE_TOAST": "Klicken Sie auf Validieren Schaltfläche, um Ihr Prozessnetz zu überprüfen.",
         "INSTRUCTION_AUTO_FIRING": "Automatische Erstellung",
         "INSTRUCTION_AUTO_FIRING_TEXT": "Im Lernmodus erstellt das Klicken auf aktivierte Transitionen im Petrinetz automatisch das Prozessnetz."
+    },
+    "TOKEN_TRAIL": {
+        "VALIDATION": {
+            "RULE_ACTIVATION": {
+                "EVENT_WITHOUT_INCOMING_CONDITION": "Event {{event}} hat keine eingehende Verbindung von einer Condition.",
+                "INVALID_CONNECTION_TYPE": "Ungültiger Verbindungstyp zwischen {{source}} und {{target}}.",
+                "EVENT_LABEL_NOT_FOUND": "Keine Transition im Petrinetz passt zum Event-Label {{event}}.",
+                "EVENT_LABEL_AMBIGUOUS": "Event-Label {{event}} ist mehrdeutig ({{count}} Transitionen im Petrinetz).",
+                "NOT_ENOUGH_PRESET_WEIGHT": "Event {{event}} an Stelle {{place}} benötigt eingehendes Kantengewicht {{expectedArcWeight}}, der Trail liefert jedoch {{actualArcWeight}}."
+            },
+            "RULE_RISE": {
+                "EVENT_WITHOUT_OUTGOING_CONDITION": "Event {{event}} hat keine ausgehende Verbindung zu einer Condition.",
+                "RISE_MISMATCH": "Rise-Abweichung für Event {{event}} an Stelle {{place}}: erwartet {{expected}}, ist {{actual}}.",
+                "PLACE_NOT_FEASIBLE": "Für Stelle {{place}} wurde keine zulässige Token-Trail-Konstruktion gefunden.",
+                "MISSING_EVENT_FOR_TRANSITION": "Für Stelle {{place}} wird die Transition {{transition}} im Token Trail benötigt, aber es existiert kein passendes Event."
+            },
+            "RULE_INITIALIZATION": {
+                "NO_START_CONDITION": "Es ist keine Start-Condition definiert.",
+                "MISSING_START_CONDITION_FOR_MARKED_PLACE": "Markierte Stelle {{place}} ({{expected}} Marke(n)) hat keine Start-Condition im Token Trail."
+            }
+        }
     },
     "EXAMPLE_MENU": {
         "TOOLTIP": "Klausuraufgaben öffnen",

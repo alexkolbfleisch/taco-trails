@@ -1,0 +1,21 @@
+<svg:path
+    xmlns:svg="http://www.w3.org/2000/svg"
+    [attr.d]="pathData()"
+    stroke="black"
+    stroke-width="2"
+    fill="none"
+    marker-end="url(#arrowhead)" />
+
+@if (hasLabel()) {
+    <svg:text
+        xmlns:svg="http://www.w3.org/2000/svg"
+        [attr.x]="labelPosition().x"
+        [attr.y]="labelPosition().y"
+        text-anchor="middle"
+        dominant-baseline="central"
+        class="arc-label"
+        fill="black"
+        font-size="12">
+        {{ displayText() }}
+    </svg:text>
+}

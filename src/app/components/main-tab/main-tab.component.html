@@ -34,6 +34,14 @@
             </ng-template>
             <app-process-net></app-process-net>
         </mat-tab>
+
+        <mat-tab>
+            <ng-template mat-tab-label>
+                <mat-icon class="tab-icon">linear_scale</mat-icon>
+                {{ 'TAB_TOKEN_TRAIL' | translate }}
+            </ng-template>
+            <app-token-trail></app-token-trail>
+        </mat-tab>
     </mat-tab-group>
     <div class="action-sidebar">
         <app-upload></app-upload>

@@ -5,6 +5,7 @@ import { DrawComponent } from '../tab-toolbar/draw/draw.component';
 import { PlayComponent } from '../tab-toolbar/play/play.component';
 import { ReachabilityGraphComponent } from '../tab-toolbar/reachability-graph/reachability-graph.component';
 import { ProcessNetComponent } from '../tab-toolbar/process-net/process-net.component';
+import { TokenTrailComponent } from '../tab-toolbar/token-trail/token-trail.component';
 import { Tab } from '../../classes/tabs';
 import { Diagram } from '../../classes/diagram/diagram';
 import { TabStateService } from '../../services/tab-state.service';
@@ -30,6 +31,7 @@ import { TupleInputButtonComponent } from '../tab-toolbar/tuple-input-button/tup
         PlayComponent,
         ReachabilityGraphComponent,
         ProcessNetComponent,
+        TokenTrailComponent,
         SaveComponent,
         UploadComponent,
         ClearNetButtonComponent,
@@ -47,7 +49,7 @@ export class MainTabComponent implements OnInit {
     private _tabStateService: TabStateService = inject(TabStateService);
     private _sourcePetriNetService: SourcePetriNetService = inject(SourcePetriNetService);
     private _displayService: DisplayService = inject(DisplayService);
-    private readonly _tabs: Tab[] = [Tab.DRAW, Tab.PLAY, Tab.REACHABILITY_GRAPH, Tab.PROCESS_NET];
+    private readonly _tabs: Tab[] = [Tab.DRAW, Tab.PLAY, Tab.REACHABILITY_GRAPH, Tab.PROCESS_NET, Tab.TOKEN_TRAIL];
 
     selectedIndex = Tab.DRAW; // Select which tab to show by default
 

@@ -1,0 +1,141 @@
+<div class="drawing-area-container">
+    <svg
+        #drawingArea
+        class="drawing-canvas"
+        data-export-id="process-net-draw"
+        [class.drag-over]="isDragOver()"
+        [attr.viewBox]="viewBox()"
+        preserveAspectRatio="xMidYMid meet"
+        (drop)="onDrop($event)"
+        (dragover)="onDragOver($event)"
+        (dragleave)="onDragLeave()"
+        (contextmenu)="preventContext($event)"
+        (mousedown)="onCanvasPanStart($event)"
+        (mousemove)="onCanvasPan($event)"
+        (mouseup)="onCanvasPanEnd()"
+        (mouseleave)="onCanvasPanEnd()"
+        (wheel)="onCanvasWheel($event)">
+        <defs>
+            <marker id="arrowhead-draw" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+                <polygon points="0 0, 10 3.5, 0 7" fill="black" />
+            </marker>
+        </defs>
+        <!-- Grid background for better visual reference -->
+        <pattern id="grid" width="50" height="50" patternUnits="userSpaceOnUse">
+            <path d="M 50 0 L 0 0 0 50" fill="none" stroke="lightgray" stroke-width="0.5" />
+        </pattern>
+        <rect
+            #gridRect
+            [attr.x]="viewBoxObj().minX - viewBoxObj().width"
+            [attr.y]="viewBoxObj().minY - viewBoxObj().height"
+            [attr.width]="viewBoxObj().width * 3"
+            [attr.height]="viewBoxObj().height * 3"
+            fill="url(#grid)" />
+        <!-- Render connection lines behind nodes -->
+        @for (line of connectionLines(); track line.id) {
+        <g
+            class="connection-group"
+            [class.invalid-connection]="isConnectionInvalid(line.id)"
+            [attr.data-connection-id]="line.id">
+            @if (getConnectionTooltip(line.id)) {
+            <title>{{ getConnectionTooltip(line.id) }}</title>
+            }
+            <line
+                class="connection-hit-target"
+                [attr.x1]="line.x1"
+                [attr.y1]="line.y1"
+                [attr.x2]="line.x2"
+                [attr.y2]="line.y2"
+                (mousedown)="onConnectionMouseDown($event, line.id)" />
+            <line
+                class="connection-line"
+                [attr.x1]="line.x1"
+                [attr.y1]="line.y1"
+                [attr.x2]="line.x2"
+                [attr.y2]="line.y2"
+                stroke="black"
+                stroke-width="2"
+                marker-end="url(#arrowhead-draw)" />
+            @if (line.weight > 1) {
+            <text
+                [attr.x]="(line.x1 + line.x2) / 2"
+                [attr.y]="(line.y1 + line.y2) / 2 - 10"
+                text-anchor="middle"
+                dominant-baseline="central"
+                class="connection-weight-label">
+                {{ line.weight }}
+            </text>
+            }
+        </g>
+        }
+        <!-- Render all drawn elements -->
+        @for (element of drawnElements(); track $index) {
+        <g
+            class="element-wrapper"
+            [class.merge-anchor]="isMergeAnchor(element)"
+            [class.invalid-node]="isNodeInvalid(element.id)"
+            [class.merge-animating]="isMergeAnimating(element)"
+            [attr.data-element-id]="element.id">
+            <g
+                appSvgEventNode
+                [diagramNode]="element"
+                [selected]="selectedElementId() === element.id" />
+            @if (isMergeAnchor(element)) {
+            <g class="merge-badge" pointer-events="none">
+                <circle [attr.cx]="element.x + 24" [attr.cy]="element.y - 24" r="12" fill="#1565c0" />
+                <text
+                    [attr.x]="element.x + 24"
+                    [attr.y]="element.y - 24"
+                    text-anchor="middle"
+                    dominant-baseline="central"
+                    fill="white"
+                    font-size="10"
+                    font-weight="700">
+                    {{ getConditionGroupSize(element.id) }}
+                </text>
+            </g>
+            }
+            <rect
+                class="drag-overlay"
+                [attr.x]="element.x - 60"
+                [attr.y]="element.y - 60"
+                width="120"
+                height="120"
+                fill="none"
+                stroke="none"
+                pointer-events="all"
+                style="cursor: move"
+                (mousedown)="onElementMouseDown($event, element)"
+                (dblclick)="onElementDoubleClick($event, element)"
+                (contextmenu)="onElementRightClick($event, element)" />
+
+            @if (getElementTooltip(element.id)) {
+            <foreignObject
+                class="node-info-fo"
+                [attr.x]="element.x + 8"
+                [attr.y]="element.y - 36"
+                width="28"
+                height="28">
+                <button
+                    mat-icon-button
+                    class="node-info-button"
+                    [matTooltip]="getElementTooltip(element.id)"
+                    matTooltipPosition="above"
+                    matTooltipClass="token-trail-tooltip"
+                    type="button"
+                    aria-label="Show validation info">
+                    <mat-icon>info</mat-icon>
+                </button>
+            </foreignObject>
+            }
+        </g>
+        }
+    </svg>
+    <div class="instruction-panel">
+        <app-draw-toolbar
+            [headerTitle]="'PROCESS_NET.DRAWING_AREA_HEADER'"
+            [helpTooltip]="'PROCESS_NET.HELP_TOOLTIP'"
+            [actions]="toolbarActions()"
+            [instructions]="toolbarInstructions()" />
+    </div>
+</div>

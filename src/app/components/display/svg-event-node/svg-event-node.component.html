@@ -1,0 +1,97 @@
+<!-- Render conditions as circles -->
+@if (isCondition()) {
+    <!-- Selection highlight -->
+    <svg:circle
+        xmlns:svg="http://www.w3.org/2000/svg"
+        [attr.cx]="circleX()"
+        [attr.cy]="circleY()"
+        [attr.r]="RADIUS + 6"
+        fill="none"
+        [attr.stroke]="selectionStrokeColor()"
+        stroke-width="4"
+        pointer-events="none" />
+
+    <svg:circle
+        xmlns:svg="http://www.w3.org/2000/svg"
+        [attr.cx]="circleX()"
+        [attr.cy]="circleY()"
+        [attr.r]="RADIUS"
+        [attr.fill]="conditionFillColor()"
+        stroke="black"
+        stroke-width="2" />
+
+    <!-- Tokens visualization inside condition -->
+    @if (!hideTokens() && !showTokenNumber()) {
+        @for (token of tokenPositions(); track token.x + '-' + token.y) {
+            <svg:circle
+                xmlns:svg="http://www.w3.org/2000/svg"
+                [attr.cx]="token.x"
+                [attr.cy]="token.y"
+                r="5"
+                fill="black" />
+        }
+    } @else if (!hideTokens()) {
+        <svg:text
+            xmlns:svg="http://www.w3.org/2000/svg"
+            [attr.x]="circleX()"
+            [attr.y]="circleY()"
+            text-anchor="middle"
+            dominant-baseline="central"
+            class="token-count"
+            fill="black">
+            {{ tokenCount() }}
+        </svg:text>
+    }
+
+    <!-- Node label -->
+    <svg:text
+        xmlns:svg="http://www.w3.org/2000/svg"
+        [attr.x]="textX()"
+        [attr.y]="textY()"
+        text-anchor="middle"
+        dominant-baseline="central"
+        fill="black"
+        [attr.class]="conditionLabelClass()">
+        {{ displayLabel() }}
+    </svg:text>
+}
+
+<!-- Render events as rectangles -->
+@if (isEvent()) {
+    <!-- Selection highlight -->
+    <svg:rect
+        xmlns:svg="http://www.w3.org/2000/svg"
+        [attr.x]="rectX() - 6"
+        [attr.y]="rectY() - 6"
+        [attr.width]="rectWidth() + 12"
+        [attr.height]="EVENT_SIZE + 12"
+        fill="none"
+        [attr.stroke]="selectionStrokeColor()"
+        stroke-width="4"
+        rx="4"
+        pointer-events="none" />
+
+    <svg:rect
+        xmlns:svg="http://www.w3.org/2000/svg"
+        [attr.x]="rectX()"
+        [attr.y]="rectY()"
+        [attr.width]="rectWidth()"
+        [attr.height]="EVENT_SIZE"
+        [attr.fill]="eventFillColor()"
+        [attr.stroke]="eventStrokeColor()"
+        [attr.stroke-width]="eventStrokeWidth()"
+        [attr.rx]="eventCornerRadius()" />
+
+    <svg:text
+        xmlns:svg="http://www.w3.org/2000/svg"
+        [attr.x]="textX()"
+        [attr.y]="textY()"
+        text-anchor="middle"
+        dominant-baseline="central"
+        fill="black"
+        [attr.class]="eventLabelClass()">
+        {{ displayLabel() }}
+    </svg:text>
+}
+
+

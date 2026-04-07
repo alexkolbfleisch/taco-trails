@@ -33,6 +33,7 @@ export class SvgNodeComponent {
     readonly showInnerLabel = input<boolean>(false);
     readonly transitionLabelPlacement = input<'inside' | 'below'>('inside');
     readonly disableActiveColoring = input<boolean>(false);
+    readonly fillColorOverride = input<string | null>(null);
 
     readonly isTransitionAndActive = computed(() => {
         if (this.disableActiveColoring()) return false;
@@ -66,6 +67,9 @@ export class SvgNodeComponent {
         if (this.isFiring()) {
             return 'lime';
         }
+        if (this.fillColorOverride()) {
+            return this.fillColorOverride()!;
+        }
         return this.fillColor();
     });
 
@@ -91,6 +95,9 @@ export class SvgNodeComponent {
     });
 
     readonly placeFillColor = computed(() => {
+        if (this.fillColorOverride()) {
+            return this.fillColorOverride()!;
+        }
         return this.fillColor();
     });
 

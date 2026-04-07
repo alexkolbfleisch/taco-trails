@@ -3,4 +3,5 @@ export enum Tab {
     PLAY,
     REACHABILITY_GRAPH,
     PROCESS_NET,
+    TOKEN_TRAIL,
 }

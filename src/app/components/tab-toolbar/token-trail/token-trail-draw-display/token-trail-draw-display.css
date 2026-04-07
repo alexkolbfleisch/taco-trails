@@ -1,0 +1,156 @@
+.drawing-canvas {
+    width: 100%;
+    flex: 1;
+    min-height: 0;
+    border: 1px dashed #bdbdbd; /* subtler border */
+    background-color: white;
+    border-radius: 6px;
+    box-shadow: inset 0 0 4px rgba(0, 0, 0, 0.03);
+    transition: all 0.2s ease;
+}
+
+.instruction-panel {
+    padding-top: 5px;
+}
+
+.drawing-canvas:hover {
+    border-color: #1976d2;
+}
+
+.drawing-canvas.drag-over {
+    border-color: #4caf50;
+    border-width: 3px;
+    background-color: #e8f5e9;
+    box-shadow: inset 0 0 20px rgba(76, 175, 80, 0.2);
+}
+
+.instructions {
+    display: none; /* removed in favor of help menu overlay */
+}
+
+.validation-result {
+    margin: 8px 0;
+    padding: 8px 12px;
+    border-radius: 6px;
+    border-left: 4px solid #888;
+    background: #f7f7f7;
+}
+
+.validation-result.valid {
+    border-color: #2e7d32;
+    background: #e8f5e9;
+}
+
+.validation-result.invalid {
+    border-color: #c62828;
+    background: #ffebee;
+}
+
+.validation-result ul {
+    margin: 6px 0 0 18px;
+}
+
+/* Styling for draggable elements */
+g[appSvgNode] {
+    cursor: move;
+    transition: opacity 0.2s;
+}
+
+g[appSvgNode]:hover {
+    opacity: 0.8;
+}
+
+g[appSvgNode]:active {
+    cursor: grabbing;
+}
+
+/* Prevent text selection on all SVG elements */
+svg text {
+    user-select: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    pointer-events: none;
+}
+
+.connection-weight-label {
+    font-size: 1.5em;
+    fill: #222;
+    background: white; /* not visible in SVG, but kept for potential future foreignObject */
+    pointer-events: none;
+}
+
+.connection-line {
+    stroke: #000;
+    stroke-width: 2;
+    pointer-events: none; /* do not capture, hit target handles */
+}
+
+.connection-group.invalid-connection .connection-line {
+    stroke: #c62828;
+    stroke-width: 3;
+}
+
+.connection-hit-target {
+    stroke: rgba(0, 0, 0, 0); /* invisible */
+    stroke-width: 14; /* larger clickable area */
+    cursor: pointer;
+}
+
+.element-wrapper.merge-anchor {
+    filter: drop-shadow(0 0 5px rgba(21, 101, 192, 0.45));
+}
+
+.element-wrapper.invalid-node {
+    filter: drop-shadow(0 0 6px rgba(198, 40, 40, 0.65));
+}
+
+.element-wrapper.merge-animating {
+    animation: merge-pop 0.22s ease-out;
+    transform-origin: center;
+    transform-box: fill-box;
+}
+
+.merge-badge {
+    pointer-events: none;
+}
+
+.node-info-fo {
+    overflow: visible;
+    pointer-events: all;
+}
+
+.node-info-button {
+    width: 28px;
+    height: 28px;
+    min-width: 28px;
+    padding: 0;
+    color: #ef6c00;
+    background: rgba(255, 255, 255, 0.92);
+    border: 1px solid rgba(239, 108, 0, 0.35);
+    border-radius: 50%;
+}
+
+.node-info-button .mat-icon {
+    font-size: 18px;
+    width: 18px;
+    height: 18px;
+    line-height: 18px;
+}
+
+.token-trail-tooltip {
+    white-space: pre-line;
+}
+
+@keyframes merge-pop {
+    0% {
+        transform: scale(1);
+    }
+    45% {
+        transform: scale(1.1);
+    }
+    100% {
+        transform: scale(1);
+    }
+}
+
