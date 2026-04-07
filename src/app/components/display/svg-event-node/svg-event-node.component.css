@@ -1,0 +1,55 @@
+.node-label {
+    font-family: Arial, sans-serif;
+    font-size: 14px;
+    fill: currentColor;
+    font-weight: bold;
+    pointer-events: none; /* Prevent text from interfering with mouse events */
+}
+
+.event-label {
+    font-family: Arial, sans-serif;
+    font-size: 14px;
+    fill: currentColor;
+    font-weight: bold;
+    pointer-events: none;
+}
+
+.event-label-below {
+    font-family: Arial, sans-serif;
+    font-size: 14px;
+    fill: currentColor;
+    font-weight: bold;
+    pointer-events: none;
+}
+
+.token-count {
+    font-family: Arial, sans-serif;
+    font-size: 12px;
+    font-weight: bold;
+    fill: black;
+    pointer-events: none;
+}
+
+.condition-label-inside {
+    font-family: Arial, sans-serif;
+    font-size: 14px;
+    fill: currentColor;
+    font-weight: bold;
+    pointer-events: none;
+}
+
+.event-label-inside {
+    font-family: Arial, sans-serif;
+    font-size: 14px;
+    fill: currentColor;
+    font-weight: bold;
+    pointer-events: none;
+}
+
+.event-inner-label {
+    font-family: Arial, sans-serif;
+    font-size: 14px;
+    fill: currentColor;
+    font-weight: bold;
+    pointer-events: none;
+}
