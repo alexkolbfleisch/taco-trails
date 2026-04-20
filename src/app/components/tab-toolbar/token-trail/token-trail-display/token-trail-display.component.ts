@@ -75,6 +75,11 @@ export class TokenTrailDisplayComponent extends DisplayComponent {
             this._tokenTrailStateService.setSelectedPetriPlaceId(node.id);
         }
 
+        if (this._tokenTrailStateService.displayMode() === 'puzzle') {
+            // Drag and drop is disabled in Puzzle mode
+            return;
+        }
+
         this.isDragging = false;
         this.dragStartPos = { x: event.clientX, y: event.clientY };
 

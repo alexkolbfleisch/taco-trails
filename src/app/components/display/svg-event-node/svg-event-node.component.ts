@@ -23,7 +23,7 @@ export class SvgEventNodeComponent {
 
     readonly diagramNode = input<DisplayableNode>();
 
-    // Mark if this node is currently selected (for connection creation)
+    readonly displayMode = input<'puzzle' | 'construction'>('puzzle');
     readonly selected = input<boolean>(false);
 
     clickNode = output<DisplayableNode>();
@@ -64,8 +64,15 @@ export class SvgEventNodeComponent {
      * Truncated display label for the node, adding ellipsis if it exceeds MAX_CHARS.
      */
     readonly displayLabel = computed(() => {
-        const label = this.diagramNode()?.displayLabel || '';
-        if (label.length > this.MAX_CHARS && !(this.diagramNode() instanceof StateNode)) {
+        const n = this.diagramNode();
+        let label = n?.displayLabel || '';
+
+        // If it's a Condition and we are in puzzle mode, use baseName as the visual label.
+        if (n instanceof Condition && this.displayMode() === 'puzzle') {
+            label = n.baseName || label;
+        }
+
+        if (label.length > this.MAX_CHARS && !(n instanceof StateNode)) {
             return label.substring(0, this.MAX_CHARS) + '...';
         }
         return label;
