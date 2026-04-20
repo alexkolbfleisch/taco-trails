@@ -1,0 +1,3 @@
+[submodule "ilpn-components"]
+	path = ilpn-components
+	url = https://github.com/ILPN/ILPN-Components.git
