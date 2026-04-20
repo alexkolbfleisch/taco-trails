@@ -55,7 +55,6 @@ import { Transition as IlpnTransition } from '../../../../../../ilpn-components/
 import { PartialOrder } from '../../../../../../ilpn-components/src/lib/models/po/model/partial-order';
 import { SpringEmbedderService } from '../../../../services/spring-embedder.service';
 
-
 interface GlobalDragData {
     // Source side still emits place/transition from the base Petri net.
     elementType: 'place' | 'transition';

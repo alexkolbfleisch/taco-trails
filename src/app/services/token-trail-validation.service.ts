@@ -98,7 +98,8 @@ export function validateTokenTrail(
         }
 
         for (const eventElement of events) {
-            const transitionId = Object.keys(net.labels).find((id) => net.labels[id] === eventElement.label) || eventElement.label;
+            const transitionId =
+                Object.keys(net.labels).find((id) => net.labels[id] === eventElement.label) || eventElement.label;
 
             if (!checkActivation(placeId, transitionId, eventElement, net, conditions, connections, issues)) {
                 isPlaceValid = false;
@@ -207,7 +208,12 @@ function checkActivation(
         issues.push({
             rule: 'ACTIVATION',
             messageKey: 'TOKEN_TRAIL.VALIDATION_ENABLING_FAILED',
-            messageParams: { place: placeId, transition: transitionId, expected: originalPrePlaceWeight, actual: calculatedAvailableTokens },
+            messageParams: {
+                place: placeId,
+                transition: transitionId,
+                expected: originalPrePlaceWeight,
+                actual: calculatedAvailableTokens,
+            },
             eventIds: [event.id],
         });
         return false;
