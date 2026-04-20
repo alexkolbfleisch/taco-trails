@@ -40,6 +40,10 @@ export class DiagramPlace extends DiagramNode {
         return SHAPE.CIRCLE;
     }
 
+    set label(value: string | undefined) {
+        this._label = value;
+    }
+
     // Expose original label (place id) if available
     get label(): string | undefined {
         return this._label;

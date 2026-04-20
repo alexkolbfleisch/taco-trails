@@ -12,7 +12,12 @@ import {
     ViewChild,
 } from '@angular/core';
 
-import { Condition, Event as LabeledEvent, LabeledNetEdge, LabeledNetNode } from '../../../../classes/labeled-net.model';
+import {
+    Condition,
+    Event as LabeledEvent,
+    LabeledNetEdge,
+    LabeledNetNode,
+} from '../../../../classes/labeled-net.model';
 import { DiagramNode } from '../../../../classes/diagram/diagram-node';
 import { Diagram } from '../../../../classes/diagram/diagram';
 import { DisplayService } from '../../../../services/display.service';
@@ -29,6 +34,7 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
+import { MatButtonToggleModule } from '@angular/material/button-toggle';
 import { GRAPH_FILENAMES, GRAPH_IDS, PLACE_RADIUS, TRANSITION_SIZE } from '../../../display/display.constants';
 import { TokenTrailStateService } from '../../../../services/token-trail-state.service';
 import { Subscription } from 'rxjs';
@@ -70,14 +76,22 @@ declare global {
 @Component({
     selector: 'app-token-trail-draw-display',
     standalone: true,
-    imports: [SvgEventNodeComponent, TranslateModule, DrawToolbarComponent, MatTooltipModule, MatButtonModule, MatIconModule],
+    imports: [
+        SvgEventNodeComponent,
+        TranslateModule,
+        DrawToolbarComponent,
+        MatTooltipModule,
+        MatButtonModule,
+        MatIconModule,
+        MatButtonToggleModule,
+    ],
     templateUrl: './token-trail-draw-display.html',
     providers: [PanningService],
     styleUrls: ['./token-trail-draw-display.css'],
 })
 export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterViewInit {
     @ViewChild('drawingArea') drawingArea!: ElementRef<SVGGraphicsElement>;
-    private stateService = inject(TokenTrailStateService);
+    protected stateService = inject(TokenTrailStateService);
 
     // Bind to service state
     readonly drawnElements = this.stateService.drawnElements;
@@ -133,12 +147,8 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
     readonly liveValidation = computed<ValidationResult | null>(() => {
         const triggerKey = this.validationTriggerKey();
         if (this._lastValidationTriggerKey === triggerKey) {
-            console.log("Last validation trigger key", this._lastValidationTriggerKey);
-            console.log("Last validation result", this._lastValidationResult);
             return this._lastValidationResult;
         }
-
-        console.log("NEW VALIDATION");
 
         const data = this.buildValidationInput();
         this._lastValidationTriggerKey = triggerKey;
@@ -187,7 +197,36 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
             isActive: !this.isDisabled(),
             action: () => this.onValidate(),
         },
+        {
+            icon: this.getModeToggleIcon(),
+            tooltip: this.getModeToggleTooltip(),
+            color: 'accent',
+            isActive: true, //TODO
+            action: () => this.toggleMode(),
+        },
+        {
+            icon: 'refresh',
+            tooltip: "TODO",
+            color: 'warn',
+            isActive: true, //TODO
+            action: () => this.createNewLPN(),
+        },
     ]);
+
+    private getModeToggleIcon(): string {
+        return this.stateService.displayMode() === 'puzzle' ? 'construction' : 'extension';
+    }
+
+    private getModeToggleTooltip(): string {
+        return this.stateService.displayMode() === 'puzzle'
+            ? 'PROCESS_NET.MODE_CONSTRUCTION'
+            : 'PROCESS_NET.MODE_PUZZLE';
+    }
+
+    private toggleMode(): void {
+        const nextMode = this.stateService.displayMode() === 'puzzle' ? 'construction' : 'puzzle';
+        this.stateService.setDisplayMode(nextMode);
+    }
 
     protected readonly toolbarInstructions = computed<DrawToolbarInstruction[]>(() => {
         return [
@@ -203,6 +242,7 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
 
     private draggedElement: Condition | LabeledEvent | null = null;
     private dragOffset = { x: 0, y: 0 };
+    private hasDragged = false;
     private svgElement: SVGSVGElement | null = null;
     private isDraggingElement = false;
     private dragStartedMergedAnchorId: string | null = null;
@@ -236,40 +276,14 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
 
     private readonly _tokenPreviewEffect = effect(() => {
         const selectedPlaceId = this.stateService.selectedPetriPlaceId();
-        const validation = this.liveValidation();
-        const diagram = this.resolveSourceNetForValidation() ?? undefined;
-        const requiredTokens = selectedPlaceId && diagram ? Math.max(0, Math.floor(diagram.startMarking[selectedPlaceId] ?? 0)) : 0;
-        const canShowTokens = !!selectedPlaceId && !!validation?.valid;
-
-        const tokenByConditionId = new Map<string, number>();
-        if (canShowTokens && selectedPlaceId) {
-            const matchingConditions = this.drawnElements()
-                .filter((node): node is Condition => node instanceof Condition)
-                .filter((condition) => (condition.label ?? condition.displayLabel) === selectedPlaceId)
-                .sort((a, b) => a.id.localeCompare(b.id));
-
-            let remaining = requiredTokens;
-            for (const condition of matchingConditions) {
-                if (remaining <= 0) {
-                    tokenByConditionId.set(condition.id, 0);
-                    continue;
-                }
-                tokenByConditionId.set(condition.id, 1);
-                remaining -= 1;
-            }
-            if (remaining > 0 && matchingConditions.length > 0) {
-                const first = matchingConditions[0];
-                tokenByConditionId.set(first.id, (tokenByConditionId.get(first.id) ?? 0) + remaining);
-            }
-        }
 
         let hasChanges = false;
         for (const node of this.drawnElements()) {
             if (!(node instanceof Condition)) {
                 continue;
             }
-            const desiredTokens = canShowTokens ? tokenByConditionId.get(node.id) ?? 0 : 0;
-            const desiredHideTokens = !canShowTokens;
+            const desiredTokens = selectedPlaceId ? node.getTrailTokens(selectedPlaceId) : 0;
+            const desiredHideTokens = !selectedPlaceId;
             if (node.tokenCount() !== desiredTokens || node.hideTokens !== desiredHideTokens) {
                 hasChanges = true;
                 break;
@@ -280,6 +294,7 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
             return;
         }
 
+        // We update the view to visually reflect the tokens for the selected Petri-Net place.
         this.stateService.updateDrawnElements((elements) =>
             elements.map((node) => {
                 if (!(node instanceof Condition)) {
@@ -287,13 +302,19 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
                 }
 
                 const updated = this.stateService.buildCondition(node.id, node.label ?? node.displayLabel, 0, {
-                    hideTokens: !canShowTokens,
+                    hideTokens: !selectedPlaceId,
                     labelPlacement: node.labelPlacement,
                     isStartPlace: node.isStartPlace,
+                    baseName: node.baseName,
                 });
-                updated.tokens = canShowTokens ? tokenByConditionId.get(node.id) ?? 0 : 0;
                 updated.x = node.x;
                 updated.y = node.y;
+                updated.baseName = node.baseName ?? node.label ?? node.displayLabel;
+                updated.trailMarkings = { ...node.trailMarkings };
+                updated.tokens = selectedPlaceId ? node.getTrailTokens(selectedPlaceId) : 0;
+
+                updated.updateDynamicLabel(); // Always compute the correct string based on trailMarkings first
+
                 return updated;
             }),
         );
@@ -394,6 +415,7 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
     };
 
     private handleCustomDrop(event: CustomEvent) {
+        if (this.stateService.displayMode() === 'puzzle') return;
         const detail = event.detail;
         if (!detail) {
             return;
@@ -415,10 +437,13 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
         const isSourceEvent = detail.elementType === 'transition';
 
         if (isSourceCondition) {
-            newNode = this.stateService.buildCondition(uniqueId, undefined, elementTokens, {
+            newNode = this.stateService.buildCondition(uniqueId, detail.elementId, elementTokens, {
                 isStartPlace: this.shouldMarkAsStartCondition(detail.elementId),
                 innerLabel: detail.elementId,
             });
+            // Im Konstruktionsmodus erhält die neue Condition direkt das Trail Marking der gezogenen Stelle:
+            (newNode as Condition).trailMarkings = { [detail.elementId]: 1 };
+            (newNode as Condition).updateDynamicLabel();
         } else if (isSourceEvent) {
             newNode = this.stateService.buildEvent(uniqueId, elementLabel, elementLabel);
         } else {
@@ -444,6 +469,7 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
     }
 
     onDrop(event: DragEvent) {
+        if (this.stateService.displayMode() === 'puzzle') return;
         event.preventDefault();
         this.isDragOver.set(false);
 
@@ -465,10 +491,13 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
             const isSourceEvent = dragData.elementType === 'transition';
 
             if (isSourceCondition) {
-                newNode = this.stateService.buildCondition(uniqueId, undefined, elementTokens, {
+                newNode = this.stateService.buildCondition(uniqueId, dragData.elementId, elementTokens, {
                     isStartPlace: this.shouldMarkAsStartCondition(dragData.elementId),
                     innerLabel: dragData.elementId,
                 });
+                // Initiales Trail Marking für die Source-Stelle setzen:
+                (newNode as Condition).trailMarkings = { [dragData.elementId]: 1 };
+                (newNode as Condition).updateDynamicLabel();
             } else if (isSourceEvent) {
                 newNode = this.stateService.buildEvent(uniqueId, elementLabel, elementLabel);
             } else {
@@ -517,6 +546,17 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
     }
 
     onElementMouseDown(event: MouseEvent, element: LabeledNetNode) {
+        // Shift + Left Click for Debugging
+        if (event.shiftKey && event.button === 0) {
+            console.log('Condition Properties Debug:', element);
+            if (element instanceof Condition) {
+                console.log('Trail Markings:', element.trailMarkings);
+            }
+            event.stopImmediatePropagation();
+            event.preventDefault();
+            return;
+        }
+
         // Middle click (button 1) deletes the element and its connections
         if (event.button === 1) {
             event.stopImmediatePropagation();
@@ -535,6 +575,7 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
         event.preventDefault();
 
         this.isDraggingElement = true;
+        this.hasDragged = false;
         this.draggedElement = element;
         this.dragStartedMergedAnchorId =
             element instanceof Condition ? this.getMergedConditionAnchorIdOrNull(element.id) : null;
@@ -608,17 +649,18 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
 
         const anchorConditionId = this.resolveConditionAnchorId(element.id);
 
-        const lastSnapshot = this.lastPhysicalMergeSnapshot();
-        if (lastSnapshot && lastSnapshot.anchorConditionId === anchorConditionId) {
-            this.restoreLastPhysicalMergeSnapshot(lastSnapshot);
+        // If it's a visual merge group (size > 1), double tap to FINALIZE it
+        if (this.getConditionGroupSize(anchorConditionId) > 1) {
+            this.finalizeMergedConditionGroup(anchorConditionId);
             return;
         }
 
-        if (this.getConditionGroupSize(anchorConditionId) <= 1) {
+        // If it's already a finalized merged condition (size === 1) and the label has a '+' sign or multiplier, UNMERGE it
+        const displayLabel = element.label ?? element.displayLabel;
+        if (displayLabel.includes('+') || /^\d+\*/.test(displayLabel)) {
+            this.unmergeConditionGroup(anchorConditionId);
             return;
         }
-
-        this.finalizeMergedConditionGroup(anchorConditionId);
     }
 
     // Increment connection weight (used by left click)
@@ -668,6 +710,11 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
             const newX = svgPoint.x - this.dragOffset.x;
             const newY = svgPoint.y - this.dragOffset.y;
 
+            // Mark that we dragged
+            if (Math.abs(newX - this.draggedElement.x) > 2 || Math.abs(newY - this.draggedElement.y) > 2) {
+                this.hasDragged = true;
+            }
+
             let updatedElement: LabeledNetNode | null = null;
             this.stateService.updateDrawnElements((elements) =>
                 elements.map((el) => {
@@ -681,13 +728,12 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
                         newNode = this.stateService.buildCondition(el.id, originalLabel, tokens, {
                             hideTokens: el.hideTokens,
                             isStartPlace: el.isStartPlace,
+                            baseName: el.baseName,
                         });
+                        newNode.trailMarkings = { ...el.trailMarkings };
+                        newNode.baseName = el.baseName;
                     } else {
-                        newNode = this.stateService.buildEvent(
-                            el.id,
-                            el.displayLabel,
-                            el.transitionId,
-                        );
+                        newNode = this.stateService.buildEvent(el.id, el.displayLabel, el.transitionId);
                     }
                     newNode.x = newX;
                     newNode.y = newY;
@@ -707,7 +753,10 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
             if (this.draggedElement instanceof Condition && this.dragStartedMergedAnchorId) {
                 const anchor = this.getElementById(this.dragStartedMergedAnchorId);
                 if (anchor instanceof Condition) {
-                    const distanceToAnchor = Math.hypot(this.draggedElement.x - anchor.x, this.draggedElement.y - anchor.y);
+                    const distanceToAnchor = Math.hypot(
+                        this.draggedElement.x - anchor.x,
+                        this.draggedElement.y - anchor.y,
+                    );
                     if (distanceToAnchor > this.UNMERGE_DRAG_DISTANCE) {
                         this.unmergeCondition(this.draggedElement.id);
                         this.dragStartedMergedAnchorId = null;
@@ -719,24 +768,85 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
 
     private onDocumentMouseUp = (event: MouseEvent) => {
         const releasedElement = this.draggedElement;
+
         if (this.isDraggingElement) {
             event.preventDefault();
             event.stopImmediatePropagation();
         }
 
-        if (releasedElement instanceof Condition) {
+        if (releasedElement instanceof Condition && this.hasDragged) {
             this.tryMergeConditionOnDrop(releasedElement);
         }
 
         this.draggedElement = null;
         this.isDraggingElement = false;
+        this.hasDragged = false;
         this.dragStartedMergedAnchorId = null;
         document.removeEventListener('mousemove', this.onDocumentMouseMove, true);
         document.removeEventListener('mouseup', this.onDocumentMouseUp, true);
     };
 
+    onElementWheel(event: WheelEvent, element: LabeledNetNode) {
+        if (this.stateService.displayMode() !== 'puzzle' || !(element instanceof Condition)) {
+            return;
+        }
+
+        event.preventDefault();
+        event.stopPropagation();
+
+        // Scroll up = positive token delta, scroll down = negative
+        const delta = event.deltaY < 0 ? 1 : -1;
+        this.handleConditionTokenDelta(element, delta);
+    }
+
     private getSvgCoordinates(event: MouseEvent | DragEvent): { x: number; y: number } | null {
         return this.getSvgCoordinatesFromClient(event.clientX, event.clientY);
+    }
+
+    private handleConditionTokenDelta(condition: Condition, delta: number) {
+        const selectedPlaceId = this.stateService.selectedPetriPlaceId();
+        if (!selectedPlaceId) {
+            return;
+        }
+
+        this.stateService.updateDrawnElements((elements) =>
+            elements.map((node) => {
+                if (node.id === condition.id && node instanceof Condition) {
+                    const originalLabel = node.label ?? node.displayLabel;
+                    const updated = this.stateService.buildCondition(node.id, originalLabel, 0, {
+                        hideTokens: node.hideTokens,
+                        isStartPlace: node.isStartPlace,
+                        labelPlacement: node.labelPlacement,
+                        baseName: node.baseName,
+                    });
+                    updated.x = node.x;
+                    updated.y = node.y;
+                    // Ensure the base name stays exactly as is, and we preserve it
+                    updated.baseName = node.baseName ?? originalLabel;
+                    updated.trailMarkings = { ...node.trailMarkings };
+
+                    const currentTokens = updated.getTrailTokens(selectedPlaceId);
+                    const nextTokens = Math.max(0, currentTokens + delta);
+
+                    // We directly mutate the inner map without triggering updateDynamicLabel()
+                    // because we are in puzzle mode and want to keep the base label ("c1" etc.)
+                    if (nextTokens > 0) {
+                        updated.trailMarkings[selectedPlaceId] = nextTokens;
+                    } else {
+                        delete updated.trailMarkings[selectedPlaceId];
+                    }
+
+                    // Call updateDynamicLabel to properly reflect dynamic data correctly even if currently hidden
+                    updated.updateDynamicLabel();
+
+                    // Visually update the UI right away
+                    updated.tokens = updated.getTrailTokens(selectedPlaceId);
+
+                    return updated;
+                }
+                return node;
+            }),
+        );
     }
 
     private getSvgCoordinatesFromClient(clientX: number, clientY: number): { x: number; y: number } | null {
@@ -764,7 +874,10 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
     }
 
     // Compute trimmed line from center of a to center of b, shortened by shape radii/half-sizes
-    private computeTrimmedLine(a: LabeledNetNode, b: LabeledNetNode): { x1: number; y1: number; x2: number; y2: number } {
+    private computeTrimmedLine(
+        a: LabeledNetNode,
+        b: LabeledNetNode,
+    ): { x1: number; y1: number; x2: number; y2: number } {
         const ax = a.x;
         const ay = a.y;
         const bx = b.x;
@@ -775,14 +888,8 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
         const ux = dx / len;
         const uy = dy / len;
 
-        const aOffset =
-            a instanceof Condition
-                ? this.CONDITION_RADIUS
-                : Math.min(this.EVENT_HALF_W, this.EVENT_HALF_H);
-        const bOffset =
-            b instanceof Condition
-                ? this.CONDITION_RADIUS
-                : Math.min(this.EVENT_HALF_W, this.EVENT_HALF_H);
+        const aOffset = a instanceof Condition ? this.CONDITION_RADIUS : Math.min(this.EVENT_HALF_W, this.EVENT_HALF_H);
+        const bOffset = b instanceof Condition ? this.CONDITION_RADIUS : Math.min(this.EVENT_HALF_W, this.EVENT_HALF_H);
 
         const x1 = ax + ux * aOffset;
         const y1 = ay + uy * aOffset;
@@ -816,7 +923,7 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
                 this.commitLastPhysicalMergeSnapshot();
             }
             this.removeConditionFromMergeGraph(element.id);
-            this.stateService.releaseConditionName(element.label ?? element.displayLabel);
+            this.stateService.releaseConditionName(element.baseName ?? element.label ?? element.displayLabel);
         }
         this.stateService.removeDrawnElement(element.id);
 
@@ -850,7 +957,9 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
         }
 
         const messages = result.issues
-            .filter((issue) => (issue.eventIds ?? []).includes(elementId) || (issue.conditionIds ?? []).includes(elementId))
+            .filter(
+                (issue) => (issue.eventIds ?? []).includes(elementId) || (issue.conditionIds ?? []).includes(elementId),
+            )
             .map((issue) => {
                 const translated = this.translateService.instant(issue.messageKey, issue.messageParams ?? {});
                 return `[${issue.rule}] ${translated}`;
@@ -900,7 +1009,11 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
         return displayed instanceof Diagram ? displayed : null;
     }
 
-    private buildValidationInput(): { petri: PetriNet; elements: TokenTrailElement[]; connections: TokenTrailConnection[] } | null {
+    private buildValidationInput(): {
+        petri: PetriNet;
+        elements: TokenTrailElement[];
+        connections: TokenTrailConnection[];
+    } | null {
         const base = this.resolveSourceNetForValidation() ?? undefined;
         if (!base) {
             return null;
@@ -961,7 +1074,9 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
     }
 
     private hasExactConnectionDirection(sourceId: string, targetId: string): boolean {
-        return this.connections().some((connection) => connection.source === sourceId && connection.target === targetId);
+        return this.connections().some(
+            (connection) => connection.source === sourceId && connection.target === targetId,
+        );
     }
 
     private finalizeMergedConditionGroup(anchorConditionId: string) {
@@ -971,10 +1086,17 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
             return;
         }
 
-        const removedConditionLabels = removedConditionIds
+        const allMemberNodes = groupMemberIds
             .map((id) => this.getElementById(id))
-            .filter((node): node is Condition => node instanceof Condition)
-            .map((node) => node.label ?? node.displayLabel);
+            .filter((node): node is Condition => node instanceof Condition);
+
+        // Immediate release of ALL member base names to generate the optimal lowest available one
+        allMemberNodes.forEach((node) => {
+            if (node.baseName) {
+                this.stateService.releaseConditionName(node.baseName);
+            }
+        });
+        const newMergedBaseName = this.stateService.generateConditionName();
 
         // Only the most recent physical merge is reversible.
         this.commitLastPhysicalMergeSnapshot();
@@ -983,26 +1105,62 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
             drawnElements: this.cloneDrawnElements(this.drawnElements()),
             connections: this.cloneConnections(this.connections()),
             mergedConditionAnchorById: { ...this.mergedConditionAnchorById() },
-            removedConditionLabels,
+            removedConditionLabels: [], // Immediately released, so nothing queued
         });
 
         const removedConditionIdSet = new Set(removedConditionIds);
 
+        // Update the anchor condition with the merged label and trail markings
+        const mergedLabel = this.computeMergedLabel(groupMemberIds);
 
-        this.stateService.updateDrawnElements((elements) => elements.filter((node) => !removedConditionIdSet.has(node.id)));
+        // Sum trail markings across all members
+        const combinedTrailMarkings: Record<string, number> = {};
+        for (const memberNode of allMemberNodes) {
+            for (const [place, count] of Object.entries(memberNode.trailMarkings)) {
+                combinedTrailMarkings[place] = (combinedTrailMarkings[place] ?? 0) + count;
+            }
+        }
+
+        this.stateService.updateDrawnElements((elements) =>
+            elements
+                .map((node) => {
+                    if (node.id === anchorConditionId && node instanceof Condition) {
+                        const updated = this.stateService.buildCondition(node.id, mergedLabel, node.tokenCount(), {
+                            hideTokens: node.hideTokens,
+                            isStartPlace: node.isStartPlace,
+                            labelPlacement: node.labelPlacement,
+                            baseName: newMergedBaseName,
+                        });
+                        updated.trailMarkings = combinedTrailMarkings;
+                        updated.updateDynamicLabel();
+                        updated.x = node.x;
+                        updated.y = node.y;
+                        return updated;
+                    }
+                    return node;
+                })
+                .filter((node) => !removedConditionIdSet.has(node.id)),
+        );
 
         this.stateService.updateConnections((connections) => {
             const remapped = connections
                 .map((connection) => {
-                    const mappedSource = removedConditionIdSet.has(connection.source) ? anchorConditionId : connection.source;
-                    const mappedTarget = removedConditionIdSet.has(connection.target) ? anchorConditionId : connection.target;
+                    const mappedSource = removedConditionIdSet.has(connection.source)
+                        ? anchorConditionId
+                        : connection.source;
+                    const mappedTarget = removedConditionIdSet.has(connection.target)
+                        ? anchorConditionId
+                        : connection.target;
                     return {
                         ...connection,
                         source: mappedSource,
                         target: mappedTarget,
                     };
                 })
-                .filter((connection) => !(connection.source === anchorConditionId && connection.target === anchorConditionId));
+                .filter(
+                    (connection) =>
+                        !(connection.source === anchorConditionId && connection.target === anchorConditionId),
+                );
 
             const uniqueByDirection = new Map<string, (typeof remapped)[number]>();
             for (const connection of remapped) {
@@ -1037,6 +1195,133 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
         this.playMergeAnimation(anchorConditionId);
     }
 
+    private unmergeConditionGroup(anchorConditionId: string) {
+        const anchorNode = this.getElementById(anchorConditionId);
+        if (!(anchorNode instanceof Condition)) {
+            return;
+        }
+
+        const mergedLabel = anchorNode.label ?? anchorNode.displayLabel;
+        const parsedLabels = this.parseMergedLabel(mergedLabel);
+
+        if (parsedLabels.length <= 1) {
+            return;
+        }
+
+        // Release the anchor's base name so its pieces can optimally reuse it (e.g. c1)
+        if (anchorNode.baseName) {
+            this.stateService.releaseConditionName(anchorNode.baseName);
+        }
+
+        const newIds: string[] = [];
+
+        this.stateService.updateDrawnElements((elements) => {
+            const updated = elements.filter((n) => n.id !== anchorConditionId);
+
+            // Add back the anchor with the first label
+            const firstClone = this.stateService.buildCondition(
+                anchorConditionId,
+                parsedLabels[0],
+                anchorNode.tokenCount(),
+                {
+                    hideTokens: anchorNode.hideTokens,
+                    isStartPlace: this.shouldMarkAsStartCondition(parsedLabels[0]),
+                    labelPlacement: anchorNode.labelPlacement,
+                },
+            );
+            firstClone.trailMarkings = { [parsedLabels[0]]: 1 };
+            firstClone.updateDynamicLabel();
+            firstClone.x = anchorNode.x;
+            firstClone.y = anchorNode.y;
+            updated.push(firstClone);
+            newIds.push(anchorConditionId);
+
+            // Add the rest
+            const otherLabels = parsedLabels.slice(1);
+            otherLabels.forEach((label, index) => {
+                const angle = ((index + 1) / otherLabels.length) * 2 * Math.PI;
+                const radius = 80;
+                const newX = anchorNode.x + Math.cos(angle) * radius;
+                const newY = anchorNode.y + Math.sin(angle) * radius;
+
+                const newId = this.stateService.generateElementId(`drawn-${label}`);
+                const clone = this.stateService.buildCondition(newId, label, 0, {
+                    hideTokens: anchorNode.hideTokens,
+                    isStartPlace: this.shouldMarkAsStartCondition(label),
+                    labelPlacement: anchorNode.labelPlacement,
+                });
+                clone.trailMarkings = { [label]: 1 };
+                clone.updateDynamicLabel();
+                clone.x = newX;
+                clone.y = newY;
+                updated.push(clone);
+                newIds.push(newId);
+            });
+
+            return updated;
+        });
+
+        // Duplicate connections for all unmerged conditions
+        this.stateService.updateConnections((connections) => {
+            const newConnections: LabeledNetEdge[] = [];
+
+            for (const conn of connections) {
+                if (conn.source === anchorConditionId) {
+                    for (let i = 1; i < newIds.length; i++) {
+                        const newConnId = this.stateService.generateConnectionId('conn');
+                        const newConn = {
+                            id: newConnId,
+                            source: newIds[i],
+                            target: conn.target,
+                            weight: conn.weight,
+                            bendPoints: [],
+                            displayLabel: conn.displayLabel,
+                        };
+                        newConnections.push(newConn as LabeledNetEdge);
+                    }
+                }
+
+                if (conn.target === anchorConditionId) {
+                    for (let i = 1; i < newIds.length; i++) {
+                        const newConnId = this.stateService.generateConnectionId('conn');
+                        const newConn = {
+                            id: newConnId,
+                            source: conn.source,
+                            target: newIds[i],
+                            weight: conn.weight,
+                            bendPoints: [],
+                            displayLabel: conn.displayLabel,
+                        };
+                        newConnections.push(newConn as LabeledNetEdge);
+                    }
+                }
+            }
+            return [...connections, ...newConnections];
+        });
+
+        this.playMergeAnimation(anchorConditionId);
+    }
+
+    private parseMergedLabel(label: string): string[] {
+        // Parse a merged label like "p1 + 2*p2" into individual labels
+        const result: string[] = [];
+        const parts = label.split(' + ').map((p) => p.trim());
+
+        for (const part of parts) {
+            // Parse multipliers like "2*p1" or single labels like "p1"
+            const match = part.match(/^(\d+)\*(.+)$|^(.+)$/);
+            if (match) {
+                const multiplier = match[1] ? parseInt(match[1], 10) : 1;
+                const singleLabel = match[2] || match[3];
+                for (let i = 0; i < multiplier; i++) {
+                    result.push(singleLabel);
+                }
+            }
+        }
+
+        return result;
+    }
+
     isMergeAnchor(node: LabeledNetNode): boolean {
         return node instanceof Condition && this.getConditionGroupSize(node.id) > 1;
     }
@@ -1047,8 +1332,9 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
 
     getConditionGroupSize(conditionId: string): number {
         const anchorId = this.resolveConditionAnchorId(conditionId);
-        return this.drawnElements().filter((node) => node instanceof Condition && this.resolveConditionAnchorId(node.id) === anchorId)
-            .length;
+        return this.drawnElements().filter(
+            (node) => node instanceof Condition && this.resolveConditionAnchorId(node.id) === anchorId,
+        ).length;
     }
 
     private tryMergeConditionOnDrop(condition: Condition) {
@@ -1187,10 +1473,17 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
                     if (node.id !== conditionId || !(node instanceof Condition)) {
                         return node;
                     }
-                    const updated = this.stateService.buildCondition(node.id, node.label ?? node.displayLabel, node.tokenCount(), {
-                        hideTokens: node.hideTokens,
-                        isStartPlace: node.isStartPlace,
-                    });
+                    const updated = this.stateService.buildCondition(
+                        node.id,
+                        node.label ?? node.displayLabel,
+                        node.tokenCount(),
+                        {
+                            hideTokens: node.hideTokens,
+                            isStartPlace: node.isStartPlace,
+                            baseName: node.baseName,
+                        },
+                    );
+                    updated.trailMarkings = { ...node.trailMarkings };
                     updated.x = nextX;
                     updated.y = nextY;
                     return updated;
@@ -1222,6 +1515,39 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
             .filter((node): node is Condition => node instanceof Condition)
             .filter((condition) => this.resolveConditionAnchorId(condition.id) === anchorId)
             .map((condition) => condition.id);
+    }
+
+    private computeMergedLabel(groupMemberIds: string[]): string {
+        // Get all labels from the group members, parsing existing multipliers
+        const labelCounts = new Map<string, number>();
+
+        for (const id of groupMemberIds) {
+            const node = this.getElementById(id);
+            if (!(node instanceof Condition)) continue;
+
+            // Since trailMarkings correctly hold all specific markings now,
+            // the merged label is best generated dynamically from merged trail markings
+            for (const [place, count] of Object.entries(node.trailMarkings)) {
+                labelCounts.set(place, (labelCounts.get(place) ?? 0) + count);
+            }
+        }
+
+        // Build the merged label with counts and plus signs
+        const parts: string[] = [];
+        const sortedPlaces = Array.from(labelCounts.keys()).sort((a, b) =>
+            a.localeCompare(b, undefined, { numeric: true }),
+        );
+
+        for (const label of sortedPlaces) {
+            const count = labelCounts.get(label)!;
+            if (count > 1) {
+                parts.push(`${count}*${label}`);
+            } else {
+                parts.push(label);
+            }
+        }
+
+        return parts.length > 0 ? parts.join(' + ') : 'c...'; // fallback baseline label will be replaced by the object method correctly
     }
 
     private getMergedConditionAnchorIdOrNull(conditionId: string): string | null {
@@ -1276,7 +1602,9 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
         this.stateService.updateDrawnElements((elements) => [...elements, ...restoredConditions]);
 
         this.stateService.updateConnections((connections) => {
-            const existingDirections = new Set(connections.map((connection) => `${connection.source}->${connection.target}`));
+            const existingDirections = new Set(
+                connections.map((connection) => `${connection.source}->${connection.target}`),
+            );
             const toAdd = this.cloneConnections(restorableConnections).filter((connection) => {
                 const key = `${connection.source}->${connection.target}`;
                 if (existingDirections.has(key)) {
@@ -1316,10 +1644,17 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
     private cloneDrawnElements(elements: LabeledNetNode[]): LabeledNetNode[] {
         return elements.map((node) => {
             if (node instanceof Condition) {
-                const clone = this.stateService.buildCondition(node.id, node.label ?? node.displayLabel, node.tokenCount(), {
-                    hideTokens: node.hideTokens,
-                    isStartPlace: node.isStartPlace,
-                });
+                const clone = this.stateService.buildCondition(
+                    node.id,
+                    node.label ?? node.displayLabel,
+                    node.tokenCount(),
+                    {
+                        hideTokens: node.hideTokens,
+                        isStartPlace: node.isStartPlace,
+                        baseName: node.baseName,
+                    },
+                );
+                clone.trailMarkings = { ...node.trailMarkings };
                 clone.x = node.x;
                 clone.y = node.y;
                 return clone;
@@ -1378,5 +1713,9 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
 
     isCondition(node: DiagramNode): boolean {
         return node instanceof Condition;
+    }
+
+    private createNewLPN() {
+        //TODO: create a new LPN based on the existing Petri Net
     }
 }

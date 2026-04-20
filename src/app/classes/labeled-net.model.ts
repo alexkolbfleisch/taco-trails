@@ -3,7 +3,52 @@ import { DiagramTransition } from './diagram/diagram-transition';
 import { DisplayableEdge, DisplayableGraph, DisplayableNode } from './displayable-graph.interface';
 
 export class Condition extends DiagramPlace {
-    // We can add additional properties here if needed.
+    // Initial name assigned to the Condition before it holds any trails (e.g. 'c1')
+    baseName?: string;
+
+    // Maps original Petri net place IDs to the number of tokens in this condition for that trail.
+    trailMarkings: Record<string, number> = {};
+
+    setTrailTokens(petriPlaceId: string, count: number): void {
+        if (!this.baseName) {
+            this.baseName = this.label;
+        }
+
+        if (count > 0) {
+            this.trailMarkings[petriPlaceId] = count;
+        } else {
+            delete this.trailMarkings[petriPlaceId];
+        }
+
+        this.updateDynamicLabel();
+    }
+
+    getTrailTokens(petriPlaceId: string): number {
+        return this.trailMarkings[petriPlaceId] || 0;
+    }
+
+    updateDynamicLabel(): void {
+        if (!this.baseName) {
+            this.baseName = this.label;
+        }
+
+        const parts: string[] = [];
+        // Generate sorted array of places to ensure consistent label formatting (e.g. 'p1 + p2' instead of 'p2 + p1')
+        const sortedPlaces = Object.keys(this.trailMarkings).sort((a, b) =>
+            a.localeCompare(b, undefined, { numeric: true }),
+        );
+
+        for (const place of sortedPlaces) {
+            const count = this.trailMarkings[place];
+            if (count === 1) {
+                parts.push(place);
+            } else if (count > 1) {
+                parts.push(`${count}*${place}`);
+            }
+        }
+
+        this.label = parts.length > 0 ? parts.join(' + ') : this.baseName;
+    }
 }
 
 export class Event extends DiagramTransition {

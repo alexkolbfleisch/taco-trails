@@ -79,7 +79,8 @@
             <g
                 appSvgEventNode
                 [diagramNode]="element"
-                [selected]="selectedElementId() === element.id" />
+                [selected]="selectedElementId() === element.id"
+                [displayMode]="stateService.displayMode()" />
             @if (isMergeAnchor(element)) {
             <g class="merge-badge" pointer-events="none">
                 <circle [attr.cx]="element.x + 24" [attr.cy]="element.y - 24" r="12" fill="#1565c0" />
@@ -107,7 +108,8 @@
                 style="cursor: move"
                 (mousedown)="onElementMouseDown($event, element)"
                 (dblclick)="onElementDoubleClick($event, element)"
-                (contextmenu)="onElementRightClick($event, element)" />
+                (contextmenu)="onElementRightClick($event, element)"
+                (wheel)="onElementWheel($event, element)" />
 
             @if (getElementTooltip(element.id)) {
             <foreignObject

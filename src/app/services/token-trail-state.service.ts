@@ -1,9 +1,14 @@
 import { Injectable, signal } from '@angular/core';
-import {  DiagramPlaceLabelPlacement } from '../classes/diagram/diagram-place';
-import { Condition, Event as LabeledEvent, LabeledNetEdge, LabeledNetGraph, LabeledNetNode } from '../classes/labeled-net.model';
+import { DiagramPlaceLabelPlacement } from '../classes/diagram/diagram-place';
+import {
+    Condition,
+    Event as LabeledEvent,
+    LabeledNetEdge,
+    LabeledNetGraph,
+    LabeledNetNode,
+} from '../classes/labeled-net.model';
 import { viewBoxValues } from '../components/display/display.constants';
 import { Subject } from 'rxjs';
-
 
 @Injectable({ providedIn: 'root' })
 export class TokenTrailStateService {
@@ -21,6 +26,8 @@ export class TokenTrailStateService {
     readonly viewBox = signal<{ minX: number; minY: number; width: number; height: number }>(viewBoxValues);
     readonly selectedPetriPlaceId = signal<string | null>(null);
     readonly validPetriPlaceIds = signal<Set<string>>(new Set<string>());
+
+    readonly displayMode = signal<'puzzle' | 'construction'>('puzzle');
 
     private readonly _fitViewRequest$ = new Subject<void>();
     public readonly fitViewRequest$ = this._fitViewRequest$.asObservable();
@@ -77,6 +84,10 @@ export class TokenTrailStateService {
         return `${prefix}-${++this.connectionIdCounter}`;
     }
 
+    setDisplayMode(mode: 'puzzle' | 'construction') {
+        this.displayMode.set(mode);
+    }
+
     generateConditionName(): string {
         const recycledNumber = this.getSmallestReleasedConditionNumber();
         if (recycledNumber !== null) {
@@ -128,17 +139,21 @@ export class TokenTrailStateService {
             labelPlacement?: DiagramPlaceLabelPlacement;
             isStartPlace?: boolean;
             innerLabel?: string;
+            baseName?: string;
         },
     ): Condition {
-        return new Condition(id, initialTokens, label || this.generateConditionName(), {
+        const generatedBaseName = options?.baseName || this.generateConditionName();
+        const condition = new Condition(id, initialTokens, label || generatedBaseName, {
             hideTokens: options?.hideTokens ?? true,
             labelPlacement: options?.labelPlacement ?? 'below',
             isStartPlace: options?.isStartPlace ?? false,
             innerLabel: options?.innerLabel,
         });
+        condition.baseName = generatedBaseName;
+        return condition;
     }
 
     buildEvent(id: string, label: string, transitionId: string): LabeledEvent {
-        return  new LabeledEvent(id, label, transitionId);
+        return new LabeledEvent(id, label, transitionId);
     }
 }
