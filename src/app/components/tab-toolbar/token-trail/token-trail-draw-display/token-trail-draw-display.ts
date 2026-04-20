@@ -1,6 +1,5 @@
 import {
     AfterViewInit,
-    ChangeDetectorRef,
     Component,
     computed,
     effect,
@@ -55,6 +54,7 @@ import { Place as IlpnPlace } from '../../../../../../ilpn-components/src/lib/mo
 import { Transition as IlpnTransition } from '../../../../../../ilpn-components/src/lib/models/pn/model/transition';
 import { PartialOrder } from '../../../../../../ilpn-components/src/lib/models/po/model/partial-order';
 import { SpringEmbedderService } from '../../../../services/spring-embedder.service';
+
 
 interface GlobalDragData {
     // Source side still emits place/transition from the base Petri net.
@@ -256,7 +256,6 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
     private isDraggingElement = false;
     private dragStartedMergedAnchorId: string | null = null;
     private elementRef = inject(ElementRef);
-    private cdr = inject(ChangeDetectorRef);
 
     private playValidationService = inject(PlayValidationService);
     private playService = inject(PlayService);
@@ -317,40 +316,17 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
                     return node;
                 }
 
-                const updated = this.stateService.buildCondition(node.id, node.label ?? node.displayLabel, 0, {
-                    hideTokens: !selectedPlaceId,
-                    labelPlacement: node.labelPlacement,
-                    isStartPlace: node.isStartPlace,
-                    baseName: node.baseName,
-                });
-                updated.x = node.x;
-                updated.y = node.y;
-                updated.baseName = node.baseName ?? node.label ?? node.displayLabel;
-                updated.trailMarkings = { ...node.trailMarkings };
-                updated.tokens = selectedPlaceId ? node.getTrailTokens(selectedPlaceId) : 0;
+                node.hideTokens = !selectedPlaceId;
+                node.tokens = selectedPlaceId ? node.getTrailTokens(selectedPlaceId) : 0;
+                node.updateDynamicLabel(); // Always compute the correct string based on trailMarkings first
 
-                updated.updateDynamicLabel(); // Always compute the correct string based on trailMarkings first
-
-                return updated;
+                return node;
             }),
         );
     });
 
-    private readonly _validPlacesEffect = effect(() => {
-        const result = this.liveValidation();
-        if (!result?.perPlaceResults) {
-            this.stateService.setValidPetriPlaceIds(new Set<string>());
-            return;
-        }
-
-        const validPlaces = new Set<string>();
-        for (const [placeId, placeResult] of Object.entries(result.perPlaceResults)) {
-            if (placeResult.valid) {
-                validPlaces.add(placeId);
-            }
-        }
-        this.stateService.setValidPetriPlaceIds(validPlaces);
-    });
+    // Previously, validPlaces were automatically computed by _validPlacesEffect.
+    // Now they are handled by the ILP TokenTrailValidatorService securely.
 
     ngOnInit() {
         // Listen for custom drop events
@@ -799,37 +775,28 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
         this.stateService.updateDrawnElements((elements) =>
             elements.map((node) => {
                 if (node.id === condition.id && node instanceof Condition) {
-                    const originalLabel = node.label ?? node.displayLabel;
-                    const updated = this.stateService.buildCondition(node.id, originalLabel, 0, {
-                        hideTokens: node.hideTokens,
-                        isStartPlace: node.isStartPlace,
-                        labelPlacement: node.labelPlacement,
-                        baseName: node.baseName,
-                    });
-                    updated.x = node.x;
-                    updated.y = node.y;
-                    // Ensure the base name stays exactly as is, and we preserve it
-                    updated.baseName = node.baseName ?? originalLabel;
-                    updated.trailMarkings = { ...node.trailMarkings };
+                    if (!node.baseName) {
+                        node.baseName = node.label ?? node.displayLabel;
+                    }
 
-                    const currentTokens = updated.getTrailTokens(selectedPlaceId);
+                    const currentTokens = node.getTrailTokens(selectedPlaceId);
                     const nextTokens = Math.max(0, currentTokens + delta);
 
                     // We directly mutate the inner map without triggering updateDynamicLabel()
                     // because we are in puzzle mode and want to keep the base label ("c1" etc.)
                     if (nextTokens > 0) {
-                        updated.trailMarkings[selectedPlaceId] = nextTokens;
+                        node.trailMarkings[selectedPlaceId] = nextTokens;
                     } else {
-                        delete updated.trailMarkings[selectedPlaceId];
+                        delete node.trailMarkings[selectedPlaceId];
                     }
 
                     // Call updateDynamicLabel to properly reflect dynamic data correctly even if currently hidden
-                    updated.updateDynamicLabel();
+                    node.updateDynamicLabel();
 
                     // Visually update the UI right away
-                    updated.tokens = updated.getTrailTokens(selectedPlaceId);
+                    node.tokens = node.getTrailTokens(selectedPlaceId);
 
-                    return updated;
+                    return node;
                 }
                 return node;
             }),
@@ -974,16 +941,30 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
     //TODO: implement actual validation logic and show results in a user-friendly way (e.g. list of errors and infos with translations)
     //maybe we will replace this with a more direct way of giving feedback on specific elements (e.g. red border on invalid elements with tooltip explanations) instead of a separate validation step and toast
     onValidate() {
-        const data = this.buildValidationInput();
-        if (!data) {
+        const result = this.liveValidation();
+        if (!result) {
             this.toaster.showError('TOASTER.HEADER.VALIDATION', 'TOASTER.BODY.VALIDATION_ERROR', {
                 duration: 0,
             });
-
             return;
         }
-        validateTokenTrail(data.petri, data.elements, data.connections);
-        //TODO: show validation results in a user-friendly way (e.g. list of errors and infos with translations)
+
+        const validSet = new Set<string>();
+        const invalidSet = new Set<string>();
+
+        if (result.perPlaceResults) {
+            for (const [placeId, placeResult] of Object.entries(result.perPlaceResults)) {
+                if (placeResult.valid) {
+                    validSet.add(placeId);
+                } else {
+                    invalidSet.add(placeId);
+                }
+            }
+        }
+
+        this.stateService.setValidPetriPlaceIds(validSet);
+        this.stateService.setInvalidPetriPlaceIds(invalidSet);
+        this.stateService.setSelectedPetriPlaceId(null);
     }
 
     private resolveSourceNetForValidation(): Diagram | null {
@@ -1031,6 +1012,7 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
                 label: isCondition ? (el.innerLabel ?? el.displayLabel) : el.displayLabel,
                 isStartCondition: isCondition ? el.isStartPlace : undefined,
                 marking: isCondition ? el.tokenCount() : undefined,
+                trailMarkings: isCondition ? { ...el.trailMarkings } : undefined,
             };
         });
 
@@ -1460,20 +1442,10 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
                     if (node.id !== conditionId || !(node instanceof Condition)) {
                         return node;
                     }
-                    const updated = this.stateService.buildCondition(
-                        node.id,
-                        node.label ?? node.displayLabel,
-                        node.tokenCount(),
-                        {
-                            hideTokens: node.hideTokens,
-                            isStartPlace: node.isStartPlace,
-                            baseName: node.baseName,
-                        },
-                    );
-                    updated.trailMarkings = { ...node.trailMarkings };
-                    updated.x = nextX;
-                    updated.y = nextY;
-                    return updated;
+
+                    node.x = nextX;
+                    node.y = nextY;
+                    return node;
                 }),
             );
 
@@ -1553,67 +1525,6 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
         }
 
         return anchorId;
-    }
-
-    private restoreLastPhysicalMergeSnapshot(snapshot: LastPhysicalMergeSnapshot) {
-        const currentNodes = this.drawnElements();
-        const currentNodeIds = new Set(currentNodes.map((node) => node.id));
-        const existingEventIds = new Set(
-            currentNodes.filter((node): node is LabeledEvent => node instanceof LabeledEvent).map((event) => event.id),
-        );
-
-        const removedConditionSnapshots = snapshot.drawnElements
-            .filter((node): node is Condition => node instanceof Condition)
-            .filter((condition) => condition.id !== snapshot.anchorConditionId)
-            .filter((condition) => !currentNodeIds.has(condition.id));
-
-        if (removedConditionSnapshots.length === 0) {
-            this.lastPhysicalMergeSnapshot.set(null);
-            return;
-        }
-
-        const removedConditionIds = new Set(removedConditionSnapshots.map((condition) => condition.id));
-        const restorableConnections = snapshot.connections.filter(
-            (connection) =>
-                (removedConditionIds.has(connection.source) && existingEventIds.has(connection.target)) ||
-                (removedConditionIds.has(connection.target) && existingEventIds.has(connection.source)),
-        );
-
-        // If all event relations disappeared after merge, unmerge is no longer meaningful.
-        if (restorableConnections.length === 0) {
-            this.lastPhysicalMergeSnapshot.set(null);
-            return;
-        }
-
-        const restoredConditions = this.cloneDrawnElements(removedConditionSnapshots);
-        this.stateService.updateDrawnElements((elements) => [...elements, ...restoredConditions]);
-
-        this.stateService.updateConnections((connections) => {
-            const existingDirections = new Set(
-                connections.map((connection) => `${connection.source}->${connection.target}`),
-            );
-            const toAdd = this.cloneConnections(restorableConnections).filter((connection) => {
-                const key = `${connection.source}->${connection.target}`;
-                if (existingDirections.has(key)) {
-                    return false;
-                }
-                existingDirections.add(key);
-                return true;
-            });
-            return [...connections, ...toAdd];
-        });
-
-        this.mergedConditionAnchorById.update((currentMap) => {
-            const nextMap = { ...currentMap };
-            for (const restoredCondition of removedConditionSnapshots) {
-                delete nextMap[restoredCondition.id];
-            }
-            delete nextMap[snapshot.anchorConditionId];
-            return nextMap;
-        });
-
-        this.lastPhysicalMergeSnapshot.set(null);
-        this.playMergeAnimation(snapshot.anchorConditionId);
     }
 
     private commitLastPhysicalMergeSnapshot() {
@@ -1758,25 +1669,37 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
             const placeMap = new Map<string, string>();
             const transitionMap = new Map<string, string>();
 
-            minedNet.getPlaces().forEach((p, i) => {
+            const getRandomPos = () => {
+                const viewBox = this.viewBoxObj();
+                const width = Math.max(viewBox.width, 800);
+                const height = Math.max(viewBox.height, 600);
+                return {
+                    x: viewBox.minX + Math.random() * width,
+                    y: viewBox.minY + Math.random() * height,
+                };
+            };
+
+            minedNet.getPlaces().forEach((p) => {
                 const uniqueId = this.stateService.generateElementId(`drawn-place`);
                 placeMap.set(p.id!, uniqueId);
                 const condition = this.stateService.buildCondition(uniqueId, p.id!, p.marking, {
                     isStartPlace: p.marking > 0,
                 });
-                condition.x = 100 + (i % 5) * 80;
-                condition.y = 100 + Math.floor(i / 5) * 80;
+                const pos = getRandomPos();
+                condition.x = pos.x;
+                condition.y = pos.y;
                 this.stateService.addDrawnElement(condition);
             });
 
-            minedNet.getTransitions().forEach((t, i) => {
+            minedNet.getTransitions().forEach((t) => {
                 const uniqueId = this.stateService.generateElementId(`drawn-trans`);
                 transitionMap.set(t.id!, uniqueId);
                 const rawLabel = t.label ?? t.id!;
                 const cleanLabel = rawLabel.split('__split')[0];
                 const eventNode = this.stateService.buildEvent(uniqueId, cleanLabel, cleanLabel);
-                eventNode.x = 100 + (i % 5) * 80;
-                eventNode.y = 200 + Math.floor(i / 5) * 80;
+                const pos = getRandomPos();
+                eventNode.x = pos.x;
+                eventNode.y = pos.y;
                 this.stateService.addDrawnElement(eventNode);
             });
 

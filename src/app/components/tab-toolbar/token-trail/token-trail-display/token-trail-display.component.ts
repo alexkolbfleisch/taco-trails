@@ -37,6 +37,7 @@ export class TokenTrailDisplayComponent extends DisplayComponent {
     private _tokenTrailStateService = inject(TokenTrailStateService);
     readonly selectedPetriPlaceId = this._tokenTrailStateService.selectedPetriPlaceId;
     readonly validPetriPlaceIds = this._tokenTrailStateService.validPetriPlaceIds;
+    readonly invalidPetriPlaceIds = this._tokenTrailStateService.invalidPetriPlaceIds;
 
     private isDragging = false;
     private dragStartPos = { x: 0, y: 0 };
@@ -57,7 +58,13 @@ export class TokenTrailDisplayComponent extends DisplayComponent {
         if (node.shape !== SHAPE.CIRCLE) {
             return null;
         }
-        return this.validPetriPlaceIds().has(node.id) ? '#d7ffd9' : null;
+        if (this.validPetriPlaceIds().has(node.id)) {
+            return '#d7ffd9'; // Green if valid
+        }
+        if (this.invalidPetriPlaceIds().has(node.id)) {
+            return '#ffd7d7'; // Red if invalid
+        }
+        return null;
     }
 
     override prevent(e: DragEvent) {
