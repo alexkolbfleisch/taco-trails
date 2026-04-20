@@ -46,6 +46,15 @@ import {
 import { ImageExportService } from '../../../../services/image-export.service';
 import { SourcePetriNetService } from '../../../../services/source-petri-net.service';
 import { SvgEventNodeComponent } from '../../../display/svg-event-node/svg-event-node.component';
+import { PlayValidationService } from '../../../../services/play-validation.service';
+import { PlayService } from '../../../../services/play.service';
+import { PetriNetToPartialOrderTransformerService } from '../../../../../../ilpn-components/src/lib/algorithms/pn/transformation/petri-net-to-partial-order-transformer.service';
+import { Ilp2MinerService } from '../../../../../../ilpn-components/src/lib/algorithms/pn/synthesis/ilp2-miner/ilp2-miner.service';
+import { PetriNet as IlpnPetriNet } from '../../../../../../ilpn-components/src/lib/models/pn/model/petri-net';
+import { Place as IlpnPlace } from '../../../../../../ilpn-components/src/lib/models/pn/model/place';
+import { Transition as IlpnTransition } from '../../../../../../ilpn-components/src/lib/models/pn/model/transition';
+import { PartialOrder } from '../../../../../../ilpn-components/src/lib/models/po/model/partial-order';
+import { SpringEmbedderService } from '../../../../services/spring-embedder.service';
 
 interface GlobalDragData {
     // Source side still emits place/transition from the base Petri net.
@@ -206,7 +215,7 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
         },
         {
             icon: 'refresh',
-            tooltip: "TODO",
+            tooltip: 'TODO',
             color: 'warn',
             isActive: true, //TODO
             action: () => this.createNewLPN(),
@@ -248,6 +257,13 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
     private dragStartedMergedAnchorId: string | null = null;
     private elementRef = inject(ElementRef);
     private cdr = inject(ChangeDetectorRef);
+
+    private playValidationService = inject(PlayValidationService);
+    private playService = inject(PlayService);
+    private pnToPOTransformer = inject(PetriNetToPartialOrderTransformerService);
+    private ilp2MinerService = inject(Ilp2MinerService);
+    private springEmbedderService = inject(SpringEmbedderService);
+
     private customDropListener: ((event: Event) => void) | null = null;
     private displayService = inject(DisplayService);
     private toaster = inject(ToasterNotificationService);
@@ -715,40 +731,11 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
                 this.hasDragged = true;
             }
 
-            let updatedElement: LabeledNetNode | null = null;
-            this.stateService.updateDrawnElements((elements) =>
-                elements.map((el) => {
-                    if (el.id !== this.draggedElement?.id) return el;
-
-                    // Recreate node instance to trigger SvgNodeComponent re-render
-                    let newNode: LabeledNetNode;
-                    if (el instanceof Condition) {
-                        const tokens = el.tokenCount() ?? 0;
-                        const originalLabel = el.label ?? el.displayLabel;
-                        newNode = this.stateService.buildCondition(el.id, originalLabel, tokens, {
-                            hideTokens: el.hideTokens,
-                            isStartPlace: el.isStartPlace,
-                            baseName: el.baseName,
-                        });
-                        newNode.trailMarkings = { ...el.trailMarkings };
-                        newNode.baseName = el.baseName;
-                    } else {
-                        newNode = this.stateService.buildEvent(el.id, el.displayLabel, el.transitionId);
-                    }
-                    newNode.x = newX;
-                    newNode.y = newY;
-
-                    updatedElement = newNode;
-                    return newNode;
-                }),
-            );
-
-            if (updatedElement) {
-                this.draggedElement = updatedElement;
-            }
-
-            // Force Angular to detect the changes just in case
-            this.cdr.detectChanges();
+            // Just update coordinates directly. Due to `x` and `y` being WritableSignal getters/setters
+            // inside DiagramNode, the UI will re-render automatically. This preserves the object reference
+            // so active instances of SpringEmbedderService calculating layout can read the dragged changes.
+            this.draggedElement.x = newX;
+            this.draggedElement.y = newY;
 
             if (this.draggedElement instanceof Condition && this.dragStartedMergedAnchorId) {
                 const anchor = this.getElementById(this.dragStartedMergedAnchorId);
@@ -1716,6 +1703,115 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
     }
 
     private createNewLPN() {
-        //TODO: create a new LPN based on the existing Petri Net
+        const sourceNet = this.resolveSourceNetForValidation();
+        if (!sourceNet) return;
+
+        this.playService.firingEntries.set([]);
+        this.playValidationService.findSequences(sourceNet, 1, 15);
+
+        const partialOrders: PartialOrder[] = [];
+        const entries = this.playService.firingEntries();
+
+        const validEntries = entries.filter((entry) => entry.isValid && entry.labels.length > 0);
+        const shuffled = [...validEntries].sort(() => 0.5 - Math.random());
+        const subsetSize = Math.max(1, Math.floor(Math.random() * shuffled.length) + 1);
+        const selectedEntries = shuffled.slice(0, subsetSize);
+
+        for (const entry of selectedEntries) {
+            const net = new IlpnPetriNet();
+            let lastPlace = new IlpnPlace();
+            lastPlace.marking = 1;
+            net.addPlace(lastPlace);
+
+            const occurrenceCount = new Map<string, number>();
+
+            for (const label of entry.labels) {
+                const count = occurrenceCount.get(label) || 0;
+                occurrenceCount.set(label, count + 1);
+
+                const actualLabel = count === 0 ? label : `${label}__split${count}`;
+                const t = new IlpnTransition(actualLabel);
+                net.addTransition(t);
+                net.addArc(lastPlace, t);
+
+                const nextPlace = new IlpnPlace();
+                net.addPlace(nextPlace);
+                net.addArc(t, nextPlace);
+
+                lastPlace = nextPlace;
+            }
+
+            try {
+                const po = this.pnToPOTransformer.transform(net);
+                partialOrders.push(po);
+            } catch (e) {
+                console.error('Failed to transform to partial order', e);
+            }
+        }
+
+        if (partialOrders.length === 0) return;
+
+        this.ilp2MinerService.mine(partialOrders).subscribe((result) => {
+            this.clearDrawing();
+            const minedNet = result.net;
+
+            const placeMap = new Map<string, string>();
+            const transitionMap = new Map<string, string>();
+
+            minedNet.getPlaces().forEach((p, i) => {
+                const uniqueId = this.stateService.generateElementId(`drawn-place`);
+                placeMap.set(p.id!, uniqueId);
+                const condition = this.stateService.buildCondition(uniqueId, p.id!, p.marking, {
+                    isStartPlace: p.marking > 0,
+                });
+                condition.x = 100 + (i % 5) * 80;
+                condition.y = 100 + Math.floor(i / 5) * 80;
+                this.stateService.addDrawnElement(condition);
+            });
+
+            minedNet.getTransitions().forEach((t, i) => {
+                const uniqueId = this.stateService.generateElementId(`drawn-trans`);
+                transitionMap.set(t.id!, uniqueId);
+                const rawLabel = t.label ?? t.id!;
+                const cleanLabel = rawLabel.split('__split')[0];
+                const eventNode = this.stateService.buildEvent(uniqueId, cleanLabel, cleanLabel);
+                eventNode.x = 100 + (i % 5) * 80;
+                eventNode.y = 200 + Math.floor(i / 5) * 80;
+                this.stateService.addDrawnElement(eventNode);
+            });
+
+            minedNet.getPlaces().forEach((p) => {
+                const pId = placeMap.get(p.id!)!;
+                p.outgoingArcs.forEach((a) => {
+                    const tId = transitionMap.get(a.destinationId!)!;
+                    this.stateService.addConnection({
+                        id: this.stateService.generateConnectionId('conn'),
+                        source: pId,
+                        target: tId,
+                        weight: a.weight,
+                        bendPoints: [],
+                        displayLabel: '',
+                    });
+                });
+                p.ingoingArcs.forEach((a) => {
+                    const tId = transitionMap.get(a.sourceId!)!;
+                    this.stateService.addConnection({
+                        id: this.stateService.generateConnectionId('conn'),
+                        source: tId,
+                        target: pId,
+                        weight: a.weight,
+                        bendPoints: [],
+                        displayLabel: '',
+                    });
+                });
+            });
+
+            this.springEmbedderService
+                .calculateLayout({
+                    getNodes: () => this.drawnElements(),
+                    getEdges: () => this.connections(),
+                })
+                .catch(console.error);
+        });
     }
 }
