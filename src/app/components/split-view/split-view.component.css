@@ -1,0 +1,70 @@
+.split-view-layout {
+    display: flex;
+    flex-direction: row;
+    gap: 0.5rem;
+}
+
+.split-view-panel {
+    min-width: 0;
+    max-width: 100%;
+    background: #fff;
+    border: 1px solid #e0e0e0;
+    border-radius: 10px;
+    padding: 12px;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+    overflow: hidden;
+}
+
+.resizer {
+    width: 12px;
+    cursor: col-resize;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 -4px;
+    z-index: 10;
+}
+
+.resizer-handle {
+    width: 4px;
+    height: 40px;
+    background-color: #ccc;
+    border-radius: 2px;
+    transition: background-color 0.2s;
+}
+
+.resizer:hover .resizer-handle,
+.split-view-layout.dragging .resizer-handle {
+    background-color: #888;
+}
+
+.split-view-layout.dragging {
+    user-select: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+}
+
+.split-view-panel ::ng-deep svg.canvas,
+.split-view-panel ::ng-deep svg.drawing-canvas {
+    display: block;
+    width: 100%;
+}
+
+@media (max-width: 900px) {
+    .split-view-layout {
+        flex-direction: column;
+    }
+
+    .resizer {
+        width: 100%;
+        height: 12px;
+        cursor: row-resize;
+        margin: -4px 0;
+    }
+
+    .resizer-handle {
+        width: 40px;
+        height: 4px;
+    }
+}
