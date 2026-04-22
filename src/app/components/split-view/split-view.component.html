@@ -1,0 +1,13 @@
+<div class="split-view-layout" [class.dragging]="isDragging">
+    <div class="split-view-panel split-view-left" [style.flex]="leftPanelFlex() + ' 1 0'">
+        <ng-content select="[left]"></ng-content>
+    </div>
+
+    <div class="resizer" (mousedown)="startDrag($event)">
+        <div class="resizer-handle"></div>
+    </div>
+
+    <div class="split-view-panel split-view-right" [style.flex]="100 - leftPanelFlex() + ' 1 0'">
+        <ng-content select="[right]"></ng-content>
+    </div>
+</div>
