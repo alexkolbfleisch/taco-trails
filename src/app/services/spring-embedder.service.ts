@@ -2,7 +2,6 @@ import { inject, Injectable } from '@angular/core';
 import { SourcePetriNetService } from './source-petri-net.service';
 import { PanningService } from './panning.service';
 import { Coords } from '../classes/json-petri-net';
-import { toSignal } from '@angular/core/rxjs-interop';
 import { applyParallelOffsetsToArcs, DEFAULT_PARALLEL_OFFSET } from './arc-parallel-offset.util';
 import { DisplayableEdge, DisplayableGraph, DisplayableNode } from '../classes/displayable-graph.interface';
 
@@ -12,7 +11,6 @@ import { DisplayableEdge, DisplayableGraph, DisplayableNode } from '../classes/d
 export class SpringEmbedderService {
     private _sourceNetService = inject(SourcePetriNetService);
     private _panningService = inject(PanningService);
-    public isOptimalLayoutCalculated = toSignal(this._sourceNetService.optimalLayoutCalculated$);
 
     private readonly LENGTH_CONSTANT = 150;
     private readonly STIFFNESS_CONSTANT = 0.2;
