@@ -54,16 +54,7 @@ import { Place as IlpnPlace } from '../../../../../../ilpn-components/src/lib/mo
 import { Transition as IlpnTransition } from '../../../../../../ilpn-components/src/lib/models/pn/model/transition';
 import { PartialOrder } from '../../../../../../ilpn-components/src/lib/models/po/model/partial-order';
 import { SpringEmbedderService } from '../../../../services/spring-embedder.service';
-
-interface GlobalDragData {
-    // Source side still emits place/transition from the base Petri net.
-    elementType: 'place' | 'transition';
-    elementId: string;
-    elementLabel: string;
-    elementTokens?: number;
-    clientX: number;
-    clientY: number;
-}
+import { SugiyamaService } from '../../../../services/sugiyama.service';
 
 interface LastPhysicalMergeSnapshot {
     anchorConditionId: string;
@@ -71,12 +62,6 @@ interface LastPhysicalMergeSnapshot {
     connections: LabeledNetEdge[];
     mergedConditionAnchorById: Record<string, string>;
     removedConditionLabels: string[];
-}
-
-declare global {
-    interface Window {
-        __dragData?: GlobalDragData;
-    }
 }
 
 //TODO: clean this up, this is becoming huge, implement a merging service or something, or handle merging in the state service as well. Remove duplications or put them into a common place.
@@ -100,6 +85,7 @@ declare global {
 export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterViewInit {
     @ViewChild('drawingArea') drawingArea!: ElementRef<SVGGraphicsElement>;
     protected stateService = inject(TokenTrailStateService);
+    private sugiyamaService = inject(SugiyamaService);
 
     // Bind to service state
     readonly drawnElements = this.stateService.drawnElements;
@@ -1706,34 +1692,21 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
                 const pId = placeMap.get(p.id!)!;
                 p.outgoingArcs.forEach((a) => {
                     const tId = transitionMap.get(a.destinationId!)!;
-                    this.stateService.addConnection({
-                        id: this.stateService.generateConnectionId('conn'),
-                        source: pId,
-                        target: tId,
-                        weight: a.weight,
-                        bendPoints: [],
-                        displayLabel: '',
-                    });
+                    this.stateService.addConnection(
+                        new LabeledNetEdge(this.stateService.generateConnectionId('conn'), pId, tId, a.weight),
+                    );
                 });
                 p.ingoingArcs.forEach((a) => {
                     const tId = transitionMap.get(a.sourceId!)!;
-                    this.stateService.addConnection({
-                        id: this.stateService.generateConnectionId('conn'),
-                        source: tId,
-                        target: pId,
-                        weight: a.weight,
-                        bendPoints: [],
-                        displayLabel: '',
-                    });
+                    this.stateService.addConnection(
+                        new LabeledNetEdge(this.stateService.generateConnectionId('conn'), tId, pId, a.weight),
+                    );
                 });
             });
 
-            this.springEmbedderService
-                .calculateLayout({
-                    getNodes: () => this.drawnElements(),
-                    getEdges: () => this.connections(),
-                })
-                .catch(console.error);
+            this.sugiyamaService.calculateLayout(this.drawnElements(), this.connections());
+            this.stateService.updateDrawnElements((e) => [...e]);
+            this.stateService.updateConnections((c) => [...c]);
         });
     }
 }

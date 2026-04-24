@@ -9,20 +9,6 @@ export class Condition extends DiagramPlace {
     // Maps original Petri net place IDs to the number of tokens in this condition for that trail.
     trailMarkings: Record<string, number> = {};
 
-    setTrailTokens(petriPlaceId: string, count: number): void {
-        if (!this.baseName) {
-            this.baseName = this.label;
-        }
-
-        if (count > 0) {
-            this.trailMarkings[petriPlaceId] = count;
-        } else {
-            delete this.trailMarkings[petriPlaceId];
-        }
-
-        this.updateDynamicLabel();
-    }
-
     getTrailTokens(petriPlaceId: string): number {
         return this.trailMarkings[petriPlaceId] || 0;
     }
@@ -75,6 +61,36 @@ export class LabeledNetEdge implements DisplayableEdge {
         this.source = source;
         this.target = target;
         this.weight = weight;
+    }
+}
+
+export class SugiyamaEdge extends LabeledNetEdge {
+    isReversed = false;
+    virtualSource: string;
+    virtualTarget: string;
+    originalEdge?: LabeledNetEdge;
+
+    constructor(edge: LabeledNetEdge) {
+        super(edge.id, edge.source, edge.target, edge.weight);
+        this.virtualSource = edge.source;
+        this.virtualTarget = edge.target;
+        this.originalEdge = edge;
+    }
+}
+
+export class LayeredNode {
+    labeledNetNode?: LabeledNetNode;
+    id: string;
+    layer: number;
+    isDummy: boolean;
+    x = 0;
+    y = 0;
+
+    constructor(id: string, layer: number, labeledNetNode?: LabeledNetNode, isDummy = false) {
+        this.id = id;
+        this.layer = layer;
+        this.labeledNetNode = labeledNetNode;
+        this.isDummy = isDummy;
     }
 }
 
