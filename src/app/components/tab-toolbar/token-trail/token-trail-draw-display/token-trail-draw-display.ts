@@ -17,7 +17,6 @@ import {
     LabeledNetEdge,
     LabeledNetNode,
 } from '../../../../classes/labeled-net.model';
-import { DiagramNode } from '../../../../classes/diagram/diagram-node';
 import { Diagram } from '../../../../classes/diagram/diagram';
 import { DisplayService } from '../../../../services/display.service';
 import {
@@ -44,6 +43,7 @@ import {
 } from '../../../draw-toolbar/draw-toolbar.component';
 import { ImageExportService } from '../../../../services/image-export.service';
 import { SourcePetriNetService } from '../../../../services/source-petri-net.service';
+import { TokenTrailMergeService } from './token-trail-merge.service';
 import { SvgEventNodeComponent } from '../../../display/svg-event-node/svg-event-node.component';
 import { PlayValidationService } from '../../../../services/play-validation.service';
 import { PlayService } from '../../../../services/play.service';
@@ -53,19 +53,26 @@ import { PetriNet as IlpnPetriNet } from '../../../../../../ilpn-components/src/
 import { Place as IlpnPlace } from '../../../../../../ilpn-components/src/lib/models/pn/model/place';
 import { Transition as IlpnTransition } from '../../../../../../ilpn-components/src/lib/models/pn/model/transition';
 import { PartialOrder } from '../../../../../../ilpn-components/src/lib/models/po/model/partial-order';
-import { SpringEmbedderService } from '../../../../services/spring-embedder.service';
 import { SugiyamaService } from '../../../../services/sugiyama.service';
-
-interface LastPhysicalMergeSnapshot {
-    anchorConditionId: string;
-    drawnElements: LabeledNetNode[];
-    connections: LabeledNetEdge[];
-    mergedConditionAnchorById: Record<string, string>;
-    removedConditionLabels: string[];
-}
 
 //TODO: clean this up, this is becoming huge, implement a merging service or something, or handle merging in the state service as well. Remove duplications or put them into a common place.
 
+/**
+ * TokenTrailDrawDisplayComponent is the main drawing canvas for Token Trail validation in the Token Trail tab.
+ *
+ * Responsibilities:
+ * - Canvas interaction: drag-drop, pan/zoom, click-based connection creation
+ * - Token editing in puzzle mode (scroll to adjust counts)
+ * - Live validation feedback (highlights invalid nodes/connections)
+ * - Drawing layout and rendering of conditions and events
+ * - Delegation of merge logic to `TokenTrailMergeService`
+ *
+ * The component maintains:
+ * - Drawing elements (Conditions and Events) via `TokenTrailStateService`
+ * - Currently selected element for connection drawing
+ * - Live validation state and display errors
+ * - SVG coordinate transformations for panning/zooming
+ */
 @Component({
     selector: 'app-token-trail-draw-display',
     standalone: true,
@@ -79,7 +86,7 @@ interface LastPhysicalMergeSnapshot {
         MatButtonToggleModule,
     ],
     templateUrl: './token-trail-draw-display.html',
-    providers: [PanningService],
+    providers: [PanningService, TokenTrailMergeService],
     styleUrls: ['./token-trail-draw-display.css'],
 })
 export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterViewInit {
@@ -244,9 +251,9 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
 
     private playValidationService = inject(PlayValidationService);
     private playService = inject(PlayService);
+    private mergeService = inject(TokenTrailMergeService);
     private pnToPOTransformer = inject(PetriNetToPartialOrderTransformerService);
     private ilp2MinerService = inject(Ilp2MinerService);
-    private springEmbedderService = inject(SpringEmbedderService);
 
     private customDropListener: ((event: Event) => void) | null = null;
     private displayService = inject(DisplayService);
@@ -256,11 +263,6 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
     private translateService = inject(TranslateService);
     private sourcePetriNetService = inject(SourcePetriNetService);
     private downloadSub?: Subscription;
-    private mergeAnimationTimeout?: ReturnType<typeof setTimeout>;
-    private lastPhysicalMergeSnapshot = signal<LastPhysicalMergeSnapshot | null>(null);
-
-    private readonly mergedConditionAnchorById = signal<Record<string, string>>({});
-    readonly mergeAnimationAnchorId = signal<string | null>(null);
 
     readonly viewBox = this.panningService.viewBoxAsString;
     readonly viewBoxObj = this.panningService.viewBox;
@@ -271,7 +273,6 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
     private readonly CONDITION_RADIUS = PLACE_RADIUS;
     private readonly EVENT_HALF_W = TRANSITION_SIZE / 2;
     private readonly EVENT_HALF_H = TRANSITION_SIZE / 2;
-    private readonly MERGE_DROP_DISTANCE = this.CONDITION_RADIUS * 1.2;
     private readonly UNMERGE_DRAG_DISTANCE = this.CONDITION_RADIUS * 2;
 
     private readonly _tokenPreviewEffect = effect(() => {
@@ -361,10 +362,6 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
         }
         this.downloadSub?.unsubscribe();
         this.fitViewSubscription?.unsubscribe();
-        if (this.mergeAnimationTimeout) {
-            clearTimeout(this.mergeAnimationTimeout);
-            this.mergeAnimationTimeout = undefined;
-        }
     }
 
     private handleCanvasMouseDown = (event: MouseEvent) => {
@@ -555,7 +552,7 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
         this.hasDragged = false;
         this.draggedElement = element;
         this.dragStartedMergedAnchorId =
-            element instanceof Condition ? this.getMergedConditionAnchorIdOrNull(element.id) : null;
+            element instanceof Condition ? this.mergeService.getMergedConditionAnchorIdOrNull(element.id) : null;
 
         const svgPoint = this.getSvgCoordinates(event);
         if (svgPoint) {
@@ -624,18 +621,23 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
             return;
         }
 
-        const anchorConditionId = this.resolveConditionAnchorId(element.id);
+        const anchorConditionId = this.mergeService.getMergedConditionAnchorIdOrNull(element.id) ?? element.id;
 
         // If it's a visual merge group (size > 1), double tap to FINALIZE it
-        if (this.getConditionGroupSize(anchorConditionId) > 1) {
-            this.finalizeMergedConditionGroup(anchorConditionId);
+        if (this.mergeService.getConditionGroupSize(anchorConditionId) > 1) {
+            const removedConditionIds = this.mergeService.finalizeMergedConditionGroup(anchorConditionId);
+            if (this.selectedElementId() && removedConditionIds.includes(this.selectedElementId()!)) {
+                this.selectedElementId.set(null);
+            }
             return;
         }
 
         // If it's already a finalized merged condition (size === 1) and the label has a '+' sign or multiplier, UNMERGE it
         const displayLabel = element.label ?? element.displayLabel;
         if (displayLabel.includes('+') || /^\d+\*/.test(displayLabel)) {
-            this.unmergeConditionGroup(anchorConditionId);
+            this.mergeService.unmergeConditionGroup(anchorConditionId, (conditionId) =>
+                this.shouldMarkAsStartCondition(conditionId),
+            );
             return;
         }
     }
@@ -706,7 +708,7 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
                         this.draggedElement.y - anchor.y,
                     );
                     if (distanceToAnchor > this.UNMERGE_DRAG_DISTANCE) {
-                        this.unmergeCondition(this.draggedElement.id);
+                        this.mergeService.unmergeCondition(this.draggedElement.id);
                         this.dragStartedMergedAnchorId = null;
                     }
                 }
@@ -723,7 +725,7 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
         }
 
         if (releasedElement instanceof Condition && this.hasDragged) {
-            this.tryMergeConditionOnDrop(releasedElement);
+            this.mergeService.tryMergeConditionOnDrop(releasedElement);
         }
 
         this.draggedElement = null;
@@ -839,13 +841,7 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
 
     clearDrawing() {
         this.selectedElementId.set(null);
-        this.mergedConditionAnchorById.set({});
-        this.lastPhysicalMergeSnapshot.set(null);
-        this.mergeAnimationAnchorId.set(null);
-        if (this.mergeAnimationTimeout) {
-            clearTimeout(this.mergeAnimationTimeout);
-            this.mergeAnimationTimeout = undefined;
-        }
+        this.mergeService.clearMergeState();
 
         const diagram = this.displayService.diagram;
         if (diagram instanceof Diagram) {
@@ -857,12 +853,7 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
 
     deleteElement(element: LabeledNetNode) {
         if (element instanceof Condition) {
-            const lastSnapshot = this.lastPhysicalMergeSnapshot();
-            if (lastSnapshot && lastSnapshot.anchorConditionId === element.id) {
-                this.commitLastPhysicalMergeSnapshot();
-            }
-            this.removeConditionFromMergeGraph(element.id);
-            this.stateService.releaseConditionName(element.baseName ?? element.label ?? element.displayLabel);
+            this.mergeService.handleConditionDelete(element);
         }
         this.stateService.removeDrawnElement(element.id);
 
@@ -1024,7 +1015,7 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
     }
 
     private isValidConditionEventPair(sourceNode: LabeledNetNode, targetNode: LabeledNetNode): boolean {
-        return this.isCondition(sourceNode) !== this.isCondition(targetNode);
+        return sourceNode instanceof Condition !== targetNode instanceof Condition;
     }
 
     private hasExactConnectionDirection(sourceId: string, targetId: string): boolean {
@@ -1033,531 +1024,33 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
         );
     }
 
-    private finalizeMergedConditionGroup(anchorConditionId: string) {
-        const groupMemberIds = this.getConditionGroupMembers(anchorConditionId);
-        const removedConditionIds = groupMemberIds.filter((id) => id !== anchorConditionId);
-        if (removedConditionIds.length === 0) {
-            return;
-        }
+    // Template/view helpers bound to merge service
 
-        const allMemberNodes = groupMemberIds
-            .map((id) => this.getElementById(id))
-            .filter((node): node is Condition => node instanceof Condition);
-
-        // Immediate release of ALL member base names to generate the optimal lowest available one
-        allMemberNodes.forEach((node) => {
-            if (node.baseName) {
-                this.stateService.releaseConditionName(node.baseName);
-            }
-        });
-        const newMergedBaseName = this.stateService.generateConditionName();
-
-        // Only the most recent physical merge is reversible.
-        this.commitLastPhysicalMergeSnapshot();
-        this.lastPhysicalMergeSnapshot.set({
-            anchorConditionId,
-            drawnElements: this.cloneDrawnElements(this.drawnElements()),
-            connections: this.cloneConnections(this.connections()),
-            mergedConditionAnchorById: { ...this.mergedConditionAnchorById() },
-            removedConditionLabels: [], // Immediately released, so nothing queued
-        });
-
-        const removedConditionIdSet = new Set(removedConditionIds);
-
-        // Update the anchor condition with the merged label and trail markings
-        const mergedLabel = this.computeMergedLabel(groupMemberIds);
-
-        // Sum trail markings across all members
-        const combinedTrailMarkings: Record<string, number> = {};
-        for (const memberNode of allMemberNodes) {
-            for (const [place, count] of Object.entries(memberNode.trailMarkings)) {
-                combinedTrailMarkings[place] = (combinedTrailMarkings[place] ?? 0) + count;
-            }
-        }
-
-        this.stateService.updateDrawnElements((elements) =>
-            elements
-                .map((node) => {
-                    if (node.id === anchorConditionId && node instanceof Condition) {
-                        const updated = this.stateService.buildCondition(node.id, mergedLabel, node.tokenCount(), {
-                            hideTokens: node.hideTokens,
-                            isStartPlace: node.isStartPlace,
-                            labelPlacement: node.labelPlacement,
-                            baseName: newMergedBaseName,
-                        });
-                        updated.trailMarkings = combinedTrailMarkings;
-                        updated.updateDynamicLabel();
-                        updated.x = node.x;
-                        updated.y = node.y;
-                        return updated;
-                    }
-                    return node;
-                })
-                .filter((node) => !removedConditionIdSet.has(node.id)),
-        );
-
-        this.stateService.updateConnections((connections) => {
-            const remapped = connections
-                .map((connection) => {
-                    const mappedSource = removedConditionIdSet.has(connection.source)
-                        ? anchorConditionId
-                        : connection.source;
-                    const mappedTarget = removedConditionIdSet.has(connection.target)
-                        ? anchorConditionId
-                        : connection.target;
-                    return {
-                        ...connection,
-                        source: mappedSource,
-                        target: mappedTarget,
-                    };
-                })
-                .filter(
-                    (connection) =>
-                        !(connection.source === anchorConditionId && connection.target === anchorConditionId),
-                );
-
-            const uniqueByDirection = new Map<string, (typeof remapped)[number]>();
-            for (const connection of remapped) {
-                const key = `${connection.source}->${connection.target}`;
-                if (!uniqueByDirection.has(key)) {
-                    uniqueByDirection.set(key, connection);
-                }
-            }
-            return Array.from(uniqueByDirection.values());
-        });
-
-        this.mergedConditionAnchorById.update((currentMap) => {
-            const nextMap = { ...currentMap };
-            for (const removedId of removedConditionIds) {
-                delete nextMap[removedId];
-            }
-            delete nextMap[anchorConditionId];
-
-            for (const [conditionId, mappedAnchorId] of Object.entries(nextMap)) {
-                if (removedConditionIdSet.has(mappedAnchorId)) {
-                    delete nextMap[conditionId];
-                }
-            }
-
-            return nextMap;
-        });
-
-        if (this.selectedElementId() && removedConditionIdSet.has(this.selectedElementId()!)) {
-            this.selectedElementId.set(null);
-        }
-
-        this.playMergeAnimation(anchorConditionId);
-    }
-
-    private unmergeConditionGroup(anchorConditionId: string) {
-        const anchorNode = this.getElementById(anchorConditionId);
-        if (!(anchorNode instanceof Condition)) {
-            return;
-        }
-
-        const mergedLabel = anchorNode.label ?? anchorNode.displayLabel;
-        const parsedLabels = this.parseMergedLabel(mergedLabel);
-
-        if (parsedLabels.length <= 1) {
-            return;
-        }
-
-        // Release the anchor's base name so its pieces can optimally reuse it (e.g. c1)
-        if (anchorNode.baseName) {
-            this.stateService.releaseConditionName(anchorNode.baseName);
-        }
-
-        const newIds: string[] = [];
-
-        this.stateService.updateDrawnElements((elements) => {
-            const updated = elements.filter((n) => n.id !== anchorConditionId);
-
-            // Add back the anchor with the first label
-            const firstClone = this.stateService.buildCondition(
-                anchorConditionId,
-                parsedLabels[0],
-                anchorNode.tokenCount(),
-                {
-                    hideTokens: anchorNode.hideTokens,
-                    isStartPlace: this.shouldMarkAsStartCondition(parsedLabels[0]),
-                    labelPlacement: anchorNode.labelPlacement,
-                },
-            );
-            firstClone.trailMarkings = { [parsedLabels[0]]: 1 };
-            firstClone.updateDynamicLabel();
-            firstClone.x = anchorNode.x;
-            firstClone.y = anchorNode.y;
-            updated.push(firstClone);
-            newIds.push(anchorConditionId);
-
-            // Add the rest
-            const otherLabels = parsedLabels.slice(1);
-            otherLabels.forEach((label, index) => {
-                const angle = ((index + 1) / otherLabels.length) * 2 * Math.PI;
-                const radius = 80;
-                const newX = anchorNode.x + Math.cos(angle) * radius;
-                const newY = anchorNode.y + Math.sin(angle) * radius;
-
-                const newId = this.stateService.generateElementId(`drawn-${label}`);
-                const clone = this.stateService.buildCondition(newId, label, 0, {
-                    hideTokens: anchorNode.hideTokens,
-                    isStartPlace: this.shouldMarkAsStartCondition(label),
-                    labelPlacement: anchorNode.labelPlacement,
-                });
-                clone.trailMarkings = { [label]: 1 };
-                clone.updateDynamicLabel();
-                clone.x = newX;
-                clone.y = newY;
-                updated.push(clone);
-                newIds.push(newId);
-            });
-
-            return updated;
-        });
-
-        // Duplicate connections for all unmerged conditions
-        this.stateService.updateConnections((connections) => {
-            const newConnections: LabeledNetEdge[] = [];
-
-            for (const conn of connections) {
-                if (conn.source === anchorConditionId) {
-                    for (let i = 1; i < newIds.length; i++) {
-                        const newConnId = this.stateService.generateConnectionId('conn');
-                        const newConn = {
-                            id: newConnId,
-                            source: newIds[i],
-                            target: conn.target,
-                            weight: conn.weight,
-                            bendPoints: [],
-                            displayLabel: conn.displayLabel,
-                        };
-                        newConnections.push(newConn as LabeledNetEdge);
-                    }
-                }
-
-                if (conn.target === anchorConditionId) {
-                    for (let i = 1; i < newIds.length; i++) {
-                        const newConnId = this.stateService.generateConnectionId('conn');
-                        const newConn = {
-                            id: newConnId,
-                            source: conn.source,
-                            target: newIds[i],
-                            weight: conn.weight,
-                            bendPoints: [],
-                            displayLabel: conn.displayLabel,
-                        };
-                        newConnections.push(newConn as LabeledNetEdge);
-                    }
-                }
-            }
-            return [...connections, ...newConnections];
-        });
-
-        this.playMergeAnimation(anchorConditionId);
-    }
-
-    private parseMergedLabel(label: string): string[] {
-        // Parse a merged label like "p1 + 2*p2" into individual labels
-        const result: string[] = [];
-        const parts = label.split(' + ').map((p) => p.trim());
-
-        for (const part of parts) {
-            // Parse multipliers like "2*p1" or single labels like "p1"
-            const match = part.match(/^(\d+)\*(.+)$|^(.+)$/);
-            if (match) {
-                const multiplier = match[1] ? parseInt(match[1], 10) : 1;
-                const singleLabel = match[2] || match[3];
-                for (let i = 0; i < multiplier; i++) {
-                    result.push(singleLabel);
-                }
-            }
-        }
-
-        return result;
-    }
-
+    /**
+     * Check if a node should visually display a merge anchor badge (i.e., multiple conditions merged).
+     * Used by the template to render the merge group size indicator.
+     */
     isMergeAnchor(node: LabeledNetNode): boolean {
-        return node instanceof Condition && this.getConditionGroupSize(node.id) > 1;
+        return this.mergeService.isMergeAnchor(node);
     }
 
+    /**
+     * Check if a node is currently playing its merge animation.
+     * Used by the template to apply CSS animation classes.
+     */
     isMergeAnimating(node: LabeledNetNode): boolean {
-        return node instanceof Condition && this.mergeAnimationAnchorId() === node.id;
+        return this.mergeService.isMergeAnimating(node);
     }
 
+    /**
+     * Get the size of the merge group that this condition belongs to.
+     * Used by the template to display the merge count badge.
+     */
     getConditionGroupSize(conditionId: string): number {
-        const anchorId = this.resolveConditionAnchorId(conditionId);
-        return this.drawnElements().filter(
-            (node) => node instanceof Condition && this.resolveConditionAnchorId(node.id) === anchorId,
-        ).length;
+        return this.mergeService.getConditionGroupSize(conditionId);
     }
 
-    private tryMergeConditionOnDrop(condition: Condition) {
-        const mergeTarget = this.findConditionMergeTarget(condition);
-        if (!mergeTarget) {
-            return;
-        }
-        this.mergeConditions(condition.id, mergeTarget.id);
-    }
-
-    private findConditionMergeTarget(movingCondition: Condition): Condition | null {
-        const movingAnchorId = this.resolveConditionAnchorId(movingCondition.id);
-        let nearest: { node: Condition; distance: number } | null = null;
-
-        for (const node of this.drawnElements()) {
-            if (!(node instanceof Condition) || node.id === movingCondition.id) {
-                continue;
-            }
-
-            if (this.resolveConditionAnchorId(node.id) === movingAnchorId) {
-                continue;
-            }
-
-            const distance = Math.hypot(movingCondition.x - node.x, movingCondition.y - node.y);
-            if (distance > this.MERGE_DROP_DISTANCE) {
-                continue;
-            }
-
-            if (!nearest || distance < nearest.distance) {
-                nearest = { node, distance };
-            }
-        }
-
-        return nearest?.node ?? null;
-    }
-
-    private mergeConditions(sourceConditionId: string, targetConditionId: string) {
-        const sourceAnchorId = this.resolveConditionAnchorId(sourceConditionId);
-        const targetAnchorId = this.resolveConditionAnchorId(targetConditionId);
-        if (sourceAnchorId === targetAnchorId) {
-            return;
-        }
-
-        const sourceGroupMembers = this.getConditionGroupMembers(sourceAnchorId);
-        this.mergedConditionAnchorById.update((currentMap) => {
-            const nextMap = { ...currentMap };
-            for (const memberId of sourceGroupMembers) {
-                if (memberId !== targetAnchorId) {
-                    nextMap[memberId] = targetAnchorId;
-                }
-            }
-            delete nextMap[targetAnchorId];
-            return nextMap;
-        });
-
-        this.animateMergedConditionsTowardsAnchor(targetAnchorId);
-        this.playMergeAnimation(targetAnchorId);
-    }
-
-    private unmergeCondition(conditionId: string) {
-        this.mergedConditionAnchorById.update((currentMap) => {
-            if (!currentMap[conditionId]) {
-                return currentMap;
-            }
-            const nextMap = { ...currentMap };
-            delete nextMap[conditionId];
-            return nextMap;
-        });
-    }
-
-    private removeConditionFromMergeGraph(conditionId: string) {
-        this.mergedConditionAnchorById.update((currentMap) => {
-            const nextMap = { ...currentMap };
-
-            if (nextMap[conditionId]) {
-                delete nextMap[conditionId];
-                return nextMap;
-            }
-
-            const mergedChildren = Object.entries(nextMap)
-                .filter(([, anchorId]) => anchorId === conditionId)
-                .map(([id]) => id);
-
-            if (mergedChildren.length === 0) {
-                return nextMap;
-            }
-
-            const [newAnchorId, ...otherChildren] = mergedChildren;
-            delete nextMap[newAnchorId];
-            for (const childId of otherChildren) {
-                nextMap[childId] = newAnchorId;
-            }
-
-            return nextMap;
-        });
-    }
-
-    private animateMergedConditionsTowardsAnchor(anchorConditionId: string) {
-        const anchorNode = this.getElementById(anchorConditionId);
-        if (!(anchorNode instanceof Condition)) {
-            return;
-        }
-
-        const members = this.getConditionGroupMembers(anchorConditionId).filter((id) => id !== anchorConditionId);
-        if (members.length === 0) {
-            return;
-        }
-
-        const placementRadius = Math.max(12, this.CONDITION_RADIUS * 0.9);
-        members.forEach((memberId, index) => {
-            const angle = (index / members.length) * 2 * Math.PI;
-            const targetX = anchorNode.x + Math.cos(angle) * placementRadius;
-            const targetY = anchorNode.y + Math.sin(angle) * placementRadius;
-            this.animateConditionPosition(memberId, targetX, targetY, 180);
-        });
-    }
-
-    private animateConditionPosition(conditionId: string, targetX: number, targetY: number, durationMs: number) {
-        const conditionNode = this.getElementById(conditionId);
-        if (!(conditionNode instanceof Condition)) {
-            return;
-        }
-
-        const startX = conditionNode.x;
-        const startY = conditionNode.y;
-        const startTime = performance.now();
-
-        const step = (now: number) => {
-            const progress = Math.min(1, (now - startTime) / durationMs);
-            const eased = 1 - Math.pow(1 - progress, 3);
-            const nextX = startX + (targetX - startX) * eased;
-            const nextY = startY + (targetY - startY) * eased;
-
-            this.stateService.updateDrawnElements((elements) =>
-                elements.map((node) => {
-                    if (node.id !== conditionId || !(node instanceof Condition)) {
-                        return node;
-                    }
-
-                    node.x = nextX;
-                    node.y = nextY;
-                    return node;
-                }),
-            );
-
-            if (progress < 1) {
-                requestAnimationFrame(step);
-            }
-        };
-
-        requestAnimationFrame(step);
-    }
-
-    private playMergeAnimation(anchorConditionId: string) {
-        this.mergeAnimationAnchorId.set(anchorConditionId);
-        if (this.mergeAnimationTimeout) {
-            clearTimeout(this.mergeAnimationTimeout);
-        }
-        this.mergeAnimationTimeout = setTimeout(() => {
-            if (this.mergeAnimationAnchorId() === anchorConditionId) {
-                this.mergeAnimationAnchorId.set(null);
-            }
-        }, 220);
-    }
-
-    private getConditionGroupMembers(anchorId: string): string[] {
-        return this.drawnElements()
-            .filter((node): node is Condition => node instanceof Condition)
-            .filter((condition) => this.resolveConditionAnchorId(condition.id) === anchorId)
-            .map((condition) => condition.id);
-    }
-
-    private computeMergedLabel(groupMemberIds: string[]): string {
-        // Get all labels from the group members, parsing existing multipliers
-        const labelCounts = new Map<string, number>();
-
-        for (const id of groupMemberIds) {
-            const node = this.getElementById(id);
-            if (!(node instanceof Condition)) continue;
-
-            // Since trailMarkings correctly hold all specific markings now,
-            // the merged label is best generated dynamically from merged trail markings
-            for (const [place, count] of Object.entries(node.trailMarkings)) {
-                labelCounts.set(place, (labelCounts.get(place) ?? 0) + count);
-            }
-        }
-
-        // Build the merged label with counts and plus signs
-        const parts: string[] = [];
-        const sortedPlaces = Array.from(labelCounts.keys()).sort((a, b) =>
-            a.localeCompare(b, undefined, { numeric: true }),
-        );
-
-        for (const label of sortedPlaces) {
-            const count = labelCounts.get(label)!;
-            if (count > 1) {
-                parts.push(`${count}*${label}`);
-            } else {
-                parts.push(label);
-            }
-        }
-
-        return parts.length > 0 ? parts.join(' + ') : 'c...'; // fallback baseline label will be replaced by the object method correctly
-    }
-
-    private getMergedConditionAnchorIdOrNull(conditionId: string): string | null {
-        const resolvedAnchor = this.resolveConditionAnchorId(conditionId);
-        return resolvedAnchor === conditionId ? null : resolvedAnchor;
-    }
-
-    private resolveConditionAnchorId(conditionId: string): string {
-        const anchorMap = this.mergedConditionAnchorById();
-        let anchorId = conditionId;
-        const visited = new Set<string>();
-
-        while (anchorMap[anchorId] && !visited.has(anchorId)) {
-            visited.add(anchorId);
-            anchorId = anchorMap[anchorId];
-        }
-
-        return anchorId;
-    }
-
-    private commitLastPhysicalMergeSnapshot() {
-        const lastSnapshot = this.lastPhysicalMergeSnapshot();
-        if (!lastSnapshot) {
-            return;
-        }
-
-        for (const conditionLabel of lastSnapshot.removedConditionLabels) {
-            this.stateService.releaseConditionName(conditionLabel);
-        }
-        this.lastPhysicalMergeSnapshot.set(null);
-    }
-
-    private cloneDrawnElements(elements: LabeledNetNode[]): LabeledNetNode[] {
-        return elements.map((node) => {
-            if (node instanceof Condition) {
-                const clone = this.stateService.buildCondition(
-                    node.id,
-                    node.label ?? node.displayLabel,
-                    node.tokenCount(),
-                    {
-                        hideTokens: node.hideTokens,
-                        isStartPlace: node.isStartPlace,
-                        baseName: node.baseName,
-                    },
-                );
-                clone.trailMarkings = { ...node.trailMarkings };
-                clone.x = node.x;
-                clone.y = node.y;
-                return clone;
-            }
-
-            const clone = this.stateService.buildEvent(node.id, node.displayLabel, node.transitionId);
-            clone.x = node.x;
-            clone.y = node.y;
-            return clone;
-        });
-    }
-
-    private cloneConnections(connections: LabeledNetEdge[]): LabeledNetEdge[] {
-        return connections.map((connection) => {
-            const clone = new LabeledNetEdge(connection.id, connection.source, connection.target, connection.weight);
-            clone.displayLabel = connection.displayLabel;
-            clone.bendPoints = connection.bendPoints.map((point) => ({ x: point.x, y: point.y }));
-            return clone;
-        });
-    }
+    // Merge behavior moved to `TokenTrailMergeService`.
 
     // Helpers for template
     getElementById(id: string): LabeledNetNode | undefined {
@@ -1592,10 +1085,6 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
             return false;
         }
         return this.getCurrentStartConditionCount(conditionId) < this.getRequiredStartConditionCount(conditionId);
-    }
-
-    isCondition(node: DiagramNode): boolean {
-        return node instanceof Condition;
     }
 
     private createNewLPN() {
