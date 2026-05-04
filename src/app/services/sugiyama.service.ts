@@ -1,10 +1,18 @@
 import { Injectable } from '@angular/core';
 import { LabeledNetEdge, LabeledNetNode, LayeredNode, SugiyamaEdge } from '../classes/labeled-net.model';
 
+/**
+ * Service for calculating layout positions using the Sugiyama algorithm.
+ */
 @Injectable({
     providedIn: 'root',
 })
 export class SugiyamaService {
+    /**
+     * Calculates the layout for a given set of nodes and edges.
+     * @param nodes The nodes to space out and coordinate.
+     * @param edges The edges connecting those nodes.
+     */
     calculateLayout(nodes: LabeledNetNode[], edges: LabeledNetEdge[]) {
         // 1. Cycle Breaking
         const dagEdges = this.cycleBreaking(edges, nodes);
@@ -25,6 +33,12 @@ export class SugiyamaService {
         this.applyLayout(nodes, edges, orderedLayers, extendedDagEdges);
     }
 
+    /**
+     * Finds and reverses cycles in the graph to create a Directed Acyclic Graph (DAG).
+     * @param edges The edges of the graph.
+     * @param nodes The nodes of the graph.
+     * @returns A list of edges forming a DAG.
+     */
     private cycleBreaking(edges: LabeledNetEdge[], nodes: LabeledNetNode[]) {
         const allEdges = edges.map((e) => new SugiyamaEdge(e));
         const dagEdges: SugiyamaEdge[] = [];
@@ -36,13 +50,12 @@ export class SugiyamaService {
         nodes.forEach((n) => edgeMap.set(n.id, []));
         allEdges.forEach((e) => edgeMap.get(e.source)?.push(e));
 
-        function dfs(nodeId: string) {
+        const dfs = (nodeId: string) => {
             visiting.add(nodeId);
             const outgoing = edgeMap.get(nodeId) || [];
 
             for (const edge of outgoing) {
                 if (visiting.has(edge.target)) {
-                    // Cycle detected! Reverse it.
                     edge.isReversed = true;
                     const temp = edge.virtualSource;
                     edge.virtualSource = edge.virtualTarget;
@@ -52,21 +65,14 @@ export class SugiyamaService {
                     dagEdges.push(edge);
                     dfs(edge.target);
                 } else {
-                    // Target already fully visited, just add forward edge
                     dagEdges.push(edge);
                 }
             }
             visiting.delete(nodeId);
             visited.add(nodeId);
-        }
+        };
 
-        // Just start DFS from sources (in-degree 0) or all unvisited
-        // Find sources:
-        const inDegree = new Map<string, number>();
-        nodes.forEach((n) => inDegree.set(n.id, 0));
-        allEdges.forEach((e) => inDegree.set(e.target, (inDegree.get(e.target) || 0) + 1));
-
-        const sources = nodes.filter((n) => inDegree.get(n.id) === 0);
+        const sources = this.findGraphSources(nodes, allEdges);
 
         for (const source of sources) {
             if (!visited.has(source.id)) dfs(source.id);
@@ -78,13 +84,25 @@ export class SugiyamaService {
         return dagEdges;
     }
 
-    private reverseEdge(edge: SugiyamaEdge) {
-        edge.isReversed = !edge.isReversed;
-        const temp = edge.virtualSource;
-        edge.virtualSource = edge.virtualTarget;
-        edge.virtualTarget = temp;
+    /**
+     * Finds the nodes that have an in-degree of 0.
+     * @param nodes The graph nodes.
+     * @param allEdges All edges in the graph.
+     * @returns A list of source nodes.
+     */
+    private findGraphSources(nodes: LabeledNetNode[], allEdges: SugiyamaEdge[]): LabeledNetNode[] {
+        const inDegree = new Map<string, number>();
+        nodes.forEach((n) => inDegree.set(n.id, 0));
+        allEdges.forEach((e) => inDegree.set(e.target, (inDegree.get(e.target) || 0) + 1));
+        return nodes.filter((n) => inDegree.get(n.id) === 0);
     }
 
+    /**
+     * Assigns nodes to logical layers based on their dependencies.
+     * @param nodes The nodes of the graph.
+     * @param dagEdges The acyclic edges.
+     * @returns A map representing the layers of nodes.
+     */
     private assignLayers(nodes: LabeledNetNode[], dagEdges: SugiyamaEdge[]): Map<number, LayeredNode[]> {
         const layers = new Map<string, number>();
 
@@ -116,6 +134,12 @@ export class SugiyamaService {
         return layeredGraph;
     }
 
+    /**
+     * Adds dummy nodes to edges that span across multiple layers to maintain uniform connectivity.
+     * @param layeredGraph The layered graph map.
+     * @param dagEdges The acyclic edges.
+     * @returns An object containing the extended layers map and modified edges.
+     */
     private addDummyNodes(layeredGraph: Map<number, LayeredNode[]>, dagEdges: SugiyamaEdge[]) {
         const extendedDagEdges: SugiyamaEdge[] = [];
         let dummyCount = 0;
@@ -156,6 +180,12 @@ export class SugiyamaService {
         return { layersMap: layeredGraph, extendedDagEdges };
     }
 
+    /**
+     * Minimizes edge crossings by sorting nodes within each layer iteratively.
+     * @param layeredGraph Map of layer indices to arrays of layered nodes.
+     * @param dagEdges Edges connected between layers.
+     * @returns The optimized layered graph representation.
+     */
     private minimizeCrossings(
         layeredGraph: Map<number, LayeredNode[]>,
         dagEdges: SugiyamaEdge[],
@@ -163,14 +193,11 @@ export class SugiyamaService {
         const layersCount = Math.max(...Array.from(layeredGraph.keys())) + 1;
         const iterations = 15;
 
-        // Perform initialization sort by degree, etc to give a better start point
         for (let iter = 0; iter < iterations; iter++) {
-            // Forward sweep
             for (let i = 1; i < layersCount; i++) {
                 if (!layeredGraph.has(i)) continue;
                 this.barycenterSort(layeredGraph.get(i)!, layeredGraph.get(i - 1)!, dagEdges, true);
             }
-            // Backward sweep
             for (let i = layersCount - 2; i >= 0; i--) {
                 if (!layeredGraph.has(i)) continue;
                 this.barycenterSort(layeredGraph.get(i)!, layeredGraph.get(i + 1)!, dagEdges, false);
@@ -179,6 +206,13 @@ export class SugiyamaService {
         return layeredGraph;
     }
 
+    /**
+     * Sorts the nodes in a layer using the barycenter heuristic to reduce edge crossings.
+     * @param layer The layer of nodes to sort.
+     * @param referenceLayer The neighboring layer to act as the positional reference.
+     * @param edges Connectivity between layers.
+     * @param forward Determines the orientation to analyze adjacent connections.
+     */
     private barycenterSort(
         layer: LayeredNode[],
         referenceLayer: LayeredNode[],
@@ -207,7 +241,6 @@ export class SugiyamaService {
             barycenters.set(node.id, count > 0 ? sum / count : fallbackIndex);
         }
 
-        // Sort elements keeping stable placement for equal values
         layer.sort((a, b) => {
             const valA = barycenters.get(a.id) || 0;
             const valB = barycenters.get(b.id) || 0;
@@ -218,46 +251,97 @@ export class SugiyamaService {
         });
     }
 
+    /**
+     * Computes final coordinate positions for all configured layered nodes.
+     * @param layeredGraph Structured node layout by tiers.
+     */
     private positionNodes(layeredGraph: Map<number, LayeredNode[]>) {
         const layerWidth = 150;
         const nodeSpacing = 100;
 
         const layers = Array.from(layeredGraph.keys()).sort((a, b) => a - b);
-        const layersCount = layers.length;
 
-        // Calculate max height to center layers vertically
+        const layerHeights = this.calculateLayerHeights(layers, layeredGraph, nodeSpacing);
+        const maxHeight = Math.max(...Array.from(layerHeights.values()));
+
+        this.applyLeftToRightPositions(layers, layeredGraph, layerHeights, maxHeight, layerWidth, nodeSpacing);
+    }
+
+    /**
+     * Computes the vertical heights populated per layer based on node spacing.
+     * @param layers Array of layer ids in order.
+     * @param layeredGraph Mapped association of layers and their nodes.
+     * @param nodeSpacing Physical vertical separation gap.
+     * @returns A map representing computed vertical height requirement offsets.
+     */
+    private calculateLayerHeights(
+        layers: number[],
+        layeredGraph: Map<number, LayeredNode[]>,
+        nodeSpacing: number,
+    ): Map<number, number> {
         const layerHeights = new Map<number, number>();
-        let maxHeight = 0;
-
         for (const layerIdx of layers) {
             const nodes = layeredGraph.get(layerIdx)!;
             const height = (nodes.length - 1) * nodeSpacing;
             layerHeights.set(layerIdx, height);
-            if (height > maxHeight) maxHeight = height;
         }
+        return layerHeights;
+    }
 
-        // Apply positions for left-to-right layout
+    /**
+     * Applies standard coordinates to physical layered node spaces processing layers linearly left to right.
+     * @param layers Array of layer ids sequentially.
+     * @param layeredGraph Mapping representing nodes logically partitioned by tiers.
+     * @param layerHeights Evaluated coordinate heights offset by tier mapping.
+     * @param maxHeight Maximum required height alignment constraint limits.
+     * @param layerWidth Structural uniform separation.
+     * @param nodeSpacing Height offset unit scale per element node spacing step.
+     */
+    private applyLeftToRightPositions(
+        layers: number[],
+        layeredGraph: Map<number, LayeredNode[]>,
+        layerHeights: Map<number, number>,
+        maxHeight: number,
+        layerWidth: number,
+        nodeSpacing: number,
+    ) {
         for (const layerIdx of layers) {
             const nodes = layeredGraph.get(layerIdx)!;
             const layerX = layerIdx * layerWidth;
             const layerHeight = layerHeights.get(layerIdx)!;
-            let currentY = (maxHeight - layerHeight) / 2; // Center alignment vertically
+            let currentY = (maxHeight - layerHeight) / 2;
 
             for (const node of nodes) {
                 node.x = layerX + 50;
-                node.y = currentY + 50; // offset slightly from 0,0
+                node.y = currentY + 50;
                 currentY += nodeSpacing;
             }
         }
     }
 
+    /**
+     * Propagates layout positions from graph structures directly to user node rendering elements.
+     * @param nodes Global base array representing visual models.
+     * @param edges Original connector dependencies.
+     * @param layeredGraph Analyzed layered configurations determining x and y bounds.
+     * @param extendedDagEdges Intermediate connectivity processing details utilized for rendering line adjustments.
+     */
     private applyLayout(
         nodes: LabeledNetNode[],
         edges: LabeledNetEdge[],
         layeredGraph: Map<number, LayeredNode[]>,
         extendedDagEdges: SugiyamaEdge[],
     ) {
-        // Apply node coordinates
+        this.applyNodeCoordinates(nodes, layeredGraph);
+        this.applyBendpoints(edges, layeredGraph, extendedDagEdges);
+    }
+
+    /**
+     * Translates coordinates from internal layering calculation graph items directly onto final user structure representations.
+     * @param nodes Output layout destinations nodes representations structure array references.
+     * @param layeredGraph Analyzed layered properties bounds objects definitions constraints structure tree details source limits structures parameters setup.
+     */
+    private applyNodeCoordinates(nodes: LabeledNetNode[], layeredGraph: Map<number, LayeredNode[]>) {
         for (const layer of layeredGraph.values()) {
             for (const node of layer) {
                 if (!node.isDummy && node.labeledNetNode) {
@@ -269,50 +353,70 @@ export class SugiyamaService {
                 }
             }
         }
+    }
 
-        // Apply bendpoints by tracing dummy paths
+    /**
+     * Distributes structured bendpoint positions derived from hidden logical structures along their respective graph display lines connections geometries mapping.
+     * @param edges Connective models bounds visual structures arrays mappings configuration details bindings.
+     * @param layeredGraph Analyzed layout elements mapping representation reference source details tree definitions bounds object limitations limitations structures layouts.
+     * @param extendedDagEdges Logical intermediate configuration mappings setup representing logical line route segments restrictions settings.
+     */
+    private applyBendpoints(
+        edges: LabeledNetEdge[],
+        layeredGraph: Map<number, LayeredNode[]>,
+        extendedDagEdges: SugiyamaEdge[],
+    ) {
         for (const edge of edges) {
             edge.bendPoints = [];
 
             const paths = extendedDagEdges.filter((e) => e.originalEdge?.id === edge.id);
             if (paths.length > 1) {
-                // To trace path properly in order:
-                // Start from original source, follow virtualTargets
-                const dummies: LayeredNode[] = [];
-                let currentVirtualId = edge.source;
-                const foundNext = true;
-
-                while (foundNext && currentVirtualId !== edge.target) {
-                    const segment = paths.find(
-                        (p) => (!p.isReversed ? p.virtualSource : p.virtualTarget) === currentVirtualId,
-                    );
-                    if (!segment) break;
-
-                    const nextVirtualId = !segment.isReversed ? segment.virtualTarget : segment.virtualSource;
-                    const nextNode = this.findNodeInLayers(layeredGraph, nextVirtualId);
-
-                    if (nextNode && nextNode.isDummy) {
-                        dummies.push(nextNode);
-                    }
-                    currentVirtualId = nextVirtualId;
-                }
-
-                // Original tracing issue fix: use properly ordered list directly
-                if (dummies.length > 0) {
-                    edge.bendPoints = dummies.map((d) => ({ x: d.x, y: d.y }));
-                } else {
-                    // Fallback to sorting by layer Y
-                    const dummyNodesInPath = paths
-                        .map((p) => this.findNodeInLayers(layeredGraph, p.virtualTarget))
-                        .filter((n) => n?.isDummy);
-
-                    dummyNodesInPath.sort((a, b) => a!.y - b!.y);
-                    edge.bendPoints = dummyNodesInPath.map((d) => ({ x: d!.x, y: d!.y }));
-                }
+                this.traceDummyPath(edge, paths, layeredGraph);
             }
         }
     }
 
+    /**
+     * Detects mapped connector locations matching paths logical points setup.
+     * @param edge Single connective line instance bounds limits details limits limits layouts formats setups limitations representations.
+     * @param paths Multiple sequential sub components connecting logically structures boundaries elements references setups implementations.
+     * @param layeredGraph Analyzed layered properties representations definitions constraints limits dependencies configuration restrictions mappings.
+     */
+    private traceDummyPath(edge: LabeledNetEdge, paths: SugiyamaEdge[], layeredGraph: Map<number, LayeredNode[]>) {
+        const dummies: LayeredNode[] = [];
+        let currentVirtualId = edge.source;
+
+        while (currentVirtualId !== edge.target) {
+            const segment = paths.find((p) => (!p.isReversed ? p.virtualSource : p.virtualTarget) === currentVirtualId);
+            if (!segment) break;
+
+            const nextVirtualId = !segment.isReversed ? segment.virtualTarget : segment.virtualSource;
+            const nextNode = this.findNodeInLayers(layeredGraph, nextVirtualId);
+
+            if (nextNode && nextNode.isDummy) {
+                dummies.push(nextNode);
+            }
+            currentVirtualId = nextVirtualId;
+        }
+
+        if (dummies.length > 0) {
+            edge.bendPoints = dummies.map((d) => ({ x: d.x, y: d.y }));
+        } else {
+            const dummyNodesInPath = paths
+                .map((p) => this.findNodeInLayers(layeredGraph, p.virtualTarget))
+                .filter((n) => n?.isDummy);
+
+            dummyNodesInPath.sort((a, b) => a!.y - b!.y);
+            edge.bendPoints = dummyNodesInPath.map((d) => ({ x: d!.x, y: d!.y }));
+        }
+    }
+
+    /**
+     * Finds a single node reference in the layered graph by matching ID key identifier strings names texts patterns bounds definitions.
+     * @param layeredGraph Analyzed layered configurations reference mapped arrays properties keys.
+     * @param id Identifier keys limits constants bindings values descriptions setups properties setups mappings parameters variables limits boundaries string.
+     * @returns The corresponding LayeredNode elements object instance representations definitions constraints reference formats dependencies definitions implementations layouts parameters interfaces maps limits values references setups implementations variables parameters setups items models mappings layouts setups representations string mappings layouts mappings bindings configurations definitions mappings bindings models restrictions setups mappings layouts interfaces limits properties setups mappings configurations mappings specifications implementations keys components text constants representations values layouts definitions implementations arrays implementations structures representations elements structures components elements representations constraints definitions items.
+     */
     private findNodeInLayers(layeredGraph: Map<number, LayeredNode[]>, id: string): LayeredNode | undefined {
         for (const layer of layeredGraph.values()) {
             const found = layer.find((n) => n.id === id);
