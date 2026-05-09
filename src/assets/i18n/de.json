@@ -243,6 +243,35 @@
         "INSTRUCTION_AUTO_FIRING_TEXT": "Im Lernmodus erstellt das Klicken auf aktivierte Transitionen im Petrinetz automatisch das Prozessnetz."
     },
     "TOKEN_TRAIL": {
+        "SHOW_HINT": "Hinweis anzeigen",
+        "DRAWING_AREA_HEADER": "Labeled Petri Net",
+        "HELP_TOOLTIP": "Klicken Sie hier, um die Bedienungsanleitung anzuzeigen",
+        "BUTTON_CLEAR_DRAWING": "Zeichnung löschen",
+        "BUTTON_VALIDATE_NET": "LPN validieren",
+        "BUTTON_NEW_LPN": "Neues LPN generieren",
+        "BUTTON_SYNTHESIZE_LPN": "LPN synthetisieren",
+        "MODE_CONSTRUCTION": "In den Konstruktions-Modus wechseln",
+        "MODE_PUZZLE": "In den Puzzle-Modus wechseln",
+        "MODE_CONSTRUCTION_ACTIVE": "Konstruktions-Modus aktiv",
+        "MODE_PUZZLE_ACTIVE": "Puzzle-Modus aktiv",
+        "MODE_WARNING_TITLE": "Puzzle-Modus aktiv",
+        "MODE_WARNING_BODY": "Bitte wechseln Sie in den Konstruktions-Modus, um manuell Elemente hinzuzufügen.",
+        "PLACE_SELECTION_REQUIRED_TITLE": "Stelle auswählen",
+        "PLACE_SELECTION_REQUIRED_BODY": "Bitte wählen Sie zuerst eine Stelle im Petrinetz aus.",
+        "ACTION_DRAG_DROP": "Ziehen & Ablegen",
+        "INSTRUCTION_DRAG_DROP": "Ziehen Sie Elemente aus dem linken Anzeigebereich hierher, um Ihr LPN zu erstellen.",
+        "INSTRUCTION_MOVE": "Verschieben",
+        "INSTRUCTION_LEFT_CLICK_MOVE": "Linksklick und Ziehen zum Verschieben von Elementen auf der Leinwand.",
+        "INSTRUCTION_CONNECT": "Verbinden",
+        "INSTRUCTION_RIGHT_CLICK_CONNECT": "Rechtsklick auf eine Stelle oder Transition, dann Rechtsklick auf den entgegengesetzten Typ, um eine Verbindung zu erstellen.",
+        "INSTRUCTION_DELETE": "Löschen",
+        "INSTRUCTION_MIDDLE_CLICK_DELETE": "Mittelklick auf ein Element zum Löschen.",
+        "INSTRUCTION_DELETE_CONN": "Verbindung löschen",
+        "INSTRUCTION_MIDDLE_CLICK_DELETE_CONN": "Mittelklick auf eine Verbindung zum Löschen.",
+        "INSTRUCTION_VALIDATE": "Validieren",
+        "INSTRUCTION_VALIDATE_TOAST": "Klicken Sie auf Validieren Schaltfläche, um Ihr LPN zu überprüfen.",
+        "INSTRUCTION_CHANGE_TOKENS": "Marken ändern",
+        "INSTRUCTION_CHANGE_TOKENS_TEXT": "Wählen Sie im Puzzle-Modus eine Stelle im Petrinetz aus und verwenden Sie das Mausrad über einer Condition im LPN, um deren Markenzahl zu ändern.",
         "VALIDATION": {
             "RULE_ACTIVATION": {
                 "EVENT_WITHOUT_INCOMING_CONDITION": "Event {{event}} hat keine eingehende Verbindung von einer Condition.",
@@ -258,6 +287,7 @@
                 "MISSING_EVENT_FOR_TRANSITION": "Für Stelle {{place}} wird die Transition {{transition}} im Token Trail benötigt, aber es existiert kein passendes Event."
             },
             "RULE_INITIALIZATION": {
+                "INITIAL_MARKING_MISMATCH": "Anfangsmarkierung weicht für Stelle {{place}} ab: erwartet {{expected}}, aktuell {{actual}}.",
                 "NO_START_CONDITION": "Es ist keine Start-Condition definiert.",
                 "MISSING_START_CONDITION_FOR_MARKED_PLACE": "Markierte Stelle {{place}} ({{expected}} Marke(n)) hat keine Start-Condition im Token Trail."
             }

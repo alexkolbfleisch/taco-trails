@@ -242,6 +242,38 @@
         "INSTRUCTION_AUTO_FIRING_TEXT": "In learn mode, clicking activated transitions in the Petri net automatically builds the process net."
     },
     "TOKEN_TRAIL": {
+        "SHOW_HINT": "Show Hint",
+        "DRAWING_AREA_HEADER": "Labeled Petri Net",
+        "HELP_TOOLTIP": "Click to open the usage guide",
+        "BUTTON_CLEAR_DRAWING": "Clear Drawing",
+        "BUTTON_VALIDATE_NET": "Validate LPN",
+        "BUTTON_NEW_LPN": "Generate new LPN",
+        "BUTTON_SYNTHESIZE_LPN": "Synthesize LPN",
+        "MODE_CONSTRUCTION": "Switch to Construction Mode",
+        "MODE_PUZZLE": "Switch to Puzzle Mode",
+        "MODE_CONSTRUCTION_ACTIVE": "Construction Mode Active",
+        "MODE_PUZZLE_ACTIVE": "Puzzle Mode Active",
+        "MODE_WARNING_TITLE": "Puzzle Mode Active",
+        "MODE_WARNING_BODY": "Please switch to Construction Mode to add new elements.",
+        "PLACE_SELECTION_REQUIRED_TITLE": "Select a Place",
+        "PLACE_SELECTION_REQUIRED_BODY": "Please select a place in the Petri net first.",
+        "LPN_DIFFICULTY_EASY": "Easy",
+        "LPN_DIFFICULTY_MEDIUM": "Medium",
+        "LPN_DIFFICULTY_HARD": "Hard",
+        "ACTION_DRAG_DROP": "Drag & Drop",
+        "INSTRUCTION_DRAG_DROP": "Drag elements from the left display area here to create your labeled petri net.",
+        "INSTRUCTION_MOVE": "Move",
+        "INSTRUCTION_LEFT_CLICK_MOVE": "Left-click and drag to move elements around the canvas.",
+        "INSTRUCTION_CONNECT": "Connect",
+        "INSTRUCTION_RIGHT_CLICK_CONNECT": "Right-click a place or transition, then right-click the opposite type to create a connection.",
+        "INSTRUCTION_DELETE": "Delete",
+        "INSTRUCTION_MIDDLE_CLICK_DELETE": "Middle-click an element to delete it.",
+        "INSTRUCTION_DELETE_CONN": "Delete Connection",
+        "INSTRUCTION_MIDDLE_CLICK_DELETE_CONN": "Middle-click a connection to delete it.",
+        "INSTRUCTION_VALIDATE": "Validate",
+        "INSTRUCTION_VALIDATE_TOAST": "Click the checklist button to validate the labeled petri net.",
+        "INSTRUCTION_CHANGE_TOKENS": "Change Tokens",
+        "INSTRUCTION_CHANGE_TOKENS_TEXT": "In puzzle mode, select a place in the Petri net and use the mouse wheel over a condition in the LPN to change its token count.",
         "VALIDATION": {
             "RULE_ACTIVATION": {
                 "EVENT_WITHOUT_INCOMING_CONDITION": "Event {{event}} has no incoming connection from a condition.",
@@ -257,6 +289,7 @@
                 "MISSING_EVENT_FOR_TRANSITION": "Place {{place}} requires transition {{transition}} in the token trail, but no matching event exists."
             },
             "RULE_INITIALIZATION": {
+                "INITIAL_MARKING_MISMATCH": "Initial marking mismatch for place {{place}}: expected {{expected}}, actual {{actual}}.",
                 "NO_START_CONDITION": "No start condition is defined.",
                 "MISSING_START_CONDITION_FOR_MARKED_PLACE": "Marked place {{place}} ({{expected}} token(s)) has no start condition in the token trail."
             }

@@ -1,0 +1,30 @@
+<h2 mat-dialog-title>{{ data.title }}</h2>
+<mat-dialog-content>
+    <div class="validation-details-container">
+        @if (groupedIssues.length === 0) {
+            <div class="no-issues-message">
+                <mat-icon color="primary">check_circle</mat-icon>
+                <span>{{ 'PROCESS_NET.VALIDATION_VALID_WITH_INFOS' | translate }}</span>
+            </div>
+        } @else {
+            <div class="issues-list">
+                @for (group of groupedIssues; track group.rule) {
+                    <div class="issue-group">
+                        <h3 class="issue-group-title">
+                            <mat-icon color="warn">error_outline</mat-icon>
+                            {{ group.rule }}
+                        </h3>
+                        <ul class="custom-issue-list">
+                            @for (issue of group.issues; track $index) {
+                                <li class="issue-message">{{ issue.messageKey | translate: issue.messageParams }}</li>
+                            }
+                        </ul>
+                    </div>
+                }
+            </div>
+        }
+    </div>
+</mat-dialog-content>
+<mat-dialog-actions align="end">
+    <button mat-button mat-dialog-close>{{ 'CANCEL' | translate }}</button>
+</mat-dialog-actions>

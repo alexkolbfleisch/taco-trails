@@ -10,6 +10,8 @@ import {
 import { viewBoxValues } from '../components/display/display.constants';
 import { Subject } from 'rxjs';
 
+export type LpnGenerationDifficulty = 'easy' | 'medium' | 'hard';
+
 @Injectable({ providedIn: 'root' })
 export class TokenTrailStateService {
     readonly graph = signal<LabeledNetGraph>(new LabeledNetGraph());
@@ -29,6 +31,7 @@ export class TokenTrailStateService {
     readonly invalidPetriPlaceIds = signal<Set<string>>(new Set<string>());
 
     readonly displayMode = signal<'puzzle' | 'construction'>('puzzle');
+    readonly lpnGenerationDifficulty = signal<LpnGenerationDifficulty>('medium');
 
     private readonly _fitViewRequest$ = new Subject<void>();
     public readonly fitViewRequest$ = this._fitViewRequest$.asObservable();
@@ -92,6 +95,10 @@ export class TokenTrailStateService {
 
     setDisplayMode(mode: 'puzzle' | 'construction') {
         this.displayMode.set(mode);
+    }
+
+    setLpnGenerationDifficulty(difficulty: LpnGenerationDifficulty) {
+        this.lpnGenerationDifficulty.set(difficulty);
     }
 
     generateConditionName(): string {

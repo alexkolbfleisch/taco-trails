@@ -11,30 +11,19 @@ import {
     ViewChild,
 } from '@angular/core';
 
-import {
-    Condition,
-    Event as LabeledEvent,
-    LabeledNetEdge,
-    LabeledNetNode,
-} from '../../../../classes/labeled-net.model';
+import { Condition, Event as LabeledEvent, LabeledNetNode } from '../../../../classes/labeled-net.model';
 import { Diagram } from '../../../../classes/diagram/diagram';
 import { DisplayService } from '../../../../services/display.service';
-import {
-    type PetriNet,
-    type TokenTrailConnection,
-    type TokenTrailElement,
-    type ValidationResult,
-    validateTokenTrail,
-} from '../../../../services/token-trail-validation.service';
-import { ToasterNotificationService } from '../../../../services/toaster-notification.service';
+import { TokenTrailValidationService, ValidationIssue } from '../../../../services/token-trail-validation.service';
 import { PanningService } from '../../../../services/panning.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonToggleModule } from '@angular/material/button-toggle';
+import { MatDialog } from '@angular/material/dialog';
 import { GRAPH_FILENAMES, GRAPH_IDS, PLACE_RADIUS, TRANSITION_SIZE } from '../../../display/display.constants';
-import { TokenTrailStateService } from '../../../../services/token-trail-state.service';
+import { LpnGenerationDifficulty, TokenTrailStateService } from '../../../../services/token-trail-state.service';
 import { Subscription } from 'rxjs';
 import {
     DrawToolbarAction,
@@ -42,18 +31,12 @@ import {
     DrawToolbarInstruction,
 } from '../../../draw-toolbar/draw-toolbar.component';
 import { ImageExportService } from '../../../../services/image-export.service';
-import { SourcePetriNetService } from '../../../../services/source-petri-net.service';
 import { TokenTrailMergeService } from './token-trail-merge.service';
 import { SvgEventNodeComponent } from '../../../display/svg-event-node/svg-event-node.component';
-import { PlayValidationService } from '../../../../services/play-validation.service';
-import { PlayService } from '../../../../services/play.service';
-import { PetriNetToPartialOrderTransformerService } from '../../../../../../ilpn-components/src/lib/algorithms/pn/transformation/petri-net-to-partial-order-transformer.service';
-import { Ilp2MinerService } from '../../../../../../ilpn-components/src/lib/algorithms/pn/synthesis/ilp2-miner/ilp2-miner.service';
-import { PetriNet as IlpnPetriNet } from '../../../../../../ilpn-components/src/lib/models/pn/model/petri-net';
-import { Place as IlpnPlace } from '../../../../../../ilpn-components/src/lib/models/pn/model/place';
-import { Transition as IlpnTransition } from '../../../../../../ilpn-components/src/lib/models/pn/model/transition';
-import { PartialOrder } from '../../../../../../ilpn-components/src/lib/models/po/model/partial-order';
-import { SugiyamaService } from '../../../../services/sugiyama.service';
+import { TokenTrailLpnService } from '../../../../services/token-trail-lpn.service';
+import { TokenTrailValidationDetailDialogComponent, ValidationDetailDialogData } from './token-trail-validation-detail-dialog/token-trail-validation-detail-dialog.component';
+import { ToasterNotificationService } from '../../../../services/toaster-notification.service';
+import { SourcePetriNetService } from '../../../../services/source-petri-net.service';
 
 //TODO: clean this up, this is becoming huge, implement a merging service or something, or handle merging in the state service as well. Remove duplications or put them into a common place.
 
@@ -92,7 +75,11 @@ import { SugiyamaService } from '../../../../services/sugiyama.service';
 export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterViewInit {
     @ViewChild('drawingArea') drawingArea!: ElementRef<SVGGraphicsElement>;
     protected stateService = inject(TokenTrailStateService);
-    private sugiyamaService = inject(SugiyamaService);
+    private lpnService = inject(TokenTrailLpnService);
+    protected validationService = inject(TokenTrailValidationService);
+    private dialog = inject(MatDialog);
+    private toaster = inject(ToasterNotificationService);
+    private sourcePetriNetService = inject(SourcePetriNetService);
 
     // Bind to service state
     readonly drawnElements = this.stateService.drawnElements;
@@ -118,85 +105,22 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
     });
     // Currently selected element for making a connection (highlighted)
     readonly selectedElementId = signal<string | null>(null);
-    private _lastValidationTriggerKey: string | null = null;
-    private _lastValidationResult: ValidationResult | null = null;
-
-    readonly validationTriggerKey = computed(() => {
-        const sourceNet = this.resolveSourceNetForValidation();
-        const sourceKey = sourceNet
-            ? `${sourceNet.getNodes().length}:${sourceNet.getEdges().length}:${Object.keys(sourceNet.startMarking || {}).length}`
-            : 'no-source';
-
-        const elementKey = this.drawnElements()
-            .map((node) => {
-                if (node instanceof Condition) {
-                    return `C:${node.id}:${node.label ?? node.displayLabel}:${node.isStartPlace ? 1 : 0}`;
-                }
-                return `E:${node.id}:${node.displayLabel}:${node.transitionId}`;
-            })
-            .sort()
-            .join('|');
-
-        const connectionKey = this.connections()
-            .map((connection) => `${connection.source}>${connection.target}:${connection.weight}`)
-            .sort()
-            .join('|');
-
-        return `${sourceKey}::${elementKey}::${connectionKey}`;
-    });
-
-    readonly liveValidation = computed<ValidationResult | null>(() => {
-        const triggerKey = this.validationTriggerKey();
-        if (this._lastValidationTriggerKey === triggerKey) {
-            return this._lastValidationResult;
-        }
-
-        const data = this.buildValidationInput();
-        this._lastValidationTriggerKey = triggerKey;
-        this._lastValidationResult = data ? validateTokenTrail(data.petri, data.elements, data.connections) : null;
-        return this._lastValidationResult;
-    });
-
-    readonly invalidNodeIds = computed<Set<string>>(() => {
-        const result = this.liveValidation();
-        if (!result) {
-            return new Set<string>();
-        }
-        const ids = new Set<string>();
-        for (const issue of result.issues) {
-            for (const eventId of issue.eventIds ?? []) ids.add(eventId);
-            for (const conditionId of issue.conditionIds ?? []) ids.add(conditionId);
-        }
-        return ids;
-    });
-
-    readonly invalidConnectionIds = computed<Set<string>>(() => {
-        const result = this.liveValidation();
-        if (!result) {
-            return new Set<string>();
-        }
-        const ids = new Set<string>();
-        for (const issue of result.issues) {
-            for (const connectionId of issue.connectionIds ?? []) ids.add(connectionId);
-        }
-        return ids;
-    });
 
     // Toolbar configuration
     protected readonly toolbarActions = computed<DrawToolbarAction[]>(() => [
         {
             icon: 'delete',
-            tooltip: 'PROCESS_NET.BUTTON_CLEAR_DRAWING',
+            tooltip: 'TOKEN_TRAIL.BUTTON_CLEAR_DRAWING',
             color: 'warn',
             isActive: !this.isDisabled(),
             action: () => this.clearDrawing(),
         },
         {
             icon: 'checklist',
-            tooltip: 'PROCESS_NET.BUTTON_VALIDATE_NET',
+            tooltip: 'TOKEN_TRAIL.BUTTON_VALIDATE_NET',
             color: 'primary',
             isActive: !this.isDisabled(),
-            action: () => this.onValidate(),
+            action: () => this.validationService.onValidate(),
         },
         {
             icon: this.getModeToggleIcon(),
@@ -206,8 +130,32 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
             action: () => this.toggleMode(),
         },
         {
+            icon: 'science',
+            tooltip: 'TOKEN_TRAIL.BUTTON_SYNTHESIZE_LPN',
+            color: 'accent',
+            isActive: true,
+            action: () => {}, // empty action because we trigger the menu
+            menu: [
+                {
+                    label: 'TOKEN_TRAIL.LPN_DIFFICULTY_EASY',
+                    icon: 'sentiment_satisfied',
+                    action: () => this.createNewLPNWithDifficulty('easy')
+                },
+                {
+                    label: 'TOKEN_TRAIL.LPN_DIFFICULTY_MEDIUM',
+                    icon: 'sentiment_neutral',
+                    action: () => this.createNewLPNWithDifficulty('medium')
+                },
+                {
+                    label: 'TOKEN_TRAIL.LPN_DIFFICULTY_HARD',
+                    icon: 'sentiment_very_dissatisfied',
+                    action: () => this.createNewLPNWithDifficulty('hard')
+                }
+            ]
+        },
+        {
             icon: 'refresh',
-            tooltip: 'TODO',
+            tooltip: 'TOKEN_TRAIL.BUTTON_NEW_LPN',
             color: 'warn',
             isActive: true, //TODO
             action: () => this.createNewLPN(),
@@ -220,8 +168,8 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
 
     private getModeToggleTooltip(): string {
         return this.stateService.displayMode() === 'puzzle'
-            ? 'PROCESS_NET.MODE_CONSTRUCTION'
-            : 'PROCESS_NET.MODE_PUZZLE';
+            ? 'TOKEN_TRAIL.MODE_CONSTRUCTION'
+            : 'TOKEN_TRAIL.MODE_PUZZLE';
     }
 
     private toggleMode(): void {
@@ -231,13 +179,13 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
 
     protected readonly toolbarInstructions = computed<DrawToolbarInstruction[]>(() => {
         return [
-            { label: 'PROCESS_NET.INSTRUCTION_AUTO_FIRING', text: 'PROCESS_NET.INSTRUCTION_AUTO_FIRING_TEXT' },
-            { label: 'PROCESS_NET.ACTION_DRAG_DROP', text: 'PROCESS_NET.INSTRUCTION_DRAG_DROP' },
-            { label: 'PROCESS_NET.INSTRUCTION_MOVE', text: 'PROCESS_NET.INSTRUCTION_LEFT_CLICK_MOVE' },
-            { label: 'PROCESS_NET.INSTRUCTION_CONNECT', text: 'PROCESS_NET.INSTRUCTION_RIGHT_CLICK_CONNECT' },
-            { label: 'PROCESS_NET.INSTRUCTION_DELETE', text: 'PROCESS_NET.INSTRUCTION_MIDDLE_CLICK_DELETE' },
-            { label: 'PROCESS_NET.INSTRUCTION_DELETE_CONN', text: 'PROCESS_NET.INSTRUCTION_MIDDLE_CLICK_DELETE_CONN' },
-            { label: 'PROCESS_NET.INSTRUCTION_VALIDATE', text: 'PROCESS_NET.INSTRUCTION_VALIDATE_TOAST' },
+            { label: 'TOKEN_TRAIL.ACTION_DRAG_DROP', text: 'TOKEN_TRAIL.INSTRUCTION_DRAG_DROP' },
+            { label: 'TOKEN_TRAIL.INSTRUCTION_MOVE', text: 'TOKEN_TRAIL.INSTRUCTION_LEFT_CLICK_MOVE' },
+            { label: 'TOKEN_TRAIL.INSTRUCTION_CONNECT', text: 'TOKEN_TRAIL.INSTRUCTION_RIGHT_CLICK_CONNECT' },
+            { label: 'TOKEN_TRAIL.INSTRUCTION_DELETE', text: 'TOKEN_TRAIL.INSTRUCTION_MIDDLE_CLICK_DELETE' },
+            { label: 'TOKEN_TRAIL.INSTRUCTION_DELETE_CONN', text: 'TOKEN_TRAIL.INSTRUCTION_MIDDLE_CLICK_DELETE_CONN' },
+            { label: 'TOKEN_TRAIL.INSTRUCTION_VALIDATE', text: 'TOKEN_TRAIL.INSTRUCTION_VALIDATE_TOAST' },
+            { label: 'TOKEN_TRAIL.INSTRUCTION_CHANGE_TOKENS', text: 'TOKEN_TRAIL.INSTRUCTION_CHANGE_TOKENS_TEXT' }
         ];
     });
 
@@ -249,20 +197,15 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
     private dragStartedMergedAnchorId: string | null = null;
     private elementRef = inject(ElementRef);
 
-    private playValidationService = inject(PlayValidationService);
-    private playService = inject(PlayService);
     private mergeService = inject(TokenTrailMergeService);
-    private pnToPOTransformer = inject(PetriNetToPartialOrderTransformerService);
-    private ilp2MinerService = inject(Ilp2MinerService);
 
     private customDropListener: ((event: Event) => void) | null = null;
     private displayService = inject(DisplayService);
-    private toaster = inject(ToasterNotificationService);
     private _imageExportService = inject(ImageExportService);
     private panningService = inject(PanningService);
     private translateService = inject(TranslateService);
-    private sourcePetriNetService = inject(SourcePetriNetService);
     private downloadSub?: Subscription;
+    private sourceNetSub?: Subscription;
 
     readonly viewBox = this.panningService.viewBoxAsString;
     readonly viewBoxObj = this.panningService.viewBox;
@@ -347,6 +290,12 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
                 getEdges: () => [],
             });
         });
+
+        this.sourceNetSub = this.sourcePetriNetService.sourceNet$.subscribe((net) => {
+            if (this.stateService.displayMode() === 'puzzle' && net) {
+                this.createNewLPNWithSynthesis();
+            }
+        });
     }
 
     ngAfterViewInit() {
@@ -362,6 +311,7 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
         }
         this.downloadSub?.unsubscribe();
         this.fitViewSubscription?.unsubscribe();
+        this.sourceNetSub?.unsubscribe();
     }
 
     private handleCanvasMouseDown = (event: MouseEvent) => {
@@ -390,6 +340,7 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
 
     private handleCustomDrop(event: CustomEvent) {
         if (this.stateService.displayMode() === 'puzzle') return;
+
         const detail = event.detail;
         if (!detail) {
             return;
@@ -444,6 +395,7 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
 
     onDrop(event: DragEvent) {
         if (this.stateService.displayMode() === 'puzzle') return;
+
         event.preventDefault();
         this.isDragOver.set(false);
 
@@ -744,6 +696,12 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
         event.preventDefault();
         event.stopPropagation();
 
+        const selectedPlaceId = this.stateService.selectedPetriPlaceId();
+        if (!selectedPlaceId) {
+            this.toaster.showWarning('TOKEN_TRAIL.PLACE_SELECTION_REQUIRED_TITLE', 'TOKEN_TRAIL.PLACE_SELECTION_REQUIRED_BODY');
+            return;
+        }
+
         // Scroll up = positive token delta, scroll down = negative
         const delta = event.deltaY < 0 ? 1 : -1;
         this.handleConditionTokenDelta(element, delta);
@@ -873,145 +831,77 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
     }
 
     isNodeInvalid(elementId: string): boolean {
-        return this.invalidNodeIds().has(elementId);
+        return this.validationService.invalidNodeIds().has(elementId);
     }
 
     isConnectionInvalid(connectionId: string): boolean {
-        return this.invalidConnectionIds().has(connectionId);
+        return this.validationService.invalidConnectionIds().has(connectionId);
     }
 
-    getElementTooltip(elementId: string): string {
-        const result = this.liveValidation();
-        if (!result) {
-            return '';
-        }
+    hasElementIssues(elementId: string): boolean {
+        const result = this.validationService.liveValidation();
+        if (!result) return false;
 
-        const messages = result.issues
-            .filter(
-                (issue) => (issue.eventIds ?? []).includes(elementId) || (issue.conditionIds ?? []).includes(elementId),
-            )
-            .map((issue) => {
-                const translated = this.translateService.instant(issue.messageKey, issue.messageParams ?? {});
-                return `[${issue.rule}] ${translated}`;
-            });
+        let issues = result.issues.filter(
+            (issue) => (issue.eventIds ?? []).includes(elementId) || (issue.conditionIds ?? []).includes(elementId),
+        );
 
-        return messages.join('\n');
-    }
-
-    getConnectionTooltip(connectionId: string): string {
-        const result = this.liveValidation();
-        if (!result) {
-            return '';
-        }
-
-        const messages = result.issues
-            .filter((issue) => (issue.connectionIds ?? []).includes(connectionId))
-            .map((issue) => {
-                const translated = this.translateService.instant(issue.messageKey, issue.messageParams ?? {});
-                return `[${issue.rule}] ${translated}`;
-            });
-
-        return messages.join('\n');
-    }
-
-    //TODO: implement actual validation logic and show results in a user-friendly way (e.g. list of errors and infos with translations)
-    //maybe we will replace this with a more direct way of giving feedback on specific elements (e.g. red border on invalid elements with tooltip explanations) instead of a separate validation step and toast
-    onValidate() {
-        const result = this.liveValidation();
-        if (!result) {
-            this.toaster.showError('TOASTER.HEADER.VALIDATION', 'TOASTER.BODY.VALIDATION_ERROR', {
-                duration: 0,
-            });
-            return;
-        }
-
-        const validSet = new Set<string>();
-        const invalidSet = new Set<string>();
-
-        if (result.perPlaceResults) {
-            for (const [placeId, placeResult] of Object.entries(result.perPlaceResults)) {
-                if (placeResult.valid) {
-                    validSet.add(placeId);
-                } else {
-                    invalidSet.add(placeId);
-                }
+        if (this.stateService.displayMode() === 'puzzle') {
+            const selectedPlaceId = this.stateService.selectedPetriPlaceId();
+            if (selectedPlaceId) {
+                issues = issues.filter((issue) => issue.messageParams?.['place'] === selectedPlaceId);
             }
         }
 
-        this.stateService.setValidPetriPlaceIds(validSet);
-        this.stateService.setInvalidPetriPlaceIds(invalidSet);
-        this.stateService.setSelectedPetriPlaceId(null);
+        return issues.length > 0;
     }
 
-    private resolveSourceNetForValidation(): Diagram | null {
-        const sourceNet = this.sourcePetriNetService.getCurrentSourceNet();
-        if (sourceNet instanceof Diagram) {
-            return sourceNet;
+    hasConnectionIssues(connectionId: string): boolean {
+        const result = this.validationService.liveValidation();
+        if (!result) return false;
+
+        let issues = result.issues.filter((issue) => (issue.connectionIds ?? []).includes(connectionId));
+
+        if (this.stateService.displayMode() === 'puzzle') {
+            const selectedPlaceId = this.stateService.selectedPetriPlaceId();
+            if (selectedPlaceId) {
+                issues = issues.filter((issue) => issue.messageParams?.['place'] === selectedPlaceId);
+            }
         }
 
-        const displayed = this.displayService.diagram;
-        return displayed instanceof Diagram ? displayed : null;
+        return issues.length > 0;
     }
 
-    private buildValidationInput(): {
-        petri: PetriNet;
-        elements: TokenTrailElement[];
-        connections: TokenTrailConnection[];
-    } | null {
-        const base = this.resolveSourceNetForValidation() ?? undefined;
-        if (!base) {
-            return null;
+    openValidationDetailDialog(id: string, type: 'element' | 'connection') {
+        const result = this.validationService.liveValidation();
+        if (!result) return;
+
+        let issues: ValidationIssue[] = [];
+        if (type === 'element') {
+            issues = result.issues.filter(
+                (issue) => (issue.eventIds ?? []).includes(id) || (issue.conditionIds ?? []).includes(id),
+            );
+        } else {
+            issues = result.issues.filter((issue) => (issue.connectionIds ?? []).includes(id));
         }
 
-        const nodes = base.getNodes();
-        const edges = base.getEdges();
-        const startMarkingEntries = Object.entries(base.startMarking || {}).filter(([, tokens]) => (tokens ?? 0) > 0);
-        const petri: PetriNet = {
-            places: nodes.filter((n) => n.shape === 'circle').map((n) => n.id),
-            transitions: nodes.filter((n) => n.shape === 'rect').map((n) => n.id),
-            arcs: Object.fromEntries(
-                edges.map((e) => [
-                    `${e.source},${e.target}`,
-                    ((e as unknown as { weight?: number }).weight ?? 1) as number,
-                ]),
-            ),
-            labels: Object.fromEntries(nodes.filter((n) => n.shape === 'rect').map((n) => [n.id, n.displayLabel])),
-            marking: Object.fromEntries(startMarkingEntries),
+        if (this.stateService.displayMode() === 'puzzle') {
+            const selectedPlaceId = this.stateService.selectedPetriPlaceId();
+            if (selectedPlaceId) {
+                issues = issues.filter((issue) => issue.messageParams?.['place'] === selectedPlaceId);
+            }
+        }
+
+        const data: ValidationDetailDialogData = {
+            title: this.translateService.instant('TOASTER.HEADER.VALIDATION'),
+            issues,
         };
 
-        const elements: TokenTrailElement[] = this.drawnElements().map((el) => {
-            const isCondition = el instanceof Condition;
-            const isEvent = el instanceof LabeledEvent;
-            return {
-                id: el.id,
-                type: isCondition ? 'Condition' : isEvent ? 'Event' : 'Condition',
-                label: isCondition ? (el.innerLabel ?? el.displayLabel) : el.displayLabel,
-                isStartCondition: isCondition ? el.isStartPlace : undefined,
-                marking: isCondition ? el.tokenCount() : undefined,
-                trailMarkings: isCondition ? { ...el.trailMarkings } : undefined,
-            };
+        this.dialog.open(TokenTrailValidationDetailDialogComponent, {
+            data,
+            width: '500px',
+            maxHeight: '80vh',
         });
-
-        const connections: TokenTrailConnection[] = this.connections().map((c) => ({
-            id: c.id,
-            from: c.source,
-            to: c.target,
-            weight: c.weight,
-        }));
-
-        const startConditions = this.drawnElements()
-            .filter((el): el is Condition => el instanceof Condition && el.isStartPlace)
-            .map((el) => el.label ?? el.displayLabel);
-
-        return {
-            petri: {
-                ...petri,
-                startPlaces: startConditions,
-                focusPlaceId: this.stateService.selectedPetriPlaceId() ?? undefined,
-            },
-            elements,
-            connections,
-        };
     }
 
     private isValidConditionEventPair(sourceNode: LabeledNetNode, targetNode: LabeledNetNode): boolean {
@@ -1087,115 +977,21 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
         return this.getCurrentStartConditionCount(conditionId) < this.getRequiredStartConditionCount(conditionId);
     }
 
-    private createNewLPN() {
-        const sourceNet = this.resolveSourceNetForValidation();
+    private createNewLPNWithDifficulty(difficulty: LpnGenerationDifficulty) {
+        const sourceNet = this.validationService.resolveSourceNetForValidation();
         if (!sourceNet) return;
+        this.lpnService.createLPNWithSynthesis(sourceNet, difficulty);
+    }
 
-        this.playService.firingEntries.set([]);
-        this.playValidationService.findSequences(sourceNet, 1, 15);
+    private createNewLPNWithSynthesis() {
+        const sourceNet = this.validationService.resolveSourceNetForValidation();
+        if (!sourceNet) return;
+        this.lpnService.createLPNWithSynthesis(sourceNet);
+    }
 
-        const partialOrders: PartialOrder[] = [];
-        const entries = this.playService.firingEntries();
-
-        const validEntries = entries.filter((entry) => entry.isValid && entry.labels.length > 0);
-        const shuffled = [...validEntries].sort(() => 0.5 - Math.random());
-        const subsetSize = Math.max(1, Math.floor(Math.random() * shuffled.length) + 1);
-        const selectedEntries = shuffled.slice(0, subsetSize);
-
-        for (const entry of selectedEntries) {
-            const net = new IlpnPetriNet();
-            let lastPlace = new IlpnPlace();
-            lastPlace.marking = 1;
-            net.addPlace(lastPlace);
-
-            const occurrenceCount = new Map<string, number>();
-
-            for (const label of entry.labels) {
-                const count = occurrenceCount.get(label) || 0;
-                occurrenceCount.set(label, count + 1);
-
-                const actualLabel = count === 0 ? label : `${label}__split${count}`;
-                const t = new IlpnTransition(actualLabel);
-                net.addTransition(t);
-                net.addArc(lastPlace, t);
-
-                const nextPlace = new IlpnPlace();
-                net.addPlace(nextPlace);
-                net.addArc(t, nextPlace);
-
-                lastPlace = nextPlace;
-            }
-
-            try {
-                const po = this.pnToPOTransformer.transform(net);
-                partialOrders.push(po);
-            } catch (e) {
-                console.error('Failed to transform to partial order', e);
-            }
-        }
-
-        if (partialOrders.length === 0) return;
-
-        this.ilp2MinerService.mine(partialOrders).subscribe((result) => {
-            this.clearDrawing();
-            const minedNet = result.net;
-
-            const placeMap = new Map<string, string>();
-            const transitionMap = new Map<string, string>();
-
-            const getRandomPos = () => {
-                const viewBox = this.viewBoxObj();
-                const width = Math.max(viewBox.width, 800);
-                const height = Math.max(viewBox.height, 600);
-                return {
-                    x: viewBox.minX + Math.random() * width,
-                    y: viewBox.minY + Math.random() * height,
-                };
-            };
-
-            minedNet.getPlaces().forEach((p) => {
-                const uniqueId = this.stateService.generateElementId(`drawn-place`);
-                placeMap.set(p.id!, uniqueId);
-                const condition = this.stateService.buildCondition(uniqueId, p.id!, p.marking, {
-                    isStartPlace: p.marking > 0,
-                });
-                const pos = getRandomPos();
-                condition.x = pos.x;
-                condition.y = pos.y;
-                this.stateService.addDrawnElement(condition);
-            });
-
-            minedNet.getTransitions().forEach((t) => {
-                const uniqueId = this.stateService.generateElementId(`drawn-trans`);
-                transitionMap.set(t.id!, uniqueId);
-                const rawLabel = t.label ?? t.id!;
-                const cleanLabel = rawLabel.split('__split')[0];
-                const eventNode = this.stateService.buildEvent(uniqueId, cleanLabel, cleanLabel);
-                const pos = getRandomPos();
-                eventNode.x = pos.x;
-                eventNode.y = pos.y;
-                this.stateService.addDrawnElement(eventNode);
-            });
-
-            minedNet.getPlaces().forEach((p) => {
-                const pId = placeMap.get(p.id!)!;
-                p.outgoingArcs.forEach((a) => {
-                    const tId = transitionMap.get(a.destinationId!)!;
-                    this.stateService.addConnection(
-                        new LabeledNetEdge(this.stateService.generateConnectionId('conn'), pId, tId, a.weight),
-                    );
-                });
-                p.ingoingArcs.forEach((a) => {
-                    const tId = transitionMap.get(a.sourceId!)!;
-                    this.stateService.addConnection(
-                        new LabeledNetEdge(this.stateService.generateConnectionId('conn'), tId, pId, a.weight),
-                    );
-                });
-            });
-
-            this.sugiyamaService.calculateLayout(this.drawnElements(), this.connections());
-            this.stateService.updateDrawnElements((e) => [...e]);
-            this.stateService.updateConnections((c) => [...c]);
-        });
+    private createNewLPN() {
+        const sourceNet = this.validationService.resolveSourceNetForValidation();
+        if (!sourceNet) return;
+        this.lpnService.createNewLPN(sourceNet);
     }
 }

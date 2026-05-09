@@ -11,6 +11,7 @@ import { AppComponent } from './app/app.component';
 import { importProvidersFrom } from '@angular/core';
 import { TranslateModule } from '@ngx-translate/core';
 import { provideTranslateHttpLoader } from '@ngx-translate/http-loader';
+import { IlpnAlgorithmsModule } from '../ilpn-components/src/lib/algorithms/ilpn-algorithms.module';
 
 bootstrapApplication(AppComponent, {
     providers: [
@@ -21,6 +22,7 @@ bootstrapApplication(AppComponent, {
             MatButtonModule,
             MatIconModule,
             ReactiveFormsModule,
+            IlpnAlgorithmsModule,
             TranslateModule.forRoot({
                 fallbackLang: 'en',
             }),

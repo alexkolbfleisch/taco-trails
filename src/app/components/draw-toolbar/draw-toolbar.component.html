@@ -22,14 +22,36 @@
                 </div>
             }
             @for (action of actions(); track action.tooltip) {
-                <button
-                    matIconButton
-                    [disabled]="!action.isActive"
-                    [color]="action.color ?? 'primary'"
-                    [matTooltip]="action.tooltip | translate"
-                    (click)="action.action(); $event.stopPropagation()">
-                    <mat-icon>{{ action.icon }}</mat-icon>
-                </button>
+                @if (action.menu) {
+                    <button
+                        mat-icon-button
+                        [disabled]="!action.isActive"
+                        [color]="action.color ?? 'primary'"
+                        [matTooltip]="action.tooltip | translate"
+                        [matMenuTriggerFor]="actionMenu"
+                        (click)="$event.stopPropagation()">
+                        <mat-icon>{{ action.icon }}</mat-icon>
+                    </button>
+                    <mat-menu #actionMenu="matMenu">
+                        @for (item of action.menu; track item.label) {
+                            <button mat-menu-item (click)="item.action()">
+                                @if (item.icon) {
+                                    <mat-icon>{{ item.icon }}</mat-icon>
+                                }
+                                <span>{{ item.label | translate }}</span>
+                            </button>
+                        }
+                    </mat-menu>
+                } @else {
+                    <button
+                        mat-icon-button
+                        [disabled]="!action.isActive"
+                        [color]="action.color ?? 'primary'"
+                        [matTooltip]="action.tooltip | translate"
+                        (click)="action.action(); $event.stopPropagation()">
+                        <mat-icon>{{ action.icon }}</mat-icon>
+                    </button>
+                }
             }
         </mat-expansion-panel-header>
         <div class="pn-help-content">

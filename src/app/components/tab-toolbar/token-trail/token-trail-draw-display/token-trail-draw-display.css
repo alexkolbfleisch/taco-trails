@@ -1,3 +1,7 @@
+.drawing-area-container {
+    position: relative;
+}
+
 .drawing-canvas {
     width: 100%;
     flex: 1;
@@ -22,6 +26,37 @@
     border-width: 3px;
     background-color: #e8f5e9;
     box-shadow: inset 0 0 20px rgba(76, 175, 80, 0.2);
+}
+
+.mode-indicator {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background-color: rgba(255, 152, 0, 0.1);
+    color: #e65100;
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 500;
+    pointer-events: none;
+    z-index: 10;
+    border: 1px solid rgba(255, 152, 0, 0.3);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.mode-indicator.puzzle-mode {
+    background-color: rgba(33, 150, 243, 0.1);
+    color: #1565c0;
+    border-color: rgba(33, 150, 243, 0.3);
+}
+
+.mode-indicator mat-icon {
+    font-size: 18px;
+    width: 18px;
+    height: 18px;
 }
 
 .instructions {
@@ -115,7 +150,7 @@ svg text {
     pointer-events: none;
 }
 
-.node-info-fo {
+.node-info-fo, .connection-info-fo {
     overflow: visible;
     pointer-events: all;
 }
@@ -136,10 +171,6 @@ svg text {
     width: 18px;
     height: 18px;
     line-height: 18px;
-}
-
-.token-trail-tooltip {
-    white-space: pre-line;
 }
 
 @keyframes merge-pop {

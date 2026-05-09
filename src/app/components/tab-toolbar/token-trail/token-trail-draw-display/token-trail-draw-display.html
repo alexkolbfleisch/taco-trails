@@ -1,4 +1,8 @@
 <div class="drawing-area-container">
+    <div class="mode-indicator" [class.puzzle-mode]="stateService.displayMode() === 'puzzle'">
+        <mat-icon>{{ stateService.displayMode() === 'puzzle' ? 'extension' : 'construction' }}</mat-icon>
+        {{ (stateService.displayMode() === 'puzzle' ? 'TOKEN_TRAIL.MODE_PUZZLE_ACTIVE' : 'TOKEN_TRAIL.MODE_CONSTRUCTION_ACTIVE') | translate }}
+    </div>
     <svg
         #drawingArea
         class="drawing-canvas"
@@ -37,9 +41,6 @@
             class="connection-group"
             [class.invalid-connection]="isConnectionInvalid(line.id)"
             [attr.data-connection-id]="line.id">
-            @if (getConnectionTooltip(line.id)) {
-            <title>{{ getConnectionTooltip(line.id) }}</title>
-            }
             <line
                 class="connection-hit-target"
                 [attr.x1]="line.x1"
@@ -65,6 +66,24 @@
                 class="connection-weight-label">
                 {{ line.weight }}
             </text>
+            }
+            @if (hasConnectionIssues(line.id)) {
+            <foreignObject
+                class="connection-info-fo"
+                [attr.x]="(line.x1 + line.x2) / 2 - 14"
+                [attr.y]="(line.y1 + line.y2) / 2 - 14"
+                width="28"
+                height="28">
+                <button
+                    mat-icon-button
+                    class="node-info-button"
+                    (click)="openValidationDetailDialog(line.id, 'connection')"
+                    [matTooltip]="'TOKEN_TRAIL.SHOW_HINT' | translate"
+                    type="button"
+                    aria-label="Show validation info">
+                    <mat-icon>info</mat-icon>
+                </button>
+            </foreignObject>
             }
         </g>
         }
@@ -111,7 +130,7 @@
                 (contextmenu)="onElementRightClick($event, element)"
                 (wheel)="onElementWheel($event, element)" />
 
-            @if (getElementTooltip(element.id)) {
+            @if (hasElementIssues(element.id)) {
             <foreignObject
                 class="node-info-fo"
                 [attr.x]="element.x + 8"
@@ -121,9 +140,8 @@
                 <button
                     mat-icon-button
                     class="node-info-button"
-                    [matTooltip]="getElementTooltip(element.id)"
-                    matTooltipPosition="above"
-                    matTooltipClass="token-trail-tooltip"
+                    (click)="openValidationDetailDialog(element.id, 'element')"
+                    [matTooltip]="'TOKEN_TRAIL.SHOW_HINT' | translate"
                     type="button"
                     aria-label="Show validation info">
                     <mat-icon>info</mat-icon>
@@ -135,8 +153,8 @@
     </svg>
     <div class="instruction-panel">
         <app-draw-toolbar
-            [headerTitle]="'PROCESS_NET.DRAWING_AREA_HEADER'"
-            [helpTooltip]="'PROCESS_NET.HELP_TOOLTIP'"
+            [headerTitle]="'TOKEN_TRAIL.DRAWING_AREA_HEADER'"
+            [helpTooltip]="'TOKEN_TRAIL.HELP_TOOLTIP'"
             [actions]="toolbarActions()"
             [instructions]="toolbarInstructions()" />
     </div>
