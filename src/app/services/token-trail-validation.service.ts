@@ -1,7 +1,11 @@
-// Service / utility for validating a drawn process net against the original Petri net
-// Based on user-provided specification, with minor fixes (e.g., producer count increment).
-
+import { Injectable, computed, inject } from '@angular/core';
 import { TranslationParams } from '../classes/toast';
+import { TokenTrailStateService } from './token-trail-state.service';
+import { SourcePetriNetService } from './source-petri-net.service';
+import { DisplayService } from './display.service';
+import { Diagram } from '../classes/diagram/diagram';
+import { Condition, Event as LabeledEvent } from '../classes/labeled-net.model';
+import { ToasterNotificationService } from './toaster-notification.service';
 
 export interface PetriNet {
     places: string[];
@@ -72,7 +76,7 @@ export interface ValidationIssue {
  * @param connections The arcs/connections in the user-drawn LPN.
  * @returns A ValidationResult containing detailed issues per place.
  */
-export function validateTokenTrail(
+function validateTokenTrail(
     net: PetriNet,
     elements: TokenTrailElement[],
     connections: TokenTrailConnection[],
@@ -165,7 +169,7 @@ function checkInitialization(
     if (calculatedInitialMarking !== initialMarking) {
         issues.push({
             rule: 'INITIALIZATION',
-            messageKey: 'TOKEN_TRAIL.VALIDATION_INITIAL_MARKING_MISMATCH',
+            messageKey: 'TOKEN_TRAIL.VALIDATION.RULE_INITIALIZATION.INITIAL_MARKING_MISMATCH',
             messageParams: { place: placeId, expected: initialMarking, actual: calculatedInitialMarking },
             conditionIds: conditions.filter((e) => (e.trailMarkings?.[placeId] || 0) > 0).map((e) => e.id),
         });
@@ -207,12 +211,12 @@ function checkActivation(
     if (calculatedAvailableTokens < originalPrePlaceWeight) {
         issues.push({
             rule: 'ACTIVATION',
-            messageKey: 'TOKEN_TRAIL.VALIDATION_ENABLING_FAILED',
+            messageKey: 'TOKEN_TRAIL.VALIDATION.RULE_ACTIVATION.NOT_ENOUGH_PRESET_WEIGHT',
             messageParams: {
                 place: placeId,
-                transition: transitionId,
-                expected: originalPrePlaceWeight,
-                actual: calculatedAvailableTokens,
+                event: transitionId,
+                expectedArcWeight: originalPrePlaceWeight,
+                actualArcWeight: calculatedAvailableTokens,
             },
             eventIds: [event.id],
         });
@@ -258,10 +262,10 @@ function checkRise(
     if (actualRise !== expectedRise) {
         issues.push({
             rule: 'RISE',
-            messageKey: 'TOKEN_TRAIL.VALIDATION_FLOW_MISMATCH',
+            messageKey: 'TOKEN_TRAIL.VALIDATION.RULE_RISE.RISE_MISMATCH',
             messageParams: {
                 place: placeId,
-                transition: transitionId,
+                event: transitionId,
                 expected: expectedRise,
                 actual: actualRise,
             },
@@ -270,4 +274,176 @@ function checkRise(
         return false;
     }
     return true;
+}
+
+@Injectable({
+    providedIn: 'root',
+})
+export class TokenTrailValidationService {
+    private stateService = inject(TokenTrailStateService);
+    private sourcePetriNetService = inject(SourcePetriNetService);
+    private displayService = inject(DisplayService);
+    private toaster = inject(ToasterNotificationService);
+
+    private _lastValidationTriggerKey: string | null = null;
+    private _lastValidationResult: ValidationResult | null = null;
+
+    readonly validationTriggerKey = computed(() => {
+        const sourceNet = this.resolveSourceNetForValidation();
+        const sourceKey = sourceNet
+            ? `${sourceNet.getNodes().length}:${sourceNet.getEdges().length}:${Object.keys(sourceNet.startMarking || {}).length}`
+            : 'no-source';
+
+        const elementKey = this.stateService.drawnElements()
+            .map((node) => {
+                if (node instanceof Condition) {
+                    return `C:${node.id}:${node.label ?? node.displayLabel}:${node.isStartPlace ? 1 : 0}`;
+                }
+                return `E:${node.id}:${node.displayLabel}:${node.transitionId}`;
+            })
+            .sort()
+            .join('|');
+
+        const connectionKey = this.stateService.connections()
+            .map((connection) => `${connection.source}>${connection.target}:${connection.weight}`)
+            .sort()
+            .join('|');
+
+        return `${sourceKey}::${elementKey}::${connectionKey}`;
+    });
+
+    readonly liveValidation = computed<ValidationResult | null>(() => {
+        const triggerKey = this.validationTriggerKey();
+        if (this._lastValidationTriggerKey === triggerKey) {
+            return this._lastValidationResult;
+        }
+
+        const data = this.buildValidationInput();
+        this._lastValidationTriggerKey = triggerKey;
+        this._lastValidationResult = data ? validateTokenTrail(data.petri, data.elements, data.connections) : null;
+        return this._lastValidationResult;
+    });
+
+    readonly invalidNodeIds = computed<Set<string>>(() => {
+        const result = this.liveValidation();
+        if (!result) {
+            return new Set<string>();
+        }
+        const ids = new Set<string>();
+        for (const issue of result.issues) {
+            for (const eventId of issue.eventIds ?? []) ids.add(eventId);
+            for (const conditionId of issue.conditionIds ?? []) ids.add(conditionId);
+        }
+        return ids;
+    });
+
+    readonly invalidConnectionIds = computed<Set<string>>(() => {
+        const result = this.liveValidation();
+        if (!result) {
+            return new Set<string>();
+        }
+        const ids = new Set<string>();
+        for (const issue of result.issues) {
+            for (const connectionId of issue.connectionIds ?? []) ids.add(connectionId);
+        }
+        return ids;
+    });
+
+    onValidate() {
+        const result = this.liveValidation();
+        if (!result) {
+            this.toaster.showError('TOASTER.HEADER.VALIDATION', 'TOASTER.BODY.VALIDATION_ERROR', {
+                duration: 0,
+            });
+            return;
+        }
+
+        const validSet = new Set<string>();
+        const invalidSet = new Set<string>();
+
+        if (result.perPlaceResults) {
+            for (const [placeId, placeResult] of Object.entries(result.perPlaceResults)) {
+                if (placeResult.valid) {
+                    validSet.add(placeId);
+                } else {
+                    invalidSet.add(placeId);
+                }
+            }
+        }
+
+        this.stateService.setValidPetriPlaceIds(validSet);
+        this.stateService.setInvalidPetriPlaceIds(invalidSet);
+        this.stateService.setSelectedPetriPlaceId(null);
+    }
+
+    resolveSourceNetForValidation(): Diagram | null {
+        const sourceNet = this.sourcePetriNetService.getCurrentSourceNet();
+        if (sourceNet instanceof Diagram) {
+            return sourceNet;
+        }
+
+        const displayed = this.displayService.diagram;
+        return displayed instanceof Diagram ? displayed : null;
+    }
+
+    buildValidationInput(): {
+        petri: PetriNet;
+        elements: TokenTrailElement[];
+        connections: TokenTrailConnection[];
+    } | null {
+        const base = this.resolveSourceNetForValidation() ?? undefined;
+        if (!base) {
+            return null;
+        }
+
+        const nodes = base.getNodes();
+        const edges = base.getEdges();
+        const startMarkingEntries = Object.entries(base.startMarking || {}).filter(([, tokens]) => (tokens ?? 0) > 0);
+        const petri: PetriNet = {
+            places: nodes.filter((n) => n.shape === 'circle').map((n) => n.id),
+            transitions: nodes.filter((n) => n.shape === 'rect').map((n) => n.id),
+            arcs: Object.fromEntries(
+                edges.map((e) => [
+                    `${e.source},${e.target}`,
+                    ((e as unknown as { weight?: number }).weight ?? 1) as number,
+                ]),
+            ),
+            labels: Object.fromEntries(nodes.filter((n) => n.shape === 'rect').map((n) => [n.id, n.displayLabel])),
+            marking: Object.fromEntries(startMarkingEntries),
+        };
+
+        const elements: TokenTrailElement[] = this.stateService.drawnElements().map((el) => {
+            const isCondition = el instanceof Condition;
+            const isEvent = el instanceof LabeledEvent;
+            return {
+                id: el.id,
+                type: isCondition ? 'Condition' : isEvent ? 'Event' : 'Condition',
+                label: isCondition ? (el.innerLabel ?? el.displayLabel) : el.displayLabel,
+                isStartCondition: isCondition ? el.isStartPlace : undefined,
+                marking: isCondition ? el.tokenCount() : undefined,
+                trailMarkings: isCondition ? { ...el.trailMarkings } : undefined,
+            };
+        });
+
+        const connections: TokenTrailConnection[] = this.stateService.connections().map((c) => ({
+            id: c.id,
+            from: c.source,
+            to: c.target,
+            weight: c.weight,
+        }));
+
+        const startConditions = this.stateService.drawnElements()
+            .filter((el): el is Condition => el instanceof Condition && el.isStartPlace)
+            .map((el) => el.label ?? el.displayLabel);
+
+        return {
+            petri: {
+                ...petri,
+                startPlaces: startConditions,
+                focusPlaceId: this.stateService.selectedPetriPlaceId() ?? undefined,
+            },
+            elements,
+            connections,
+        };
+    }
 }

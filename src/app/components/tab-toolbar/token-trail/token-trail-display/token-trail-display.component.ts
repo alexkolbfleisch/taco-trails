@@ -7,6 +7,7 @@ import { DisplayableNode } from '../../../../classes/displayable-graph.interface
 import { inject } from '@angular/core';
 import { TokenTrailStateService } from '../../../../services/token-trail-state.service';
 import { DragDropUtil } from '../../../../utils/drag-drop.util';
+import { ToasterNotificationService } from '../../../../services/toaster-notification.service';
 
 @Component({
     selector: 'app-token-trail-display',
@@ -18,6 +19,7 @@ import { DragDropUtil } from '../../../../utils/drag-drop.util';
 export class TokenTrailDisplayComponent extends DisplayComponent {
     @ViewChild('drawingArea') override drawingArea!: ElementRef<SVGGraphicsElement>;
     private _tokenTrailStateService = inject(TokenTrailStateService);
+    private _toaster = inject(ToasterNotificationService);
     readonly selectedPetriPlaceId = this._tokenTrailStateService.selectedPetriPlaceId;
     readonly validPetriPlaceIds = this._tokenTrailStateService.validPetriPlaceIds;
     readonly invalidPetriPlaceIds = this._tokenTrailStateService.invalidPetriPlaceIds;
@@ -28,9 +30,7 @@ export class TokenTrailDisplayComponent extends DisplayComponent {
 
     override processNodeClick(node: DisplayableNode) {
         super.processNodeClick(node);
-        if (node.shape === SHAPE.CIRCLE) {
-            this._tokenTrailStateService.setSelectedPetriPlaceId(node.id);
-        }
+        // Selection is now handled in onNodeMouseDown to prevent double-toggling
     }
 
     getNodeFillColor(node: DisplayableNode): string | null {
@@ -58,11 +58,19 @@ export class TokenTrailDisplayComponent extends DisplayComponent {
 
         // Keep place selection responsive even when no drag is started.
         if (node.shape === SHAPE.CIRCLE) {
-            this._tokenTrailStateService.setSelectedPetriPlaceId(node.id);
+            if (this._tokenTrailStateService.selectedPetriPlaceId() === node.id) {
+                this._tokenTrailStateService.setSelectedPetriPlaceId(null);
+            } else {
+                this._tokenTrailStateService.setSelectedPetriPlaceId(node.id);
+            }
         }
 
         if (this._tokenTrailStateService.displayMode() === 'puzzle') {
-            // Drag and drop is disabled in Puzzle mode
+            // Only show the warning if the user clicks a transition,
+            // since clicking a place is a valid action (selection) in puzzle mode.
+            if (node.shape !== SHAPE.CIRCLE) {
+                this._toaster.showWarning('TOKEN_TRAIL.MODE_WARNING_TITLE', 'TOKEN_TRAIL.MODE_WARNING_BODY');
+            }
             return;
         }
 

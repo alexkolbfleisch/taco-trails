@@ -62,6 +62,10 @@ export class PlayValidationService {
                 }
             }
         }
+
+        // Restore the original marking after searching for sequences
+        diagram.resetMarking();
+        diagram.updateMarking();
     }
 
     /**

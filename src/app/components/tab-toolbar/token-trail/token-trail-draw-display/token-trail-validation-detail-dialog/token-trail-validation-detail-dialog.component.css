@@ -1,0 +1,42 @@
+.validation-details-container {
+    min-width: 400px;
+    max-height: 60vh;
+    overflow-y: auto;
+}
+
+.issue-group {
+    margin-bottom: 24px;
+}
+
+.issue-group-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+    border-bottom: 1px solid #e0e0e0;
+    padding-bottom: 4px;
+    color: #c62828; /* Default error color */
+}
+
+.no-issues-message {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 16px;
+    background-color: #e8f5e9;
+    border-radius: 4px;
+    color: #2e7d32;
+}
+
+.custom-issue-list {
+    list-style-type: disc;
+    margin: 8px 0 0 0;
+    padding-left: 28px;
+}
+
+.issue-message {
+    white-space: pre-wrap; /* Allows multiline error descriptions to break gracefully */
+    margin-bottom: 12px;
+    line-height: 1.5;
+    color: #333;
+}
