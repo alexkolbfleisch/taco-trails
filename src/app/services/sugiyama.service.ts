@@ -383,32 +383,23 @@ export class SugiyamaService {
      * @param layeredGraph Analyzed layered properties representations definitions constraints limits dependencies configuration restrictions mappings.
      */
     private traceDummyPath(edge: LabeledNetEdge, paths: SugiyamaEdge[], layeredGraph: Map<number, LayeredNode[]>) {
-        const dummies: LayeredNode[] = [];
-        let currentVirtualId = edge.source;
+        const dummies = paths
+            .map((p) => p.virtualTarget)
+            .map((id) => this.findNodeInLayers(layeredGraph, id))
+            .filter((n) => n?.isDummy) as LayeredNode[];
 
-        while (currentVirtualId !== edge.target) {
-            const segment = paths.find((p) => (!p.isReversed ? p.virtualSource : p.virtualTarget) === currentVirtualId);
-            if (!segment) break;
+        const sourceNode = this.findNodeInLayers(layeredGraph, edge.source);
+        const targetNode = this.findNodeInLayers(layeredGraph, edge.target);
 
-            const nextVirtualId = !segment.isReversed ? segment.virtualTarget : segment.virtualSource;
-            const nextNode = this.findNodeInLayers(layeredGraph, nextVirtualId);
-
-            if (nextNode && nextNode.isDummy) {
-                dummies.push(nextNode);
+        if (sourceNode && targetNode) {
+            if (sourceNode.layer < targetNode.layer) {
+                dummies.sort((a, b) => a.layer - b.layer);
+            } else {
+                dummies.sort((a, b) => b.layer - a.layer);
             }
-            currentVirtualId = nextVirtualId;
         }
 
-        if (dummies.length > 0) {
-            edge.bendPoints = dummies.map((d) => ({ x: d.x, y: d.y }));
-        } else {
-            const dummyNodesInPath = paths
-                .map((p) => this.findNodeInLayers(layeredGraph, p.virtualTarget))
-                .filter((n) => n?.isDummy);
-
-            dummyNodesInPath.sort((a, b) => a!.y - b!.y);
-            edge.bendPoints = dummyNodesInPath.map((d) => ({ x: d!.x, y: d!.y }));
-        }
+        edge.bendPoints = dummies.map((d) => ({ x: d.x, y: d.y }));
     }
 
     /**

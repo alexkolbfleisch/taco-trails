@@ -41,21 +41,16 @@
             class="connection-group"
             [class.invalid-connection]="isConnectionInvalid(line.id)"
             [attr.data-connection-id]="line.id">
-            <line
+            <path
                 class="connection-hit-target"
-                [attr.x1]="line.x1"
-                [attr.y1]="line.y1"
-                [attr.x2]="line.x2"
-                [attr.y2]="line.y2"
+                [attr.d]="line.pathData"
                 (mousedown)="onConnectionMouseDown($event, line.id)" />
-            <line
+            <path
                 class="connection-line"
-                [attr.x1]="line.x1"
-                [attr.y1]="line.y1"
-                [attr.x2]="line.x2"
-                [attr.y2]="line.y2"
+                [attr.d]="line.pathData"
                 stroke="black"
                 stroke-width="2"
+                fill="none"
                 marker-end="url(#arrowhead-draw)" />
             @if (line.weight > 1) {
             <text

@@ -22,6 +22,9 @@ import { Tab } from '../classes/tabs';
 interface LpnGenerationConfiguration {
     splittingProbability: number;
     synthesisConfig: RegionsConfiguration & SynthesisConfiguration;
+    traceLengthMultiplier: number;
+    maxTracesMultiplier: number;
+    maxEdgesMultiplier: number;
 }
 
 @Injectable({
@@ -37,74 +40,84 @@ export class TokenTrailLpnService {
     private sugiyamaService = inject(SugiyamaService);
     private panningService = inject(PanningService);
     private modeService = inject(ModeService);
+    private _lastSelectedEntriesHash = '';
 
-
-    //TODO: this config is okay, but we need to limit the amount of nodes for the lpn otherwise it will go crazy pretty fast
     private readonly _difficultyConfigurations: Record<LpnGenerationDifficulty, LpnGenerationConfiguration> = {
         easy: {
             splittingProbability: 0.25,
-            synthesisConfig: { noShortLoops: true, noArcWeights: true }
+            synthesisConfig: { noShortLoops: true, noArcWeights: true },
+            traceLengthMultiplier: 0.5,
+            maxTracesMultiplier: 0.2,
+            maxEdgesMultiplier: 1.0
         },
         medium: {
             splittingProbability: 0.6,
-            synthesisConfig: { noShortLoops: true }
+            synthesisConfig: { noShortLoops: true },
+            traceLengthMultiplier: 0.8,
+            maxTracesMultiplier: 0.3,
+            maxEdgesMultiplier: 1.5
         },
         hard: {
             splittingProbability: 0.5,
-            synthesisConfig: {}
+            synthesisConfig: {},
+            traceLengthMultiplier: 1.5,
+            maxTracesMultiplier: 0.5,
+            maxEdgesMultiplier: 2.5
         }
     };
 
     public createNewLPN(sourceNet: Diagram) {
+        const difficulty = this.stateService.lpnGenerationDifficulty() ?? 'medium';
+        const config = this._difficultyConfigurations[difficulty];
+        const nodeCount = sourceNet.allNodes.length;
+        const maxTraceLength = Math.max(3, Math.floor(nodeCount * config.traceLengthMultiplier));
+        const maxTraces = Math.max(1, Math.floor(nodeCount * config.maxTracesMultiplier));
+        const maxEdges = Math.max(5, Math.floor(nodeCount * config.maxEdgesMultiplier));
+
         this.playService.firingEntries.set([]);
-        this.playValidationService.findSequences(sourceNet, 1, 15);
+        this.playValidationService.findSequences(sourceNet, 1, maxTraceLength);
 
         const entries = this.playService.firingEntries();
         const validEntries = entries.filter((entry) => entry.isValid && entry.labels.length > 0);
 
         if (validEntries.length === 0) return;
 
-        const shuffled = [...validEntries].sort(() => 0.5 - Math.random());
-        const subsetSize = Math.max(1, Math.floor(Math.random() * shuffled.length) + 1);
-        const selectedEntries = shuffled.slice(0, subsetSize);
+        const selectedEntries = this._selectEntriesWithVariation(validEntries, maxTraces);
 
         // 50% Chance für PO (ohne Loops) oder direktes Mining (mit Loops)
         const useLoopMiner = Math.random() < 0.5;
 
         if (useLoopMiner) {
-            this.mineLoopNetDirectly(selectedEntries);
+            this.mineLoopNetDirectly(selectedEntries, maxEdges);
         } else {
-            this.minePartialOrderNet(selectedEntries);
+            this.minePartialOrderNet(selectedEntries, maxEdges);
         }
     }
 
     public createLPNWithSynthesis(sourceNet: Diagram, overrideDifficulty?: LpnGenerationDifficulty) {
+        let difficulty = overrideDifficulty;
+        if (!difficulty) {
+            difficulty = this.modeService.isExamMode(Tab.TOKEN_TRAIL) ? 'hard' : 'easy';
+        }
+        this.stateService.setLpnGenerationDifficulty(difficulty);
+
+        const config = this._difficultyConfigurations[difficulty];
+        const nodeCount = sourceNet.allNodes.length;
+        const maxTraceLength = Math.max(3, Math.floor(nodeCount * config.traceLengthMultiplier));
+        const maxTraces = Math.max(1, Math.floor(nodeCount * config.maxTracesMultiplier));
+        const maxEdges = Math.max(5, Math.floor(nodeCount * config.maxEdgesMultiplier));
+
         this.playService.firingEntries.set([]);
-        this.playValidationService.findSequences(sourceNet, 1, 15);
+        this.playValidationService.findSequences(sourceNet, 1, maxTraceLength);
 
         const entries = this.playService.firingEntries();
         const validEntries = entries.filter((entry) => entry.isValid && entry.labels.length > 0);
 
         if (validEntries.length === 0) return;
 
-        const shuffled = [...validEntries].sort(() => 0.5 - Math.random());
-        const subsetSize = Math.max(1, Math.floor(Math.random() * shuffled.length) + 1);
-        const selectedEntries = shuffled.slice(0, subsetSize);
-
+        const selectedEntries = this._selectEntriesWithVariation(validEntries, maxTraces);
         const inputNets: IlpnPetriNet[] = [];
 
-        // Determine difficulty:
-        // Use override if provided, else use current state difficulty (default medium),
-        // or apply the learning/exam mode rules if not explicitly set
-        let difficulty = overrideDifficulty;
-        if (!difficulty) {
-            difficulty = this.modeService.isExamMode(Tab.TOKEN_TRAIL) ? 'hard' : 'easy';
-            this.stateService.setLpnGenerationDifficulty(difficulty);
-        } else {
-            this.stateService.setLpnGenerationDifficulty(difficulty);
-        }
-
-        const config = this._difficultyConfigurations[difficulty];
         const splittingProbability = config.splittingProbability;
 
         for (const entry of selectedEntries) {
@@ -150,11 +163,34 @@ export class TokenTrailLpnService {
         }
 
         this.regionSynthesisService.synthesise(inputNets, config.synthesisConfig).subscribe((result) => {
-            this.renderMinedNet(result.result);
+            this.renderMinedNet(result.result, maxEdges);
         });
     }
 
-    private mineLoopNetDirectly(selectedEntries: FiringEntry[]) {
+    private _selectEntriesWithVariation(validEntries: FiringEntry[], maxTraces: number): FiringEntry[] {
+        let selectedEntries: FiringEntry[];
+        let hash: string;
+        let retries = 0;
+
+        do {
+            const shuffled = [...validEntries].sort(() => 0.5 - Math.random());
+            const subsetSize = Math.min(maxTraces, Math.max(1, Math.floor(Math.random() * shuffled.length) + 1));
+            selectedEntries = shuffled.slice(0, subsetSize);
+
+            // Use sorted sequence labels as the hash to avoid identical traces bypassing the check due to different IDs or subset ordering
+            hash = selectedEntries
+                .map((e) => e.labels.join('-'))
+                .sort()
+                .join('|');
+
+            retries++;
+        } while (hash === this._lastSelectedEntriesHash && retries < 15 && validEntries.length > 1);
+
+        this._lastSelectedEntriesHash = hash;
+        return selectedEntries;
+    }
+
+    private mineLoopNetDirectly(selectedEntries: FiringEntry[], maxEdges: number) {
         const net = new IlpnPetriNet();
 
         // Wir merken uns Places basierend auf dem ZUSTAND (dem letzten Label)
@@ -203,10 +239,10 @@ export class TokenTrailLpnService {
         }
 
         // Direkt ans Rendering übergeben (kein ILP Miner nötig!)
-        this.renderMinedNet(net);
+        this.renderMinedNet(net, maxEdges);
     }
 
-    private minePartialOrderNet(selectedEntries: FiringEntry[]) {
+    private minePartialOrderNet(selectedEntries: FiringEntry[], maxEdges: number) {
         const partialOrders: PartialOrder[] = [];
 
         for (const entry of selectedEntries) {
@@ -244,15 +280,57 @@ export class TokenTrailLpnService {
         if (partialOrders.length === 0) return;
 
         this.ilp2MinerService.mine(partialOrders).subscribe((result) => {
-            this.renderMinedNet(result.net);
+            this.renderMinedNet(result.net, maxEdges);
         });
     }
 
-    private renderMinedNet(minedNet: IlpnPetriNet) {
+    private renderMinedNet(minedNet: IlpnPetriNet, maxEdges: number) {
         this.stateService.clear();
 
         const placeMap = new Map<string, string>();
         const transitionMap = new Map<string, string>();
+
+        let places = minedNet.getPlaces();
+
+        // Ensure LPN doesn't look like a giant mess by dropping some overly complex places if necessary
+        let currentEdgeCount = places.reduce((acc, p) => acc + p.ingoingArcs.length + p.outgoingArcs.length, 0);
+
+        if (currentEdgeCount > maxEdges && places.length > 1) {
+            const shuffledPlaces = [...places].sort(() => 0.5 - Math.random());
+            const filteredPlaces: typeof places = [];
+            let newEdgeCount = 0;
+
+            for (const p of shuffledPlaces) {
+                const pEdges = p.ingoingArcs.length + p.outgoingArcs.length;
+                if (filteredPlaces.length === 0 || newEdgeCount + pEdges <= maxEdges) {
+                    filteredPlaces.push(p);
+                    newEdgeCount += pEdges;
+                }
+            }
+
+            if (filteredPlaces.length === 0 && shuffledPlaces.length > 0) {
+                filteredPlaces.push(shuffledPlaces[0]);
+            }
+            places = filteredPlaces;
+        }
+
+        const connectedTransitionIds = new Set<string>();
+        places.forEach(p => {
+            p.ingoingArcs.forEach(a => {
+                const sourceId = a.sourceId || (a.source as any).id;
+                if (sourceId) connectedTransitionIds.add(sourceId);
+            });
+            p.outgoingArcs.forEach(a => {
+                const destinationId = a.destinationId || (a.destination as any).id;
+                if (destinationId) connectedTransitionIds.add(destinationId);
+            });
+        });
+
+        // Filter out transitions that are completely disconnected from our pruned places list to avoid floating alphabet nodes
+        const transitions = minedNet.getTransitions().filter(t => {
+            const tId = t.id;
+            return tId && connectedTransitionIds.has(tId);
+        });
 
         const getRandomPos = () => {
             const viewBox = this.panningService.viewBox();
@@ -264,7 +342,7 @@ export class TokenTrailLpnService {
             };
         };
 
-        minedNet.getPlaces().forEach((p) => {
+        places.forEach((p) => {
             // Falls p.id undefiniert ist (besonders wichtig für unser manuelles Netz),
             // setzen wir hier einen Fallback.
             const pId = p.id || this.stateService.generateElementId('p');
@@ -282,7 +360,7 @@ export class TokenTrailLpnService {
             this.stateService.addDrawnElement(condition);
         });
 
-        minedNet.getTransitions().forEach((t) => {
+        transitions.forEach((t) => {
             const tId = t.id || this.stateService.generateElementId('t');
             t.id = tId;
 
@@ -301,7 +379,7 @@ export class TokenTrailLpnService {
             this.stateService.addDrawnElement(eventNode);
         });
 
-        minedNet.getPlaces().forEach((p) => {
+        places.forEach((p) => {
             const pId = placeMap.get(p.id!)!;
             p.outgoingArcs.forEach((a) => {
                 const destinationId = a.destinationId || (a.destination as any).id;

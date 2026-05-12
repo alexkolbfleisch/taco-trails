@@ -97,10 +97,19 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
 
                 // Compute trimmed endpoints so the line starts/ends at shape boundaries
                 const { x1, y1, x2, y2 } = this.computeTrimmedLine(a, b);
-                return { id: c.id, x1, y1, x2, y2, weight: c.weight };
+
+                let pathData = `M ${x1} ${y1}`;
+                if (c.bendPoints && c.bendPoints.length > 0) {
+                    for (const point of c.bendPoints) {
+                        pathData += ` L ${point.x} ${point.y}`;
+                    }
+                }
+                pathData += ` L ${x2} ${y2}`;
+
+                return { id: c.id, x1, y1, x2, y2, weight: c.weight, pathData };
             })
             .filter(
-                (v): v is { id: string; x1: number; y1: number; x2: number; y2: number; weight: number } => v !== null,
+                (v): v is { id: string; x1: number; y1: number; x2: number; y2: number; weight: number; pathData: string } => v !== null,
             );
     });
     // Currently selected element for making a connection (highlighted)
