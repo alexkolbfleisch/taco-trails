@@ -127,6 +127,7 @@ svg text {
 }
 
 .connection-hit-target {
+    fill: none;
     stroke: rgba(0, 0, 0, 0); /* invisible */
     stroke-width: 14; /* larger clickable area */
     cursor: pointer;
