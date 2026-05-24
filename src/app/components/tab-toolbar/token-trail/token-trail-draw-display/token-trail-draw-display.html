@@ -153,4 +153,10 @@
             [actions]="toolbarActions()"
             [instructions]="toolbarInstructions()" />
     </div>
+
+    @if (loadingService.isLoading()) {
+    <div class="loading-overlay">
+        <mat-spinner diameter="60"></mat-spinner>
+    </div>
+    }
 </div>

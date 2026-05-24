@@ -22,6 +22,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonToggleModule } from '@angular/material/button-toggle';
 import { MatDialog } from '@angular/material/dialog';
+import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { GRAPH_FILENAMES, GRAPH_IDS, PLACE_RADIUS, TRANSITION_SIZE } from '../../../display/display.constants';
 import { LpnGenerationDifficulty, TokenTrailStateService } from '../../../../services/token-trail-state.service';
 import { Subscription } from 'rxjs';
@@ -40,6 +41,7 @@ import {
 } from './token-trail-validation-detail-dialog/token-trail-validation-detail-dialog.component';
 import { ToasterNotificationService } from '../../../../services/toaster-notification.service';
 import { SourcePetriNetService } from '../../../../services/source-petri-net.service';
+import { LoadingService } from '../../../../services/loading.service';
 
 //TODO: clean this up, this is becoming huge, implement a merging service or something, or handle merging in the state service as well. Remove duplications or put them into a common place.
 
@@ -70,6 +72,7 @@ import { SourcePetriNetService } from '../../../../services/source-petri-net.ser
         MatButtonModule,
         MatIconModule,
         MatButtonToggleModule,
+        MatProgressSpinnerModule,
     ],
     templateUrl: './token-trail-draw-display.html',
     providers: [PanningService, TokenTrailMergeService],
@@ -80,6 +83,7 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
     protected stateService = inject(TokenTrailStateService);
     private lpnService = inject(TokenTrailLpnService);
     protected validationService = inject(TokenTrailValidationService);
+    protected loadingService = inject(LoadingService);
     private dialog = inject(MatDialog);
     private toaster = inject(ToasterNotificationService);
     private sourcePetriNetService = inject(SourcePetriNetService);
@@ -155,7 +159,7 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
             icon: 'science',
             tooltip: 'TOKEN_TRAIL.BUTTON_SYNTHESIZE_LPN',
             color: 'accent',
-            isActive: true,
+            isActive: this.stateService.displayMode() === 'puzzle',
             action: () => {
                 /* empty because we trigger the menu */
             },
@@ -998,12 +1002,14 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
     }
 
     private createNewLPNWithDifficulty(difficulty: LpnGenerationDifficulty) {
+        if (this.stateService.displayMode() === 'construction') return;
         const sourceNet = this.validationService.resolveSourceNetForValidation();
         if (!sourceNet) return;
         this.lpnService.createLPNWithSynthesis(sourceNet, difficulty);
     }
 
     private createNewLPNWithSynthesis() {
+        if (this.stateService.displayMode() === 'construction') return;
         const sourceNet = this.validationService.resolveSourceNetForValidation();
         if (!sourceNet) return;
         this.lpnService.createLPNWithSynthesis(sourceNet);
