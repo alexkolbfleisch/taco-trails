@@ -1,5 +1,16 @@
 <!-- Render conditions as circles -->
 @if (isCondition()) {
+    @if (isStartPlace()) {
+        <svg:circle
+            xmlns:svg="http://www.w3.org/2000/svg"
+            [attr.cx]="circleX()"
+            [attr.cy]="circleY()"
+            [attr.r]="RADIUS + 5"
+            fill="none"
+            stroke="green"
+            stroke-width="3"
+            pointer-events="none" />
+    }
     <!-- Selection highlight -->
     <svg:circle
         xmlns:svg="http://www.w3.org/2000/svg"

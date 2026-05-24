@@ -222,6 +222,7 @@ export class TokenTrailLpnService {
 
             const condition = this.stateService.buildCondition(uniqueId, pId, p.marking, {
                 isStartPlace: p.marking > 0,
+                hideTokens: !(p.marking > 0), //TODO: currently showing initial marking of the LPN if no place is selected
             });
             const pos = getRandomPos();
             condition.x = pos.x;
