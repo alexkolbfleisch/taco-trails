@@ -1,7 +1,8 @@
 <div class="drawing-area-container">
     <div class="mode-indicator" [class.puzzle-mode]="stateService.displayMode() === 'puzzle'">
         <mat-icon>{{ stateService.displayMode() === 'puzzle' ? 'extension' : 'construction' }}</mat-icon>
-        {{ (stateService.displayMode() === 'puzzle' ? 'TOKEN_TRAIL.MODE_PUZZLE_ACTIVE' : 'TOKEN_TRAIL.MODE_CONSTRUCTION_ACTIVE') | translate }}
+        {{ (stateService.displayMode() === 'puzzle' ? 'TOKEN_TRAIL.MODE_PUZZLE_ACTIVE' :
+        'TOKEN_TRAIL.MODE_CONSTRUCTION_ACTIVE') | translate }}
     </div>
     <svg
         #drawingArea
@@ -61,8 +62,7 @@
                 class="connection-weight-label">
                 {{ line.weight }}
             </text>
-            }
-            @if (hasConnectionIssues(line.id)) {
+            } @if (hasConnectionIssues(line.id)) {
             <foreignObject
                 class="connection-info-fo"
                 [attr.x]="(line.x1 + line.x2) / 2 - 14"

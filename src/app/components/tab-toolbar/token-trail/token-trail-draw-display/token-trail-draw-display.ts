@@ -34,7 +34,10 @@ import { ImageExportService } from '../../../../services/image-export.service';
 import { TokenTrailMergeService } from './token-trail-merge.service';
 import { SvgEventNodeComponent } from '../../../display/svg-event-node/svg-event-node.component';
 import { TokenTrailLpnService } from '../../../../services/token-trail-lpn.service';
-import { TokenTrailValidationDetailDialogComponent, ValidationDetailDialogData } from './token-trail-validation-detail-dialog/token-trail-validation-detail-dialog.component';
+import {
+    TokenTrailValidationDetailDialogComponent,
+    ValidationDetailDialogData,
+} from './token-trail-validation-detail-dialog/token-trail-validation-detail-dialog.component';
 import { ToasterNotificationService } from '../../../../services/toaster-notification.service';
 import { SourcePetriNetService } from '../../../../services/source-petri-net.service';
 
@@ -109,7 +112,17 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
                 return { id: c.id, x1, y1, x2, y2, weight: c.weight, pathData };
             })
             .filter(
-                (v): v is { id: string; x1: number; y1: number; x2: number; y2: number; weight: number; pathData: string } => v !== null,
+                (
+                    v,
+                ): v is {
+                    id: string;
+                    x1: number;
+                    y1: number;
+                    x2: number;
+                    y2: number;
+                    weight: number;
+                    pathData: string;
+                } => v !== null,
             );
     });
     // Currently selected element for making a connection (highlighted)
@@ -143,31 +156,26 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
             tooltip: 'TOKEN_TRAIL.BUTTON_SYNTHESIZE_LPN',
             color: 'accent',
             isActive: true,
-            action: () => {}, // empty action because we trigger the menu
+            action: () => {
+                /* empty because we trigger the menu */
+            },
             menu: [
                 {
                     label: 'TOKEN_TRAIL.LPN_DIFFICULTY_EASY',
                     icon: 'sentiment_satisfied',
-                    action: () => this.createNewLPNWithDifficulty('easy')
+                    action: () => this.createNewLPNWithDifficulty('easy'),
                 },
                 {
                     label: 'TOKEN_TRAIL.LPN_DIFFICULTY_MEDIUM',
                     icon: 'sentiment_neutral',
-                    action: () => this.createNewLPNWithDifficulty('medium')
+                    action: () => this.createNewLPNWithDifficulty('medium'),
                 },
                 {
                     label: 'TOKEN_TRAIL.LPN_DIFFICULTY_HARD',
                     icon: 'sentiment_very_dissatisfied',
-                    action: () => this.createNewLPNWithDifficulty('hard')
-                }
-            ]
-        },
-        {
-            icon: 'refresh',
-            tooltip: 'TOKEN_TRAIL.BUTTON_NEW_LPN',
-            color: 'warn',
-            isActive: true, //TODO
-            action: () => this.createNewLPN(),
+                    action: () => this.createNewLPNWithDifficulty('hard'),
+                },
+            ],
         },
     ]);
 
@@ -194,7 +202,7 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
             { label: 'TOKEN_TRAIL.INSTRUCTION_DELETE', text: 'TOKEN_TRAIL.INSTRUCTION_MIDDLE_CLICK_DELETE' },
             { label: 'TOKEN_TRAIL.INSTRUCTION_DELETE_CONN', text: 'TOKEN_TRAIL.INSTRUCTION_MIDDLE_CLICK_DELETE_CONN' },
             { label: 'TOKEN_TRAIL.INSTRUCTION_VALIDATE', text: 'TOKEN_TRAIL.INSTRUCTION_VALIDATE_TOAST' },
-            { label: 'TOKEN_TRAIL.INSTRUCTION_CHANGE_TOKENS', text: 'TOKEN_TRAIL.INSTRUCTION_CHANGE_TOKENS_TEXT' }
+            { label: 'TOKEN_TRAIL.INSTRUCTION_CHANGE_TOKENS', text: 'TOKEN_TRAIL.INSTRUCTION_CHANGE_TOKENS_TEXT' },
         ];
     });
 
@@ -707,7 +715,10 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
 
         const selectedPlaceId = this.stateService.selectedPetriPlaceId();
         if (!selectedPlaceId) {
-            this.toaster.showWarning('TOKEN_TRAIL.PLACE_SELECTION_REQUIRED_TITLE', 'TOKEN_TRAIL.PLACE_SELECTION_REQUIRED_BODY');
+            this.toaster.showWarning(
+                'TOKEN_TRAIL.PLACE_SELECTION_REQUIRED_TITLE',
+                'TOKEN_TRAIL.PLACE_SELECTION_REQUIRED_BODY',
+            );
             return;
         }
 
@@ -996,11 +1007,5 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
         const sourceNet = this.validationService.resolveSourceNetForValidation();
         if (!sourceNet) return;
         this.lpnService.createLPNWithSynthesis(sourceNet);
-    }
-
-    private createNewLPN() {
-        const sourceNet = this.validationService.resolveSourceNetForValidation();
-        if (!sourceNet) return;
-        this.lpnService.createNewLPN(sourceNet);
     }
 }

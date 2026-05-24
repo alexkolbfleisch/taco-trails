@@ -37,7 +37,15 @@ export interface DrawToolbarToggle {
 @Component({
     selector: 'app-draw-toolbar',
     standalone: true,
-    imports: [MatExpansionModule, MatIconModule, MatButtonModule, MatTooltipModule, TranslateModule, FormsModule, MatMenuModule],
+    imports: [
+        MatExpansionModule,
+        MatIconModule,
+        MatButtonModule,
+        MatTooltipModule,
+        TranslateModule,
+        FormsModule,
+        MatMenuModule,
+    ],
     templateUrl: './draw-toolbar.component.html',
     styleUrls: ['./draw-toolbar.component.css'],
 })

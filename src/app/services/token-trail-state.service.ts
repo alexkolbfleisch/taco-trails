@@ -36,6 +36,10 @@ export class TokenTrailStateService {
     private readonly _fitViewRequest$ = new Subject<void>();
     public readonly fitViewRequest$ = this._fitViewRequest$.asObservable();
 
+    requestFitView() {
+        this._fitViewRequest$.next();
+    }
+
     addDrawnElement(element: LabeledNetNode) {
         this.drawnElements.update((el) => [...el, element]);
     }
