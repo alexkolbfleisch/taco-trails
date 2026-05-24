@@ -294,7 +294,8 @@ export class TokenTrailValidationService {
             ? `${sourceNet.getNodes().length}:${sourceNet.getEdges().length}:${Object.keys(sourceNet.startMarking || {}).length}`
             : 'no-source';
 
-        const elementKey = this.stateService.drawnElements()
+        const elementKey = this.stateService
+            .drawnElements()
             .map((node) => {
                 if (node instanceof Condition) {
                     return `C:${node.id}:${node.label ?? node.displayLabel}:${node.isStartPlace ? 1 : 0}`;
@@ -304,7 +305,8 @@ export class TokenTrailValidationService {
             .sort()
             .join('|');
 
-        const connectionKey = this.stateService.connections()
+        const connectionKey = this.stateService
+            .connections()
             .map((connection) => `${connection.source}>${connection.target}:${connection.weight}`)
             .sort()
             .join('|');
@@ -432,7 +434,8 @@ export class TokenTrailValidationService {
             weight: c.weight,
         }));
 
-        const startConditions = this.stateService.drawnElements()
+        const startConditions = this.stateService
+            .drawnElements()
             .filter((el): el is Condition => el instanceof Condition && el.isStartPlace)
             .map((el) => el.label ?? el.displayLabel);
 

@@ -151,7 +151,8 @@ svg text {
     pointer-events: none;
 }
 
-.node-info-fo, .connection-info-fo {
+.node-info-fo,
+.connection-info-fo {
     overflow: visible;
     pointer-events: all;
 }

@@ -1,8 +1,6 @@
 import { inject, Injectable } from '@angular/core';
 import { PlayService } from './play.service';
 import { PlayValidationService } from './play-validation.service';
-import { PetriNetToPartialOrderTransformerService } from '../../../ilpn-components/src/lib/algorithms/pn/transformation/petri-net-to-partial-order-transformer.service';
-import { Ilp2MinerService } from '../../../ilpn-components/src/lib/algorithms/pn/synthesis/ilp2-miner/ilp2-miner.service';
 import { PetriNetRegionSynthesisService } from '../../../ilpn-components/src/lib/algorithms/pn/regions/petri-net-region-synthesis.service';
 import { LpnGenerationDifficulty, TokenTrailStateService } from './token-trail-state.service';
 import { SugiyamaService } from './sugiyama.service';
@@ -10,22 +8,12 @@ import { FiringEntry } from '../classes/firing-entry';
 import { PetriNet as IlpnPetriNet } from '../../../ilpn-components/src/lib/models/pn/model/petri-net';
 import { Place as IlpnPlace } from '../../../ilpn-components/src/lib/models/pn/model/place';
 import { Transition as IlpnTransition } from '../../../ilpn-components/src/lib/models/pn/model/transition';
-import { PartialOrder } from '../../../ilpn-components/src/lib/models/po/model/partial-order';
 import { Diagram } from '../classes/diagram/diagram';
 import { LabeledNetEdge } from '../classes/labeled-net.model';
 import { PanningService } from './panning.service';
-import { RegionsConfiguration } from '../../../ilpn-components/src/lib/utility/glpk/model/regions-configuration';
-import { SynthesisConfiguration } from '../../../ilpn-components/src/lib/algorithms/pn/regions/classes/synthesis-configuration';
 import { ModeService } from './mode.service';
 import { Tab } from '../classes/tabs';
-
-interface LpnGenerationConfiguration {
-    splittingProbability: number;
-    synthesisConfig: RegionsConfiguration & SynthesisConfiguration;
-    traceLengthMultiplier: number;
-    maxTracesMultiplier: number;
-    maxEdgesMultiplier: number;
-}
+import { DIFFICULTY_CONFIGURATIONS } from './token-trail-lpn.config';
 
 @Injectable({
     providedIn: 'root',
@@ -33,8 +21,6 @@ interface LpnGenerationConfiguration {
 export class TokenTrailLpnService {
     private playService = inject(PlayService);
     private playValidationService = inject(PlayValidationService);
-    private pnToPOTransformer = inject(PetriNetToPartialOrderTransformerService);
-    private ilp2MinerService = inject(Ilp2MinerService);
     private regionSynthesisService = inject(PetriNetRegionSynthesisService);
     private stateService = inject(TokenTrailStateService);
     private sugiyamaService = inject(SugiyamaService);
@@ -42,58 +28,13 @@ export class TokenTrailLpnService {
     private modeService = inject(ModeService);
     private _lastSelectedEntriesHash = '';
 
-    private readonly _difficultyConfigurations: Record<LpnGenerationDifficulty, LpnGenerationConfiguration> = {
-        easy: {
-            splittingProbability: 0.25,
-            synthesisConfig: { noShortLoops: true, noArcWeights: true },
-            traceLengthMultiplier: 0.5,
-            maxTracesMultiplier: 0.2,
-            maxEdgesMultiplier: 1.0
-        },
-        medium: {
-            splittingProbability: 0.6,
-            synthesisConfig: { noShortLoops: true },
-            traceLengthMultiplier: 0.8,
-            maxTracesMultiplier: 0.3,
-            maxEdgesMultiplier: 1.5
-        },
-        hard: {
-            splittingProbability: 0.5,
-            synthesisConfig: {},
-            traceLengthMultiplier: 1.5,
-            maxTracesMultiplier: 0.5,
-            maxEdgesMultiplier: 2.5
-        }
-    };
-
-    public createNewLPN(sourceNet: Diagram) {
-        const difficulty = this.stateService.lpnGenerationDifficulty() ?? 'medium';
-        const config = this._difficultyConfigurations[difficulty];
-        const nodeCount = sourceNet.allNodes.length;
-        const maxTraceLength = Math.max(3, Math.floor(nodeCount * config.traceLengthMultiplier));
-        const maxTraces = Math.max(1, Math.floor(nodeCount * config.maxTracesMultiplier));
-        const maxEdges = Math.max(5, Math.floor(nodeCount * config.maxEdgesMultiplier));
-
-        this.playService.firingEntries.set([]);
-        this.playValidationService.findSequences(sourceNet, 1, maxTraceLength);
-
-        const entries = this.playService.firingEntries();
-        const validEntries = entries.filter((entry) => entry.isValid && entry.labels.length > 0);
-
-        if (validEntries.length === 0) return;
-
-        const selectedEntries = this._selectEntriesWithVariation(validEntries, maxTraces);
-
-        // 50% Chance für PO (ohne Loops) oder direktes Mining (mit Loops)
-        const useLoopMiner = Math.random() < 0.5;
-
-        if (useLoopMiner) {
-            this.mineLoopNetDirectly(selectedEntries, maxEdges);
-        } else {
-            this.minePartialOrderNet(selectedEntries, maxEdges);
-        }
-    }
-
+    /**
+     * Synthesizes a new Labeled Petri Net (LPN) based on traces derived from the source Petri net
+     * using region synthesis algorithms. Automatically adjusts parameters based on the generation difficulty.
+     *
+     * @param sourceNet The original Petri net diagram to synthesize the LPN from.
+     * @param overrideDifficulty Optional difficulty level to override the default setting.
+     */
     public createLPNWithSynthesis(sourceNet: Diagram, overrideDifficulty?: LpnGenerationDifficulty) {
         let difficulty = overrideDifficulty;
         if (!difficulty) {
@@ -101,7 +42,7 @@ export class TokenTrailLpnService {
         }
         this.stateService.setLpnGenerationDifficulty(difficulty);
 
-        const config = this._difficultyConfigurations[difficulty];
+        const config = DIFFICULTY_CONFIGURATIONS[difficulty];
         const nodeCount = sourceNet.allNodes.length;
         const maxTraceLength = Math.max(3, Math.floor(nodeCount * config.traceLengthMultiplier));
         const maxTraces = Math.max(1, Math.floor(nodeCount * config.maxTracesMultiplier));
@@ -167,6 +108,14 @@ export class TokenTrailLpnService {
         });
     }
 
+    /**
+     * Selects a subset of unique firing entries, shuffling and using a hash check to ensure variation
+     * in the synthesized traces compared to the last selection.
+     *
+     * @param validEntries The list of valid firing sequences.
+     * @param maxTraces The maximum number of traces to select.
+     * @returns A subset of firing entries.
+     */
     private _selectEntriesWithVariation(validEntries: FiringEntry[], maxTraces: number): FiringEntry[] {
         let selectedEntries: FiringEntry[];
         let hash: string;
@@ -177,7 +126,6 @@ export class TokenTrailLpnService {
             const subsetSize = Math.min(maxTraces, Math.max(1, Math.floor(Math.random() * shuffled.length) + 1));
             selectedEntries = shuffled.slice(0, subsetSize);
 
-            // Use sorted sequence labels as the hash to avoid identical traces bypassing the check due to different IDs or subset ordering
             hash = selectedEntries
                 .map((e) => e.labels.join('-'))
                 .sort()
@@ -190,100 +138,13 @@ export class TokenTrailLpnService {
         return selectedEntries;
     }
 
-    private mineLoopNetDirectly(selectedEntries: FiringEntry[], maxEdges: number) {
-        const net = new IlpnPetriNet();
-
-        // Wir merken uns Places basierend auf dem ZUSTAND (dem letzten Label)
-        const statePlaces = new Map<string, IlpnPlace>();
-        // Wir merken uns Transitionen basierend auf Start- und Zielzustand
-        const stateTransitions = new Map<string, IlpnTransition>();
-
-        const startPlace = new IlpnPlace();
-        startPlace.marking = 1;
-        // Setze eine ID falls dein Framework das intern braucht: startPlace.id = 'p_start';
-        net.addPlace(startPlace);
-        statePlaces.set('__start__', startPlace);
-
-        for (const entry of selectedEntries) {
-            let currentState = '__start__';
-
-            for (const label of entry.labels) {
-                const targetState = label;
-
-                // 1. Ziel-Place für dieses Label anlegen (falls noch nicht existent)
-                // Hierdurch entstehen die Loops, da bestehende Places wiederverwendet werden!
-                if (!statePlaces.has(targetState)) {
-                    const p = new IlpnPlace();
-                    // p.id = `p_${targetState}`;
-                    net.addPlace(p);
-                    statePlaces.set(targetState, p);
-                }
-
-                // 2. Transition zwischen aktuellem State und Ziel anlegen
-                const transitionKey = `${currentState}_to_${targetState}`;
-                if (!stateTransitions.has(transitionKey)) {
-                    // Hier geben wir das rohe Label ohne __split rein!
-                    const t = new IlpnTransition(label);
-                    // t.id = `t_${transitionKey}`;
-                    net.addTransition(t);
-                    stateTransitions.set(transitionKey, t);
-
-                    // Arcs verbinden: currentState -> Transition -> targetState
-                    net.addArc(statePlaces.get(currentState)!, t);
-                    net.addArc(t, statePlaces.get(targetState)!);
-                }
-
-                // Einen Schritt weitergehen
-                currentState = targetState;
-            }
-        }
-
-        // Direkt ans Rendering übergeben (kein ILP Miner nötig!)
-        this.renderMinedNet(net, maxEdges);
-    }
-
-    private minePartialOrderNet(selectedEntries: FiringEntry[], maxEdges: number) {
-        const partialOrders: PartialOrder[] = [];
-
-        for (const entry of selectedEntries) {
-            const net = new IlpnPetriNet();
-            let lastPlace = new IlpnPlace();
-            lastPlace.marking = 1;
-            net.addPlace(lastPlace);
-
-            const occurrenceCount = new Map<string, number>();
-
-            for (const label of entry.labels) {
-                const count = occurrenceCount.get(label) || 0;
-                occurrenceCount.set(label, count + 1);
-
-                const actualLabel = count === 0 ? label : `${label}__split${count}`;
-                const t = new IlpnTransition(actualLabel);
-                net.addTransition(t);
-                net.addArc(lastPlace, t);
-
-                const nextPlace = new IlpnPlace();
-                net.addPlace(nextPlace);
-                net.addArc(t, nextPlace);
-
-                lastPlace = nextPlace;
-            }
-
-            try {
-                const po = this.pnToPOTransformer.transform(net);
-                partialOrders.push(po);
-            } catch (e) {
-                console.error('Failed to transform to partial order', e);
-            }
-        }
-
-        if (partialOrders.length === 0) return;
-
-        this.ilp2MinerService.mine(partialOrders).subscribe((result) => {
-            this.renderMinedNet(result.net, maxEdges);
-        });
-    }
-
+    /**
+     * Renders a synthesized/mined Petri net by mapping its places and transitions to condition
+     * and event nodes, calculating their layout using Sugiyama layout, and adding them to the state service.
+     *
+     * @param minedNet The synthesized Petri net from the region synthesis step.
+     * @param maxEdges The maximum allowed edge count before pruning complex places.
+     */
     private renderMinedNet(minedNet: IlpnPetriNet, maxEdges: number) {
         this.stateService.clear();
 
@@ -292,8 +153,7 @@ export class TokenTrailLpnService {
 
         let places = minedNet.getPlaces();
 
-        // Ensure LPN doesn't look like a giant mess by dropping some overly complex places if necessary
-        let currentEdgeCount = places.reduce((acc, p) => acc + p.ingoingArcs.length + p.outgoingArcs.length, 0);
+        const currentEdgeCount = places.reduce((acc, p) => acc + p.ingoingArcs.length + p.outgoingArcs.length, 0);
 
         if (currentEdgeCount > maxEdges && places.length > 1) {
             const shuffledPlaces = [...places].sort(() => 0.5 - Math.random());
@@ -315,19 +175,18 @@ export class TokenTrailLpnService {
         }
 
         const connectedTransitionIds = new Set<string>();
-        places.forEach(p => {
-            p.ingoingArcs.forEach(a => {
-                const sourceId = a.sourceId || (a.source as any).id;
+        places.forEach((p) => {
+            p.ingoingArcs.forEach((a) => {
+                const sourceId = a.sourceId || (a.source as { id: string }).id;
                 if (sourceId) connectedTransitionIds.add(sourceId);
             });
-            p.outgoingArcs.forEach(a => {
-                const destinationId = a.destinationId || (a.destination as any).id;
+            p.outgoingArcs.forEach((a) => {
+                const destinationId = a.destinationId || (a.destination as { id: string }).id;
                 if (destinationId) connectedTransitionIds.add(destinationId);
             });
         });
 
-        // Filter out transitions that are completely disconnected from our pruned places list to avoid floating alphabet nodes
-        const transitions = minedNet.getTransitions().filter(t => {
+        const transitions = minedNet.getTransitions().filter((t) => {
             const tId = t.id;
             return tId && connectedTransitionIds.has(tId);
         });
@@ -343,8 +202,6 @@ export class TokenTrailLpnService {
         };
 
         places.forEach((p) => {
-            // Falls p.id undefiniert ist (besonders wichtig für unser manuelles Netz),
-            // setzen wir hier einen Fallback.
             const pId = p.id || this.stateService.generateElementId('p');
             p.id = pId;
 
@@ -364,8 +221,6 @@ export class TokenTrailLpnService {
             const tId = t.id || this.stateService.generateElementId('t');
             t.id = tId;
 
-
-
             const uniqueId = this.stateService.generateElementId(`drawn-trans`);
             transitionMap.set(tId, uniqueId);
 
@@ -382,7 +237,7 @@ export class TokenTrailLpnService {
         places.forEach((p) => {
             const pId = placeMap.get(p.id!)!;
             p.outgoingArcs.forEach((a) => {
-                const destinationId = a.destinationId || (a.destination as any).id;
+                const destinationId = a.destinationId || (a.destination as { id: string }).id;
                 const tId = transitionMap.get(destinationId)!;
                 if (!tId) return;
                 this.stateService.addConnection(
@@ -390,7 +245,7 @@ export class TokenTrailLpnService {
                 );
             });
             p.ingoingArcs.forEach((a) => {
-                const sourceId = a.sourceId || (a.source as any).id;
+                const sourceId = a.sourceId || (a.source as { id: string }).id;
                 const tId = transitionMap.get(sourceId)!;
                 if (!tId) return;
                 this.stateService.addConnection(
@@ -402,5 +257,6 @@ export class TokenTrailLpnService {
         this.sugiyamaService.calculateLayout(this.stateService.drawnElements(), this.stateService.connections());
         this.stateService.updateDrawnElements((e) => [...e]);
         this.stateService.updateConnections((c) => [...c]);
+        this.stateService.requestFitView();
     }
 }
