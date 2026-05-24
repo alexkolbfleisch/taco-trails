@@ -242,6 +242,8 @@
         "INSTRUCTION_AUTO_FIRING_TEXT": "In learn mode, clicking activated transitions in the Petri net automatically builds the process net."
     },
     "TOKEN_TRAIL": {
+        "LPN_SYNTHESIS_ERROR_TITLE": "LPN Synthesis Failed",
+        "LPN_SYNTHESIS_ERROR_BODY": "An error occurred while synthesizing the Labeled Petri Net.",
         "SHOW_HINT": "Show Hint",
         "DRAWING_AREA_HEADER": "Labeled Petri Net",
         "HELP_TOOLTIP": "Click to open the usage guide",

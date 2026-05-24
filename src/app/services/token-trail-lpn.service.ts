@@ -14,6 +14,8 @@ import { PanningService } from './panning.service';
 import { ModeService } from './mode.service';
 import { Tab } from '../classes/tabs';
 import { DIFFICULTY_CONFIGURATIONS } from './token-trail-lpn.config';
+import { LoadingService } from './loading.service';
+import { ToasterNotificationService } from './toaster-notification.service';
 
 @Injectable({
     providedIn: 'root',
@@ -26,6 +28,8 @@ export class TokenTrailLpnService {
     private sugiyamaService = inject(SugiyamaService);
     private panningService = inject(PanningService);
     private modeService = inject(ModeService);
+    private loadingService = inject(LoadingService);
+    private toaster = inject(ToasterNotificationService);
     private _lastSelectedEntriesHash = '';
 
     /**
@@ -103,8 +107,16 @@ export class TokenTrailLpnService {
             inputNets.push(net);
         }
 
-        this.regionSynthesisService.synthesise(inputNets, config.synthesisConfig).subscribe((result) => {
-            this.renderMinedNet(result.result, maxEdges);
+        this.loadingService.show();
+        this.regionSynthesisService.synthesise(inputNets, config.synthesisConfig).subscribe({
+            next: (result) => {
+                this.renderMinedNet(result.result, maxEdges);
+                this.loadingService.hide();
+            },
+            error: () => {
+                this.loadingService.hide();
+                this.toaster.showError('TOKEN_TRAIL.LPN_SYNTHESIS_ERROR_TITLE', 'TOKEN_TRAIL.LPN_SYNTHESIS_ERROR_BODY');
+            },
         });
     }
 

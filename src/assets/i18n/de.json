@@ -243,6 +243,8 @@
         "INSTRUCTION_AUTO_FIRING_TEXT": "Im Lernmodus erstellt das Klicken auf aktivierte Transitionen im Petrinetz automatisch das Prozessnetz."
     },
     "TOKEN_TRAIL": {
+        "LPN_SYNTHESIS_ERROR_TITLE": "LPN-Synthese fehlgeschlagen",
+        "LPN_SYNTHESIS_ERROR_BODY": "Bei der Synthese des Labeled Petri Nets ist ein Fehler aufgetreten.",
         "SHOW_HINT": "Hinweis anzeigen",
         "DRAWING_AREA_HEADER": "Labeled Petri Net",
         "HELP_TOOLTIP": "Klicken Sie hier, um die Bedienungsanleitung anzuzeigen",
