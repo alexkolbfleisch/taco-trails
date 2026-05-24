@@ -244,6 +244,8 @@
     "TOKEN_TRAIL": {
         "LPN_SYNTHESIS_ERROR_TITLE": "LPN Synthesis Failed",
         "LPN_SYNTHESIS_ERROR_BODY": "An error occurred while synthesizing the Labeled Petri Net.",
+        "LPN_NO_START_PLACE_TITLE": "No Start Place Present",
+        "LPN_NO_START_PLACE_BODY": "The generated LPN does not contain a marked start place.",
         "SHOW_HINT": "Show Hint",
         "DRAWING_AREA_HEADER": "Labeled Petri Net",
         "HELP_TOOLTIP": "Click to open the usage guide",

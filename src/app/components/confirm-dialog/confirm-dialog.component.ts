@@ -8,6 +8,7 @@ import { DrawService } from '../../services/draw.service';
 import { ReachabilityGraphService } from '../../reachability-graph.service';
 import { ProcessNetFiringService } from '../../services/process-net-firing.service';
 import { ModeService } from '../../services/mode.service';
+import { TokenTrailStateService } from '../../services/token-trail-state.service';
 
 export interface ConfirmDialogData {
     title: string;
@@ -30,6 +31,7 @@ export class ConfirmDialogComponent {
     private readonly reachabilityGraphService = inject(ReachabilityGraphService);
     private readonly drawService = inject(DrawService);
     private readonly modeService = inject(ModeService);
+    private readonly tokenTrailStateService = inject(TokenTrailStateService);
 
     keep() {
         this._dialogRef.close('keep');
@@ -45,6 +47,9 @@ export class ConfirmDialogComponent {
                 break;
             case Tab.REACHABILITY_GRAPH:
                 this.reachabilityGraphService.clear();
+                break;
+            case Tab.TOKEN_TRAIL:
+                this.tokenTrailStateService.clear();
                 break;
             default:
                 break;

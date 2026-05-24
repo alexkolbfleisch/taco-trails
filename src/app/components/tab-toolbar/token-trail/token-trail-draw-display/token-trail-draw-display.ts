@@ -42,6 +42,8 @@ import {
 import { ToasterNotificationService } from '../../../../services/toaster-notification.service';
 import { SourcePetriNetService } from '../../../../services/source-petri-net.service';
 import { LoadingService } from '../../../../services/loading.service';
+import { ModeService } from '../../../../services/mode.service';
+import { Tab } from '../../../../classes/tabs';
 
 //TODO: clean this up, this is becoming huge, implement a merging service or something, or handle merging in the state service as well. Remove duplications or put them into a common place.
 
@@ -84,6 +86,7 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
     private lpnService = inject(TokenTrailLpnService);
     protected validationService = inject(TokenTrailValidationService);
     protected loadingService = inject(LoadingService);
+    private _modeService = inject(ModeService);
     private dialog = inject(MatDialog);
     private toaster = inject(ToasterNotificationService);
     private sourcePetriNetService = inject(SourcePetriNetService);
@@ -240,15 +243,48 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
     private readonly UNMERGE_DRAG_DISTANCE = this.CONDITION_RADIUS * 2;
 
     private readonly _tokenPreviewEffect = effect(() => {
+        const displayMode = this.stateService.displayMode();
         const selectedPlaceId = this.stateService.selectedPetriPlaceId();
+        const isExam = this._modeService.isExamMode(Tab.TOKEN_TRAIL);
+
+        if (displayMode !== 'puzzle') {
+            // In construction mode, tokens are never visible
+            let hasChanges = false;
+            for (const node of this.drawnElements()) {
+                if (!(node instanceof Condition)) {
+                    continue;
+                }
+                if (!node.hideTokens || node.tokenCount() !== 0) {
+                    hasChanges = true;
+                    break;
+                }
+            }
+
+            if (!hasChanges) {
+                return;
+            }
+
+            this.stateService.updateDrawnElements((elements) =>
+                elements.map((node) => {
+                    if (node instanceof Condition) {
+                        node.hideTokens = true;
+                        node.tokens = 0;
+                        node.updateDynamicLabel();
+                    }
+                    return node;
+                }),
+            );
+            return;
+        }
 
         let hasChanges = false;
         for (const node of this.drawnElements()) {
             if (!(node instanceof Condition)) {
                 continue;
             }
-            const desiredTokens = selectedPlaceId ? node.getTrailTokens(selectedPlaceId) : 0;
-            const desiredHideTokens = !selectedPlaceId;
+            const showStartPlaceTokens = node.isStartPlace && !isExam;
+            const desiredTokens = selectedPlaceId ? node.getTrailTokens(selectedPlaceId) : showStartPlaceTokens ? 1 : 0;
+            const desiredHideTokens = selectedPlaceId ? false : !showStartPlaceTokens;
             if (node.tokenCount() !== desiredTokens || node.hideTokens !== desiredHideTokens) {
                 hasChanges = true;
                 break;
@@ -266,8 +302,9 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
                     return node;
                 }
 
-                node.hideTokens = !selectedPlaceId;
-                node.tokens = selectedPlaceId ? node.getTrailTokens(selectedPlaceId) : 0;
+                const showStartPlaceTokens = node.isStartPlace && !isExam;
+                node.hideTokens = selectedPlaceId ? false : !showStartPlaceTokens;
+                node.tokens = selectedPlaceId ? node.getTrailTokens(selectedPlaceId) : showStartPlaceTokens ? 1 : 0;
                 node.updateDynamicLabel(); // Always compute the correct string based on trailMarkings first
 
                 return node;
@@ -855,14 +892,23 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
     }
 
     isNodeInvalid(elementId: string): boolean {
+        if (this._modeService.isExamMode(Tab.TOKEN_TRAIL)) {
+            return false;
+        }
         return this.validationService.invalidNodeIds().has(elementId);
     }
 
     isConnectionInvalid(connectionId: string): boolean {
+        if (this._modeService.isExamMode(Tab.TOKEN_TRAIL)) {
+            return false;
+        }
         return this.validationService.invalidConnectionIds().has(connectionId);
     }
 
     hasElementIssues(elementId: string): boolean {
+        if (this._modeService.isExamMode(Tab.TOKEN_TRAIL)) {
+            return false;
+        }
         const result = this.validationService.liveValidation();
         if (!result) return false;
 
@@ -881,6 +927,9 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
     }
 
     hasConnectionIssues(connectionId: string): boolean {
+        if (this._modeService.isExamMode(Tab.TOKEN_TRAIL)) {
+            return false;
+        }
         const result = this.validationService.liveValidation();
         if (!result) return false;
 
