@@ -1,14 +1,21 @@
 <div class="drawing-area-container">
-    <div class="mode-indicator" [class.puzzle-mode]="stateService.displayMode() === 'puzzle'">
-        <mat-icon>{{ stateService.displayMode() === 'puzzle' ? 'extension' : 'construction' }}</mat-icon>
-        {{ (stateService.displayMode() === 'puzzle' ? 'TOKEN_TRAIL.MODE_PUZZLE_ACTIVE' :
-        'TOKEN_TRAIL.MODE_CONSTRUCTION_ACTIVE') | translate }}
+    <div
+        class="mode-indicator"
+        [class.puzzle-mode]="stateService.displayMode() === 'puzzle' && !stateService.showingSolution()"
+        [class.solution-mode]="stateService.showingSolution()">
+        <mat-icon
+            >{{ stateService.showingSolution() ? 'visibility' : (stateService.displayMode() === 'puzzle' ? 'extension' :
+            'construction') }}</mat-icon
+        >
+        {{ (stateService.showingSolution() ? 'TOKEN_TRAIL.MODE_SOLUTION_ACTIVE' : (stateService.displayMode() ===
+        'puzzle' ? 'TOKEN_TRAIL.MODE_PUZZLE_ACTIVE' : 'TOKEN_TRAIL.MODE_CONSTRUCTION_ACTIVE')) | translate }}
     </div>
     <svg
         #drawingArea
         class="drawing-canvas"
         data-export-id="process-net-draw"
         [class.drag-over]="isDragOver()"
+        [class.showing-solution]="stateService.showingSolution()"
         [attr.viewBox]="viewBox()"
         preserveAspectRatio="xMidYMid meet"
         (drop)="onDrop($event)"

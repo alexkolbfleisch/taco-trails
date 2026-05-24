@@ -11,7 +11,12 @@ import {
     ViewChild,
 } from '@angular/core';
 
-import { Condition, Event as LabeledEvent, LabeledNetNode } from '../../../../classes/labeled-net.model';
+import {
+    Condition,
+    Event as LabeledEvent,
+    LabeledNetNode,
+    LabeledNetEdge,
+} from '../../../../classes/labeled-net.model';
 import { Diagram } from '../../../../classes/diagram/diagram';
 import { DisplayService } from '../../../../services/display.service';
 import { TokenTrailValidationService, ValidationIssue } from '../../../../services/token-trail-validation.service';
@@ -25,7 +30,7 @@ import { MatDialog } from '@angular/material/dialog';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { GRAPH_FILENAMES, GRAPH_IDS, PLACE_RADIUS, TRANSITION_SIZE } from '../../../display/display.constants';
 import { LpnGenerationDifficulty, TokenTrailStateService } from '../../../../services/token-trail-state.service';
-import { Subscription } from 'rxjs';
+import { Subscription, take } from 'rxjs';
 import {
     DrawToolbarAction,
     DrawToolbarComponent,
@@ -44,6 +49,10 @@ import { SourcePetriNetService } from '../../../../services/source-petri-net.ser
 import { LoadingService } from '../../../../services/loading.service';
 import { ModeService } from '../../../../services/mode.service';
 import { Tab } from '../../../../classes/tabs';
+import { PetriNet as IlpnPetriNet } from '../../../../../../ilpn-components/src/lib/models/pn/model/petri-net';
+import { Place as IlpnPlace } from '../../../../../../ilpn-components/src/lib/models/pn/model/place';
+import { Transition as IlpnTransition } from '../../../../../../ilpn-components/src/lib/models/pn/model/transition';
+import { TokenTrailValidatorService } from '../../../../../../ilpn-components/src/lib/algorithms/pn/validation/token-trails/token-trail-validator.service';
 
 //TODO: clean this up, this is becoming huge, implement a merging service or something, or handle merging in the state service as well. Remove duplications or put them into a common place.
 
@@ -89,6 +98,7 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
     private _modeService = inject(ModeService);
     private dialog = inject(MatDialog);
     private toaster = inject(ToasterNotificationService);
+    private tokenTrailValidatorService = inject(TokenTrailValidatorService);
     private sourcePetriNetService = inject(SourcePetriNetService);
 
     // Bind to service state
@@ -141,28 +151,37 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
             icon: 'delete',
             tooltip: 'TOKEN_TRAIL.BUTTON_CLEAR_DRAWING',
             color: 'warn',
-            isActive: !this.isDisabled(),
+            isActive: !this.isDisabled() && !this.stateService.showingSolution(),
             action: () => this.clearDrawing(),
         },
         {
             icon: 'checklist',
             tooltip: 'TOKEN_TRAIL.BUTTON_VALIDATE_NET',
             color: 'primary',
-            isActive: !this.isDisabled(),
+            isActive: !this.isDisabled() && !this.stateService.showingSolution(),
             action: () => this.validationService.onValidate(),
         },
         {
             icon: this.getModeToggleIcon(),
             tooltip: this.getModeToggleTooltip(),
             color: 'accent',
-            isActive: true, //TODO
+            isActive: !this.stateService.showingSolution(),
             action: () => this.toggleMode(),
+        },
+        {
+            icon: this.stateService.showingSolution() ? 'visibility_off' : 'visibility',
+            tooltip: this.stateService.showingSolution()
+                ? 'TOKEN_TRAIL.BUTTON_HIDE_SOLUTION'
+                : 'TOKEN_TRAIL.BUTTON_SHOW_SOLUTION',
+            color: 'primary',
+            isActive: !this.isDisabled(),
+            action: () => this.toggleSolution(),
         },
         {
             icon: 'science',
             tooltip: 'TOKEN_TRAIL.BUTTON_SYNTHESIZE_LPN',
             color: 'accent',
-            isActive: this.stateService.displayMode() === 'puzzle',
+            isActive: this.stateService.displayMode() === 'puzzle' && !this.stateService.showingSolution(),
             action: () => {
                 /* empty because we trigger the menu */
             },
@@ -222,6 +241,7 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
     private elementRef = inject(ElementRef);
 
     private mergeService = inject(TokenTrailMergeService);
+    private originalDisplayMode: 'puzzle' | 'construction' | null = null;
 
     private customDropListener: ((event: Event) => void) | null = null;
     private displayService = inject(DisplayService);
@@ -246,6 +266,8 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
         const displayMode = this.stateService.displayMode();
         const selectedPlaceId = this.stateService.selectedPetriPlaceId();
         const isExam = this._modeService.isExamMode(Tab.TOKEN_TRAIL);
+        const showSolution = this.stateService.showingSolution();
+        const solvedTrails = this.stateService.solvedTokenTrails();
 
         if (displayMode !== 'puzzle') {
             // In construction mode, tokens are never visible
@@ -283,7 +305,13 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
                 continue;
             }
             const showStartPlaceTokens = node.isStartPlace && !isExam;
-            const desiredTokens = selectedPlaceId ? node.getTrailTokens(selectedPlaceId) : showStartPlaceTokens ? 1 : 0;
+            const desiredTokens = selectedPlaceId
+                ? showSolution
+                    ? (solvedTrails.get(selectedPlaceId)?.[node.id] ?? 0)
+                    : node.getTrailTokens(selectedPlaceId)
+                : showStartPlaceTokens
+                  ? 1
+                  : 0;
             const desiredHideTokens = selectedPlaceId ? false : !showStartPlaceTokens;
             if (node.tokenCount() !== desiredTokens || node.hideTokens !== desiredHideTokens) {
                 hasChanges = true;
@@ -304,7 +332,13 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
 
                 const showStartPlaceTokens = node.isStartPlace && !isExam;
                 node.hideTokens = selectedPlaceId ? false : !showStartPlaceTokens;
-                node.tokens = selectedPlaceId ? node.getTrailTokens(selectedPlaceId) : showStartPlaceTokens ? 1 : 0;
+                node.tokens = selectedPlaceId
+                    ? showSolution
+                        ? (solvedTrails.get(selectedPlaceId)?.[node.id] ?? 0)
+                        : node.getTrailTokens(selectedPlaceId)
+                    : showStartPlaceTokens
+                      ? 1
+                      : 0;
                 node.updateDynamicLabel(); // Always compute the correct string based on trailMarkings first
 
                 return node;
@@ -397,6 +431,7 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
     };
 
     private handleCustomDrop(event: CustomEvent) {
+        if (this.stateService.showingSolution()) return;
         if (this.stateService.displayMode() === 'puzzle') return;
 
         const detail = event.detail;
@@ -452,6 +487,7 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
     }
 
     onDrop(event: DragEvent) {
+        if (this.stateService.showingSolution()) return;
         if (this.stateService.displayMode() === 'puzzle') return;
 
         event.preventDefault();
@@ -530,6 +566,7 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
     }
 
     onElementMouseDown(event: MouseEvent, element: LabeledNetNode) {
+        if (this.stateService.showingSolution()) return;
         // Shift + Left Click for Debugging
         if (event.shiftKey && event.button === 0) {
             console.log('Condition Properties Debug:', element);
@@ -575,6 +612,7 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
     }
 
     onElementRightClick(event: MouseEvent, element: LabeledNetNode) {
+        if (this.stateService.showingSolution()) return;
         // Right-click selection and connection logic
         event.preventDefault();
         event.stopImmediatePropagation();
@@ -624,6 +662,7 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
     }
 
     onElementDoubleClick(event: MouseEvent, element: LabeledNetNode) {
+        if (this.stateService.showingSolution()) return;
         event.preventDefault();
         event.stopImmediatePropagation();
 
@@ -654,6 +693,7 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
 
     // Increment connection weight (used by left click)
     onConnectionMouseDown(event: MouseEvent, connectionId: string) {
+        if (this.stateService.showingSolution()) return;
         // Middle click deletes connection
         if (event.button === 1) {
             event.stopImmediatePropagation();
@@ -747,6 +787,7 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
     };
 
     onElementWheel(event: WheelEvent, element: LabeledNetNode) {
+        if (this.stateService.showingSolution()) return;
         if (this.stateService.displayMode() !== 'puzzle' || !(element instanceof Condition)) {
             return;
         }
@@ -892,21 +933,21 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
     }
 
     isNodeInvalid(elementId: string): boolean {
-        if (this._modeService.isExamMode(Tab.TOKEN_TRAIL)) {
+        if (this._modeService.isExamMode(Tab.TOKEN_TRAIL) || this.stateService.showingSolution()) {
             return false;
         }
         return this.validationService.invalidNodeIds().has(elementId);
     }
 
     isConnectionInvalid(connectionId: string): boolean {
-        if (this._modeService.isExamMode(Tab.TOKEN_TRAIL)) {
+        if (this._modeService.isExamMode(Tab.TOKEN_TRAIL) || this.stateService.showingSolution()) {
             return false;
         }
         return this.validationService.invalidConnectionIds().has(connectionId);
     }
 
     hasElementIssues(elementId: string): boolean {
-        if (this._modeService.isExamMode(Tab.TOKEN_TRAIL)) {
+        if (this._modeService.isExamMode(Tab.TOKEN_TRAIL) || this.stateService.showingSolution()) {
             return false;
         }
         const result = this.validationService.liveValidation();
@@ -927,7 +968,7 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
     }
 
     hasConnectionIssues(connectionId: string): boolean {
-        if (this._modeService.isExamMode(Tab.TOKEN_TRAIL)) {
+        if (this._modeService.isExamMode(Tab.TOKEN_TRAIL) || this.stateService.showingSolution()) {
             return false;
         }
         const result = this.validationService.liveValidation();
@@ -1047,6 +1088,7 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
         if (!this.isMarkedConditionId(conditionId)) {
             return false;
         }
+        //TODO: adjust this logic so if a start condition is already merged in construction mode that the next pull of the same place will result in a normal condition
         return this.getCurrentStartConditionCount(conditionId) < this.getRequiredStartConditionCount(conditionId);
     }
 
@@ -1062,5 +1104,110 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
         const sourceNet = this.validationService.resolveSourceNetForValidation();
         if (!sourceNet) return;
         this.lpnService.createLPNWithSynthesis(sourceNet);
+    }
+
+    private convertSourceNetToIlpn(sourceNet: Diagram): IlpnPetriNet {
+        const ilpn = new IlpnPetriNet();
+        for (const p of sourceNet.places) {
+            ilpn.addPlace(new IlpnPlace(p.tokenCount(), p.id));
+        }
+        for (const t of sourceNet.transitions) {
+            ilpn.addTransition(new IlpnTransition(t.label, t.id));
+        }
+        for (const edge of sourceNet.arcs) {
+            const sourceNode = ilpn.getPlace(edge.source) || ilpn.getTransition(edge.source);
+            const destNode = ilpn.getPlace(edge.target) || ilpn.getTransition(edge.target);
+            if (sourceNode && destNode) {
+                if (sourceNode instanceof IlpnPlace) {
+                    ilpn.addArc(sourceNode, destNode as IlpnTransition, edge.weight || 1);
+                } else {
+                    ilpn.addArc(sourceNode, destNode as IlpnPlace, edge.weight || 1);
+                }
+            }
+        }
+        return ilpn;
+    }
+
+    private convertLpnToIlpn(drawnElements: LabeledNetNode[], connections: LabeledNetEdge[]): IlpnPetriNet {
+        const ilpn = new IlpnPetriNet();
+        for (const el of drawnElements) {
+            if (el instanceof Condition) {
+                ilpn.addPlace(new IlpnPlace(el.isStartPlace ? 1 : 0, el.id));
+            }
+        }
+        for (const el of drawnElements) {
+            if (el instanceof LabeledEvent) {
+                ilpn.addTransition(new IlpnTransition(el.label, el.id));
+            }
+        }
+        for (const conn of connections) {
+            const sourceNode = ilpn.getPlace(conn.source) || ilpn.getTransition(conn.source);
+            const destNode = ilpn.getPlace(conn.target) || ilpn.getTransition(conn.target);
+            if (sourceNode && destNode) {
+                if (sourceNode instanceof IlpnPlace) {
+                    ilpn.addArc(sourceNode, destNode as IlpnTransition, conn.weight || 1);
+                } else {
+                    ilpn.addArc(sourceNode, destNode as IlpnPlace, conn.weight || 1);
+                }
+            }
+        }
+        return ilpn;
+    }
+
+    private toggleSolution(): void {
+        const nextShowing = !this.stateService.showingSolution();
+        if (nextShowing) {
+            const sourceNet = this.validationService.resolveSourceNetForValidation();
+            if (!sourceNet) {
+                this.toaster.showError('TOKEN_TRAIL.NO_SOURCE_NET_TITLE', 'TOKEN_TRAIL.NO_SOURCE_NET_BODY');
+                return;
+            }
+            this.originalDisplayMode = this.stateService.displayMode();
+            this.stateService.setDisplayMode('puzzle');
+
+            const ilpnSource = this.convertSourceNetToIlpn(sourceNet);
+            const ilpnSpec = this.convertLpnToIlpn(this.drawnElements(), this.connections());
+            this.loadingService.show();
+
+            this.tokenTrailValidatorService
+                .validate(ilpnSource, ilpnSpec)
+                .pipe(take(1))
+                .subscribe({
+                    next: (results) => {
+                        const solvedTrailsMap = new Map<string, Record<string, number>>();
+                        for (const res of results) {
+                            const markingRecord: Record<string, number> = {};
+                            for (const key of res.tokenTrail.getKeys()) {
+                                const prefix = 'n0_';
+                                if (key.startsWith(prefix)) {
+                                    const elId = key.substring(prefix.length);
+                                    markingRecord[elId] = res.tokenTrail.get(key) ?? 0;
+                                }
+                            }
+                            solvedTrailsMap.set(res.placeId, markingRecord);
+                        }
+                        this.stateService.setSolvedTokenTrails(solvedTrailsMap);
+                        this.stateService.setShowingSolution(true);
+                        this.loadingService.hide();
+                        this.toaster.showSuccess('TOKEN_TRAIL.SOLUTION_FOUND_TITLE', 'TOKEN_TRAIL.SOLUTION_FOUND_BODY');
+                    },
+                    error: (err) => {
+                        this.loadingService.hide();
+                        if (this.originalDisplayMode) {
+                            this.stateService.setDisplayMode(this.originalDisplayMode);
+                            this.originalDisplayMode = null;
+                        }
+                        this.toaster.showError('TOKEN_TRAIL.SOLUTION_ERROR_TITLE', 'TOKEN_TRAIL.SOLUTION_ERROR_BODY');
+                        console.error('LPN Solution solver error:', err);
+                    },
+                });
+        } else {
+            this.stateService.setShowingSolution(false);
+            this.stateService.setSolvedTokenTrails(new Map());
+            if (this.originalDisplayMode) {
+                this.stateService.setDisplayMode(this.originalDisplayMode);
+                this.originalDisplayMode = null;
+            }
+        }
     }
 }

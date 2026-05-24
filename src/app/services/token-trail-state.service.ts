@@ -32,6 +32,8 @@ export class TokenTrailStateService {
 
     readonly displayMode = signal<'puzzle' | 'construction'>('puzzle');
     readonly lpnGenerationDifficulty = signal<LpnGenerationDifficulty>('medium');
+    readonly showingSolution = signal<boolean>(false);
+    readonly solvedTokenTrails = signal<Map<string, Record<string, number>>>(new Map());
 
     private readonly _fitViewRequest$ = new Subject<void>();
     public readonly fitViewRequest$ = this._fitViewRequest$.asObservable();
@@ -75,6 +77,8 @@ export class TokenTrailStateService {
         this.connectionIdCounter = 0;
         this.conditionCounter = 0;
         this.releasedConditionNumbers.clear();
+        this.showingSolution.set(false);
+        this.solvedTokenTrails.set(new Map());
     }
 
     setSelectedPetriPlaceId(placeId: string | null) {
@@ -172,5 +176,13 @@ export class TokenTrailStateService {
 
     buildEvent(id: string, label: string, transitionId: string): LabeledEvent {
         return new LabeledEvent(id, label, transitionId);
+    }
+
+    setShowingSolution(show: boolean) {
+        this.showingSolution.set(show);
+    }
+
+    setSolvedTokenTrails(trails: Map<string, Record<string, number>>) {
+        this.solvedTokenTrails.set(trails);
     }
 }

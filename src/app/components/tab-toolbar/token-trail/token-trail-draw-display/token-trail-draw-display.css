@@ -53,6 +53,12 @@
     border-color: rgba(33, 150, 243, 0.3);
 }
 
+.mode-indicator.solution-mode {
+    background-color: rgba(0, 150, 136, 0.1);
+    color: #00796b;
+    border-color: rgba(0, 150, 136, 0.3);
+}
+
 .mode-indicator mat-icon {
     font-size: 18px;
     width: 18px;
@@ -198,4 +204,27 @@ svg text {
     justify-content: center;
     align-items: center;
     z-index: 10;
+}
+
+/* Solution Mode Read-Only & Grayed Out Styling */
+.drawing-canvas.showing-solution {
+    background-color: #f8f9fa;
+    border-color: #cfd8dc;
+}
+
+.drawing-canvas.showing-solution .element-wrapper,
+.drawing-canvas.showing-solution .connection-group {
+    filter: grayscale(30%) opacity(85%) !important;
+}
+
+.drawing-canvas.showing-solution g[appSvgNode] {
+    cursor: default !important;
+}
+
+.drawing-canvas.showing-solution g[appSvgNode]:hover {
+    opacity: 1 !important;
+}
+
+.drawing-canvas.showing-solution .drag-overlay {
+    cursor: default !important;
 }
