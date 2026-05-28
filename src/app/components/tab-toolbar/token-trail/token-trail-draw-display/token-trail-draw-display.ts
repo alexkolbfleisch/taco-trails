@@ -149,7 +149,10 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
             icon: 'delete',
             tooltip: 'TOKEN_TRAIL.BUTTON_CLEAR_DRAWING',
             color: 'warn',
-            isActive: !this.isDisabled() && !this.stateService.showingSolution(),
+            isActive:
+                !this.isDisabled() &&
+                !this.stateService.showingSolution() &&
+                this.stateService.displayMode() !== 'puzzle',
             action: () => this.clearDrawing(),
         },
         {
@@ -219,6 +222,12 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
     }
 
     protected readonly toolbarInstructions = computed<DrawToolbarInstruction[]>(() => {
+        if (this.stateService.displayMode() === 'puzzle') {
+            return [
+                { label: 'TOKEN_TRAIL.INSTRUCTION_CHANGE_TOKENS', text: 'TOKEN_TRAIL.INSTRUCTION_CHANGE_TOKENS_TEXT' },
+                { label: 'TOKEN_TRAIL.INSTRUCTION_VALIDATE', text: 'TOKEN_TRAIL.INSTRUCTION_VALIDATE_TOAST' },
+            ];
+        }
         return [
             { label: 'TOKEN_TRAIL.ACTION_DRAG_DROP', text: 'TOKEN_TRAIL.INSTRUCTION_DRAG_DROP' },
             { label: 'TOKEN_TRAIL.INSTRUCTION_MOVE', text: 'TOKEN_TRAIL.INSTRUCTION_LEFT_CLICK_MOVE' },
@@ -226,7 +235,6 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
             { label: 'TOKEN_TRAIL.INSTRUCTION_DELETE', text: 'TOKEN_TRAIL.INSTRUCTION_MIDDLE_CLICK_DELETE' },
             { label: 'TOKEN_TRAIL.INSTRUCTION_DELETE_CONN', text: 'TOKEN_TRAIL.INSTRUCTION_MIDDLE_CLICK_DELETE_CONN' },
             { label: 'TOKEN_TRAIL.INSTRUCTION_VALIDATE', text: 'TOKEN_TRAIL.INSTRUCTION_VALIDATE_TOAST' },
-            { label: 'TOKEN_TRAIL.INSTRUCTION_CHANGE_TOKENS', text: 'TOKEN_TRAIL.INSTRUCTION_CHANGE_TOKENS_TEXT' },
         ];
     });
 
@@ -430,7 +438,10 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
 
     private handleCustomDrop(event: CustomEvent) {
         if (this.stateService.showingSolution()) return;
-        if (this.stateService.displayMode() === 'puzzle') return;
+        if (this.stateService.displayMode() === 'puzzle') {
+            this.toaster.showWarning('TOKEN_TRAIL.MODE_WARNING_TITLE', 'TOKEN_TRAIL.MODE_WARNING_PUZZLE_RESTRICTION');
+            return;
+        }
 
         const detail = event.detail;
         if (!detail) {
@@ -473,6 +484,7 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
     }
 
     onDragOver(event: DragEvent) {
+        if (this.stateService.displayMode() === 'puzzle') return;
         event.preventDefault();
         if (event.dataTransfer) {
             event.dataTransfer.dropEffect = 'copy';
@@ -486,7 +498,10 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
 
     onDrop(event: DragEvent) {
         if (this.stateService.showingSolution()) return;
-        if (this.stateService.displayMode() === 'puzzle') return;
+        if (this.stateService.displayMode() === 'puzzle') {
+            this.toaster.showWarning('TOKEN_TRAIL.MODE_WARNING_TITLE', 'TOKEN_TRAIL.MODE_WARNING_PUZZLE_RESTRICTION');
+            return;
+        }
 
         event.preventDefault();
         this.isDragOver.set(false);
@@ -580,12 +595,24 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
         if (event.button === 1) {
             event.stopImmediatePropagation();
             event.preventDefault();
+            if (this.stateService.displayMode() === 'puzzle') {
+                this.toaster.showWarning(
+                    'TOKEN_TRAIL.MODE_WARNING_TITLE',
+                    'TOKEN_TRAIL.MODE_WARNING_PUZZLE_RESTRICTION',
+                );
+                return;
+            }
             this.deleteElement(element);
             return;
         }
 
         // Only start dragging for left mouse button
         if (event.button !== 0) {
+            return;
+        }
+
+        if (this.stateService.displayMode() === 'puzzle') {
+            this.toaster.showWarning('TOKEN_TRAIL.MODE_WARNING_TITLE', 'TOKEN_TRAIL.MODE_WARNING_PUZZLE_RESTRICTION');
             return;
         }
 
@@ -611,6 +638,10 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
 
     onElementRightClick(event: MouseEvent, element: LabeledNetNode) {
         if (this.stateService.showingSolution()) return;
+        if (this.stateService.displayMode() === 'puzzle') {
+            this.toaster.showWarning('TOKEN_TRAIL.MODE_WARNING_TITLE', 'TOKEN_TRAIL.MODE_WARNING_PUZZLE_RESTRICTION');
+            return;
+        }
         // Right-click selection and connection logic
         event.preventDefault();
         event.stopImmediatePropagation();
@@ -693,6 +724,17 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
     // Increment connection weight (used by left click)
     onConnectionMouseDown(event: MouseEvent, connectionId: string) {
         if (this.stateService.showingSolution()) return;
+        if (this.stateService.displayMode() === 'puzzle') {
+            if (event.button === 1) {
+                event.stopImmediatePropagation();
+                event.preventDefault();
+                this.toaster.showWarning(
+                    'TOKEN_TRAIL.MODE_WARNING_TITLE',
+                    'TOKEN_TRAIL.MODE_WARNING_PUZZLE_RESTRICTION',
+                );
+            }
+            return;
+        }
         // Middle click deletes connection
         if (event.button === 1) {
             event.stopImmediatePropagation();
