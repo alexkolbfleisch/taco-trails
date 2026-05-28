@@ -8,6 +8,7 @@ import { MatTooltip } from '@angular/material/tooltip';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { TranslateModule } from '@ngx-translate/core';
 import { ProcessNetFiringService } from '../../services/process-net-firing.service';
+import { TokenTrailStateService } from '../../services/token-trail-state.service';
 
 @Component({
     selector: 'app-clear-net-button',
@@ -21,6 +22,7 @@ export class ClearNetButtonComponent {
     private _playService = inject(PlayService);
     private _displayService = inject(DisplayService);
     private _processNetFiringService = inject(ProcessNetFiringService);
+    private _tokenTrailStateService = inject(TokenTrailStateService);
     private _diagramSignal = toSignal(this._displayService.diagram$);
     private _sourceNetSignal = toSignal(this._sourcePetriNetService.sourceNet$);
     private _sourceTextSignal = toSignal(this._sourcePetriNetService.sourceText$);
@@ -36,5 +38,6 @@ export class ClearNetButtonComponent {
         this._playService.clearFiringEntries();
         this._displayService.clear();
         this._processNetFiringService.clear();
+        this._tokenTrailStateService.clear();
     }
 }

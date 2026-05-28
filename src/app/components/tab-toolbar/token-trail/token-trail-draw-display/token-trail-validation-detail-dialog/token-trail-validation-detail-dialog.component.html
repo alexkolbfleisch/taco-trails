@@ -16,7 +16,9 @@
                         </h3>
                         <ul class="custom-issue-list">
                             @for (issue of group.issues; track $index) {
-                                <li class="issue-message">{{ issue.messageKey | translate: issue.messageParams }}</li>
+                                <li
+                                    class="issue-message"
+                                    [innerHTML]="issue.messageKey | translate: issue.messageParams"></li>
                             }
                         </ul>
                     </div>

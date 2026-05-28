@@ -2,7 +2,7 @@ import { Component, inject } from '@angular/core';
 import { MAT_DIALOG_DATA, MatDialogModule } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
 import { TranslateModule } from '@ngx-translate/core';
-import { ValidationIssue } from '../../../../../services/token-trail-validation.service';
+import { ValidationIssue } from '../../../../../classes/token-trail.model';
 import { MatIconModule } from '@angular/material/icon';
 
 export interface ValidationDetailDialogData {

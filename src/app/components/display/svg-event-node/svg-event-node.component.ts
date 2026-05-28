@@ -82,6 +82,14 @@ export class SvgEventNodeComponent {
         return label;
     });
 
+    /**
+     * Untruncated full display label for the node, used for hover tooltips.
+     */
+    readonly fullLabel = computed(() => {
+        const n = this.diagramNode();
+        return n?.displayLabel || '';
+    });
+
     readonly conditionLabelClass = computed(() => 'node-label');
     readonly eventLabelClass = computed(() => 'event-label event-label-inside');
 

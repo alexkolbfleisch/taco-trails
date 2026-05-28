@@ -27,8 +27,6 @@ export class TokenTrailStateService {
 
     readonly viewBox = signal<{ minX: number; minY: number; width: number; height: number }>(viewBoxValues);
     readonly selectedPetriPlaceId = signal<string | null>(null);
-    readonly validPetriPlaceIds = signal<Set<string>>(new Set<string>());
-    readonly invalidPetriPlaceIds = signal<Set<string>>(new Set<string>());
 
     readonly displayMode = signal<'puzzle' | 'construction'>('puzzle');
     readonly lpnGenerationDifficulty = signal<LpnGenerationDifficulty>('medium');
@@ -71,8 +69,6 @@ export class TokenTrailStateService {
         this.drawnElements.set([]);
         this.connections.set([]);
         this.selectedPetriPlaceId.set(null);
-        this.validPetriPlaceIds.set(new Set<string>());
-        this.invalidPetriPlaceIds.set(new Set<string>());
         this.elementIdCounter = 0;
         this.connectionIdCounter = 0;
         this.conditionCounter = 0;
@@ -83,14 +79,6 @@ export class TokenTrailStateService {
 
     setSelectedPetriPlaceId(placeId: string | null) {
         this.selectedPetriPlaceId.set(placeId);
-    }
-
-    setValidPetriPlaceIds(placeIds: Set<string>) {
-        this.validPetriPlaceIds.set(placeIds);
-    }
-
-    setInvalidPetriPlaceIds(placeIds: Set<string>) {
-        this.invalidPetriPlaceIds.set(placeIds);
     }
 
     generateElementId(prefix: string): string {

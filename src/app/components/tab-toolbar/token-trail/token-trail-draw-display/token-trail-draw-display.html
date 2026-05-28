@@ -127,6 +127,7 @@
                 stroke="none"
                 pointer-events="all"
                 style="cursor: move"
+                [matTooltip]="element.displayLabel || element.label || ''"
                 (mousedown)="onElementMouseDown($event, element)"
                 (dblclick)="onElementDoubleClick($event, element)"
                 (contextmenu)="onElementRightClick($event, element)"

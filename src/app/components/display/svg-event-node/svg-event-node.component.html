@@ -29,7 +29,9 @@
         [attr.r]="RADIUS"
         [attr.fill]="conditionFillColor()"
         stroke="black"
-        stroke-width="2" />
+        stroke-width="2">
+        <svg:title>{{ fullLabel() }}</svg:title>
+    </svg:circle>
 
     <!-- Tokens visualization inside condition -->
     @if (!hideTokens() && !showTokenNumber()) {
@@ -63,6 +65,7 @@
         dominant-baseline="central"
         fill="black"
         [attr.class]="conditionLabelClass()">
+        <svg:title>{{ fullLabel() }}</svg:title>
         {{ displayLabel() }}
     </svg:text>
 }
@@ -91,7 +94,9 @@
         [attr.fill]="eventFillColor()"
         [attr.stroke]="eventStrokeColor()"
         [attr.stroke-width]="eventStrokeWidth()"
-        [attr.rx]="eventCornerRadius()" />
+        [attr.rx]="eventCornerRadius()">
+        <svg:title>{{ fullLabel() }}</svg:title>
+    </svg:rect>
 
     <svg:text
         xmlns:svg="http://www.w3.org/2000/svg"
@@ -101,6 +106,7 @@
         dominant-baseline="central"
         fill="black"
         [attr.class]="eventLabelClass()">
+        <svg:title>{{ fullLabel() }}</svg:title>
         {{ displayLabel() }}
     </svg:text>
 }

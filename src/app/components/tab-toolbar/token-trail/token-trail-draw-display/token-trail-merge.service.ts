@@ -1,4 +1,4 @@
-import { inject, Injectable, OnDestroy, signal } from '@angular/core';
+import { effect, inject, Injectable, OnDestroy, signal } from '@angular/core';
 
 import { Condition, LabeledNetEdge, LabeledNetNode } from '../../../../classes/labeled-net.model';
 import { PLACE_RADIUS } from '../../../display/display.constants';
@@ -39,6 +39,14 @@ export class TokenTrailMergeService implements OnDestroy {
 
     private readonly stateService = inject(TokenTrailStateService);
 
+    constructor() {
+        effect(() => {
+            if (this.stateService.displayMode() === 'puzzle') {
+                this.clearMergeState();
+            }
+        });
+    }
+
     ngOnDestroy(): void {
         this.clearMergeState();
     }
@@ -61,6 +69,9 @@ export class TokenTrailMergeService implements OnDestroy {
      * Check if a node is a visual merge anchor (represents multiple visually merged conditions).
      */
     isMergeAnchor(node: LabeledNetNode): boolean {
+        if (this.stateService.displayMode() === 'puzzle') {
+            return false;
+        }
         return node instanceof Condition && this.getConditionGroupSize(node.id) > 1;
     }
 
@@ -68,6 +79,9 @@ export class TokenTrailMergeService implements OnDestroy {
      * Check if a node is animating its merge (used to trigger CSS animations).
      */
     isMergeAnimating(node: LabeledNetNode): boolean {
+        if (this.stateService.displayMode() === 'puzzle') {
+            return false;
+        }
         return node instanceof Condition && this.mergeAnimationAnchorId() === node.id;
     }
 
@@ -75,6 +89,9 @@ export class TokenTrailMergeService implements OnDestroy {
      * Get the total number of conditions in a merge group (through its anchor).
      */
     getConditionGroupSize(conditionId: string): number {
+        if (this.stateService.displayMode() === 'puzzle') {
+            return 1;
+        }
         const anchorId = this.resolveConditionAnchorId(conditionId);
         return this.stateService
             .drawnElements()
@@ -86,6 +103,9 @@ export class TokenTrailMergeService implements OnDestroy {
      * Returns null if the condition is not part of a merge group.
      */
     getMergedConditionAnchorIdOrNull(conditionId: string): string | null {
+        if (this.stateService.displayMode() === 'puzzle') {
+            return null;
+        }
         const resolvedAnchor = this.resolveConditionAnchorId(conditionId);
         return resolvedAnchor === conditionId ? null : resolvedAnchor;
     }
@@ -95,6 +115,9 @@ export class TokenTrailMergeService implements OnDestroy {
      * Only merges if a valid target is found within the merge drop distance.
      */
     tryMergeConditionOnDrop(condition: Condition): void {
+        if (this.stateService.displayMode() === 'puzzle') {
+            return;
+        }
         const mergeTarget = this.findConditionMergeTarget(condition);
         if (!mergeTarget) {
             return;
@@ -109,6 +132,9 @@ export class TokenTrailMergeService implements OnDestroy {
      * @returns Array of removed (merged) condition IDs for cleanup/selection updates.
      */
     finalizeMergedConditionGroup(anchorConditionId: string): string[] {
+        if (this.stateService.displayMode() === 'puzzle') {
+            return [];
+        }
         const groupMemberIds = this.getConditionGroupMembers(anchorConditionId);
         const removedConditionIds = groupMemberIds.filter((id) => id !== anchorConditionId);
         if (removedConditionIds.length === 0) {
@@ -145,13 +171,15 @@ export class TokenTrailMergeService implements OnDestroy {
             }
         }
 
+        const isAnyMemberStartPlace = allMemberNodes.some((node) => node.isStartPlace);
+
         this.stateService.updateDrawnElements((elements) =>
             elements
                 .map((node) => {
                     if (node.id === anchorConditionId && node instanceof Condition) {
                         const updated = this.stateService.buildCondition(node.id, mergedLabel, node.tokenCount(), {
                             hideTokens: node.hideTokens,
-                            isStartPlace: node.isStartPlace,
+                            isStartPlace: isAnyMemberStartPlace,
                             labelPlacement: node.labelPlacement,
                             baseName: newMergedBaseName,
                         });
@@ -227,6 +255,9 @@ export class TokenTrailMergeService implements OnDestroy {
         anchorConditionId: string,
         shouldMarkAsStartCondition: (conditionId: string) => boolean,
     ): void {
+        if (this.stateService.displayMode() === 'puzzle') {
+            return;
+        }
         const anchorNode = this.getElementById(anchorConditionId);
         if (!(anchorNode instanceof Condition)) {
             return;
@@ -414,6 +445,9 @@ export class TokenTrailMergeService implements OnDestroy {
     }
 
     unmergeCondition(conditionId: string): void {
+        if (this.stateService.displayMode() === 'puzzle') {
+            return;
+        }
         this.mergedConditionAnchorById.update((currentMap) => {
             if (!currentMap[conditionId]) {
                 return currentMap;
