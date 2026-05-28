@@ -25,6 +25,9 @@ export class PlayValidationService {
         const visitedSequences = new Map<number, Set<string>>();
         const queue: { marking: Record<string, number>; sequence: string[] }[] = [];
 
+        // Save the current marking so we can restore it after sequence generation
+        const originalMarking = { ...diagram.marking };
+
         diagram.resetMarking();
         const startMarking = { ...diagram.marking };
         queue.push({ marking: startMarking, sequence: [] });
@@ -64,8 +67,7 @@ export class PlayValidationService {
         }
 
         // Restore the original marking after searching for sequences
-        diagram.resetMarking();
-        diagram.updateMarking();
+        diagram.marking = originalMarking;
     }
 
     /**
