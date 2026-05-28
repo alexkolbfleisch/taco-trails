@@ -8,6 +8,7 @@ import { inject } from '@angular/core';
 import { TokenTrailStateService } from '../../../../services/token-trail-state.service';
 import { DragDropUtil } from '../../../../utils/drag-drop.util';
 import { ToasterNotificationService } from '../../../../services/toaster-notification.service';
+import { TokenTrailValidationService } from '../../../../services/token-trail-validation.service';
 
 @Component({
     selector: 'app-token-trail-display',
@@ -19,10 +20,11 @@ import { ToasterNotificationService } from '../../../../services/toaster-notific
 export class TokenTrailDisplayComponent extends DisplayComponent {
     @ViewChild('drawingArea') override drawingArea!: ElementRef<SVGGraphicsElement>;
     private _tokenTrailStateService = inject(TokenTrailStateService);
+    private _validationService = inject(TokenTrailValidationService);
     private _toaster = inject(ToasterNotificationService);
     readonly selectedPetriPlaceId = this._tokenTrailStateService.selectedPetriPlaceId;
-    readonly validPetriPlaceIds = this._tokenTrailStateService.validPetriPlaceIds;
-    readonly invalidPetriPlaceIds = this._tokenTrailStateService.invalidPetriPlaceIds;
+    readonly validPetriPlaceIds = this._validationService.validPetriPlaceIds;
+    readonly invalidPetriPlaceIds = this._validationService.invalidPetriPlaceIds;
 
     override processDropEvent(e: DragEvent) {
         super.processDropEvent(e);

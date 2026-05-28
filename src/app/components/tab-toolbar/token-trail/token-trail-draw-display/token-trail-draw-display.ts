@@ -54,8 +54,6 @@ import { Place as IlpnPlace } from '../../../../../../ilpn-components/src/lib/mo
 import { Transition as IlpnTransition } from '../../../../../../ilpn-components/src/lib/models/pn/model/transition';
 import { TokenTrailValidatorService } from '../../../../../../ilpn-components/src/lib/algorithms/pn/validation/token-trails/token-trail-validator.service';
 
-//TODO: clean this up, this is becoming huge, implement a merging service or something, or handle merging in the state service as well. Remove duplications or put them into a common place.
-
 /**
  * TokenTrailDrawDisplayComponent is the main drawing canvas for Token Trail validation in the Token Trail tab.
  *
@@ -663,6 +661,7 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
 
     onElementDoubleClick(event: MouseEvent, element: LabeledNetNode) {
         if (this.stateService.showingSolution()) return;
+        if (this.stateService.displayMode() === 'puzzle') return;
         event.preventDefault();
         event.stopImmediatePropagation();
 
@@ -685,7 +684,7 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
         const displayLabel = element.label ?? element.displayLabel;
         if (displayLabel.includes('+') || /^\d+\*/.test(displayLabel)) {
             this.mergeService.unmergeConditionGroup(anchorConditionId, (conditionId) =>
-                this.shouldMarkAsStartCondition(conditionId),
+                this.shouldMarkAsStartCondition(conditionId, anchorConditionId),
             );
             return;
         }
@@ -750,7 +749,11 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
             this.draggedElement.x = newX;
             this.draggedElement.y = newY;
 
-            if (this.draggedElement instanceof Condition && this.dragStartedMergedAnchorId) {
+            if (
+                this.draggedElement instanceof Condition &&
+                this.dragStartedMergedAnchorId &&
+                this.stateService.displayMode() !== 'puzzle'
+            ) {
                 const anchor = this.getElementById(this.dragStartedMergedAnchorId);
                 if (anchor instanceof Condition) {
                     const distanceToAnchor = Math.hypot(
@@ -774,7 +777,7 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
             event.stopImmediatePropagation();
         }
 
-        if (releasedElement instanceof Condition && this.hasDragged) {
+        if (releasedElement instanceof Condition && this.hasDragged && this.stateService.displayMode() !== 'puzzle') {
             this.mergeService.tryMergeConditionOnDrop(releasedElement);
         }
 
@@ -1074,22 +1077,24 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
         return Math.max(0, Math.floor(tokens));
     }
 
-    private getCurrentStartConditionCount(conditionId: string): number {
-        return this.drawnElements().filter((el) => {
-            if (!(el instanceof Condition) || !el.isStartPlace) {
-                return false;
+    private getCurrentStartConditionCount(conditionId: string, excludeConditionId?: string): number {
+        return this.drawnElements().reduce((count, el) => {
+            if (el instanceof Condition && el.isStartPlace && el.id !== excludeConditionId) {
+                const markingCount = el.trailMarkings[conditionId] ?? 0;
+                return count + markingCount;
             }
-            const label = el.label ?? el.displayLabel;
-            return label === conditionId;
-        }).length;
+            return count;
+        }, 0);
     }
 
-    private shouldMarkAsStartCondition(conditionId: string): boolean {
+    private shouldMarkAsStartCondition(conditionId: string, excludeConditionId?: string): boolean {
         if (!this.isMarkedConditionId(conditionId)) {
             return false;
         }
-        //TODO: adjust this logic so if a start condition is already merged in construction mode that the next pull of the same place will result in a normal condition
-        return this.getCurrentStartConditionCount(conditionId) < this.getRequiredStartConditionCount(conditionId);
+        return (
+            this.getCurrentStartConditionCount(conditionId, excludeConditionId) <
+            this.getRequiredStartConditionCount(conditionId)
+        );
     }
 
     private createNewLPNWithDifficulty(difficulty: LpnGenerationDifficulty) {
