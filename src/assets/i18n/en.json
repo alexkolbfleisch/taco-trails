@@ -268,6 +268,7 @@
         "MODE_SOLUTION_ACTIVE": "Viewing Solution",
         "MODE_WARNING_TITLE": "Puzzle Mode Active",
         "MODE_WARNING_BODY": "Please switch to Construction Mode to add new elements.",
+        "MODE_WARNING_PUZZLE_RESTRICTION": "In Puzzle Mode, the LPN structure is fixed. Switch to Construction Mode to move, connect, or delete elements.",
         "PLACE_SELECTION_REQUIRED_TITLE": "Select a Place",
         "PLACE_SELECTION_REQUIRED_BODY": "Please select a place in the Petri net first.",
         "LPN_DIFFICULTY_EASY": "Easy",

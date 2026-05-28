@@ -269,6 +269,7 @@
         "MODE_SOLUTION_ACTIVE": "Lösung wird angezeigt",
         "MODE_WARNING_TITLE": "Puzzle-Modus aktiv",
         "MODE_WARNING_BODY": "Bitte wechseln Sie in den Konstruktions-Modus, um manuell Elemente hinzuzufügen.",
+        "MODE_WARNING_PUZZLE_RESTRICTION": "Im Puzzle-Modus ist die LPN-Struktur fixiert. Wechseln Sie in den Konstruktions-Modus, um Elemente zu verschieben, zu verbinden oder zu löschen.",
         "PLACE_SELECTION_REQUIRED_TITLE": "Stelle auswählen",
         "PLACE_SELECTION_REQUIRED_BODY": "Bitte wählen Sie zuerst eine Stelle im Petrinetz aus.",
         "ACTION_DRAG_DROP": "Ziehen & Ablegen",
