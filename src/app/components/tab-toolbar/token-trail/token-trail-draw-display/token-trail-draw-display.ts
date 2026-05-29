@@ -53,6 +53,7 @@ import { PetriNet as IlpnPetriNet } from '../../../../../../ilpn-components/src/
 import { Place as IlpnPlace } from '../../../../../../ilpn-components/src/lib/models/pn/model/place';
 import { Transition as IlpnTransition } from '../../../../../../ilpn-components/src/lib/models/pn/model/transition';
 import { TokenTrailValidatorService } from '../../../../../../ilpn-components/src/lib/algorithms/pn/validation/token-trails/token-trail-validator.service';
+import { DrawingDisplayService } from '../../../../services/drawing-display.service';
 
 /**
  * TokenTrailDrawDisplayComponent is the main drawing canvas for Token Trail validation in the Token Trail tab.
@@ -98,6 +99,7 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
     private toaster = inject(ToasterNotificationService);
     private tokenTrailValidatorService = inject(TokenTrailValidatorService);
     private sourcePetriNetService = inject(SourcePetriNetService);
+    private drawingDisplayService = inject(DrawingDisplayService);
 
     // Bind to service state
     readonly drawnElements = this.stateService.drawnElements;
@@ -114,7 +116,10 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
                 if (!a || !b) return null;
 
                 // Compute trimmed endpoints so the line starts/ends at shape boundaries
-                const { x1, y1, x2, y2 } = this.computeTrimmedLine(a, b);
+                const { x1, y1, x2, y2 } = this.drawingDisplayService.computeTrimmedLine(
+                    { x: a.x, y: a.y, isPlace: a instanceof Condition },
+                    { x: b.x, y: b.y, isPlace: b instanceof Condition },
+                );
 
                 let pathData = `M ${x1} ${y1}`;
                 if (c.bendPoints && c.bendPoints.length > 0) {
@@ -241,7 +246,6 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
     private draggedElement: Condition | LabeledEvent | null = null;
     private dragOffset = { x: 0, y: 0 };
     private hasDragged = false;
-    private svgElement: SVGSVGElement | null = null;
     private isDraggingElement = false;
     private dragStartedMergedAnchorId: string | null = null;
     private elementRef = inject(ElementRef);
@@ -259,6 +263,121 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
 
     readonly viewBox = this.panningService.viewBoxAsString;
     readonly viewBoxObj = this.panningService.viewBox;
+
+    /**
+     * Highly optimized, cached signal map containing visual metadata and state for all drawn elements.
+     * Computes values for invalid status, merge anchors, animation triggers, tooltips, and issues in a single pass.
+     * Prevents expensive O(N^2) calculations during change detection cycles triggered by panning and zooming.
+     */
+    readonly elementMetadataMap = computed(() => {
+        const elements = this.drawnElements();
+        const displayMode = this.stateService.displayMode();
+        const showingSolution = this.stateService.showingSolution();
+        const isExam = this._modeService.isExamMode(Tab.TOKEN_TRAIL);
+        const selectedPlaceId = this.stateService.selectedPetriPlaceId();
+
+        const invalidNodeIds = this.validationService.invalidNodeIds();
+        const validationResult = this.validationService.liveValidation();
+
+        const map = new Map<
+            string,
+            {
+                isMergeAnchor: boolean;
+                isMergeAnimating: boolean;
+                isInvalid: boolean;
+                shouldShowTooltip: boolean;
+                groupSize: number;
+                hasIssues: boolean;
+                tooltipText: string;
+            }
+        >();
+
+        for (const element of elements) {
+            const isMergeAnchor = this.mergeService.isMergeAnchor(element);
+            const isMergeAnimating = this.mergeService.isMergeAnimating(element);
+
+            // isNodeInvalid logic
+            const isInvalid = !isExam && !showingSolution && invalidNodeIds.has(element.id);
+
+            // shouldShowTooltip logic
+            const label = element.displayLabel || element.label || '';
+            let shouldShowTooltip = false;
+            if (label.length > 15) {
+                shouldShowTooltip = true;
+            } else if (displayMode === 'puzzle') {
+                shouldShowTooltip = label.length > 5;
+            }
+
+            // groupSize logic
+            const groupSize = this.mergeService.getConditionGroupSize(element.id);
+
+            // hasElementIssues logic
+            let hasIssues = false;
+            if (!isExam && !showingSolution && validationResult) {
+                let issues = validationResult.issues.filter(
+                    (issue) =>
+                        (issue.eventIds ?? []).includes(element.id) || (issue.conditionIds ?? []).includes(element.id),
+                );
+
+                if (displayMode === 'puzzle' && selectedPlaceId) {
+                    issues = issues.filter((issue) => issue.messageParams?.['place'] === selectedPlaceId);
+                }
+                hasIssues = issues.length > 0;
+            }
+
+            map.set(element.id, {
+                isMergeAnchor,
+                isMergeAnimating,
+                isInvalid,
+                shouldShowTooltip,
+                groupSize,
+                hasIssues,
+                tooltipText: label,
+            });
+        }
+
+        return map;
+    });
+
+    /**
+     * Highly optimized, cached signal map containing visual metadata and state for all connections.
+     * Pre-calculates invalid statuses and validation issues in a single pass to ensure O(1) rendering lookups.
+     */
+    readonly connectionMetadataMap = computed(() => {
+        const connections = this.connections();
+        const showingSolution = this.stateService.showingSolution();
+        const isExam = this._modeService.isExamMode(Tab.TOKEN_TRAIL);
+
+        const invalidConnectionIds = this.validationService.invalidConnectionIds();
+        const validationResult = this.validationService.liveValidation();
+
+        const map = new Map<
+            string,
+            {
+                isInvalid: boolean;
+                hasIssues: boolean;
+            }
+        >();
+
+        for (const connection of connections) {
+            const isInvalid = !isExam && !showingSolution && invalidConnectionIds.has(connection.id);
+
+            let hasIssues = false;
+            if (!isExam && !showingSolution && validationResult) {
+                const issues = validationResult.issues.filter((issue) =>
+                    (issue.connectionIds ?? []).includes(connection.id),
+                );
+                hasIssues = issues.length > 0;
+            }
+
+            map.set(connection.id, {
+                isInvalid,
+                hasIssues,
+            });
+        }
+
+        return map;
+    });
 
     private fitViewSubscription?: Subscription;
 
@@ -356,18 +475,6 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
     // Now they are handled by the ILP TokenTrailValidatorService securely.
 
     ngOnInit() {
-        // Listen for custom drop events
-        const canvas = this.elementRef.nativeElement.querySelector('.drawing-canvas');
-        if (canvas) {
-            this.customDropListener = (event: Event) => {
-                this.handleCustomDrop(event as CustomEvent);
-            };
-            canvas.addEventListener('customDrop', this.customDropListener);
-
-            // Add mousedown listener with capture phase to intercept before child elements
-            canvas.addEventListener('mousedown', this.handleCanvasMouseDown, true);
-        }
-
         this.downloadSub = this.displayService.downloadRequest$.subscribe(({ format, target }) => {
             if (target && target !== GRAPH_IDS.PROCESS_NET) {
                 return;
@@ -397,7 +504,16 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
     }
 
     ngAfterViewInit() {
-        this.svgElement = (this.drawingArea?.nativeElement as SVGSVGElement) ?? null;
+        const canvas = this.elementRef.nativeElement.querySelector('.drawing-canvas');
+        if (canvas) {
+            this.customDropListener = (event: Event) => {
+                this.handleCustomDrop(event as CustomEvent);
+            };
+            canvas.addEventListener('customDrop', this.customDropListener);
+
+            // Add mousedown listener with capture phase to intercept before child elements
+            canvas.addEventListener('mousedown', this.handleCanvasMouseDown, true);
+        }
     }
 
     ngOnDestroy() {
@@ -413,27 +529,9 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
     }
 
     private handleCanvasMouseDown = (event: MouseEvent) => {
-        // Only handle left clicks for dragging/moving
-        if (event.button !== 0) return;
-
-        // Check if this is the drag overlay rect (which has its own handler)
-        const target = event.target as Element;
-        if (target.classList.contains('drag-overlay')) {
-            return;
-        }
-
-        // Find if we clicked on an element wrapper
-        const wrapper = target.closest('.element-wrapper');
-
-        if (wrapper) {
-            const elementId = wrapper.getAttribute('data-element-id');
-            if (elementId) {
-                const element = this.drawnElements().find((e) => e.id === elementId);
-                if (element) {
-                    this.onElementMouseDown(event, element);
-                }
-            }
-        }
+        this.drawingDisplayService.handleCanvasMouseDown(event, this.drawnElements(), (evt, el) =>
+            this.onElementMouseDown(evt, el),
+        );
     };
 
     private handleCustomDrop(event: CustomEvent) {
@@ -448,7 +546,11 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
             return;
         }
 
-        const svgPoint = this.getSvgCoordinatesFromClient(detail.clientX, detail.clientY);
+        const svgPoint = this.drawingDisplayService.getSvgCoordinatesFromClient(
+            detail.clientX,
+            detail.clientY,
+            this.drawingArea.nativeElement as SVGSVGElement,
+        );
         if (!svgPoint) {
             return;
         }
@@ -468,7 +570,7 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
                 isStartPlace: this.shouldMarkAsStartCondition(detail.elementId),
                 innerLabel: detail.elementId,
             });
-            // Im Konstruktionsmodus erhält die neue Condition direkt das Trail Marking der gezogenen Stelle:
+            // In construction mode, the new Condition directly receives the trail marking of the dragged place:
             (newNode as Condition).trailMarkings = { [detail.elementId]: 1 };
             (newNode as Condition).updateDynamicLabel();
         } else if (isSourceEvent) {
@@ -509,7 +611,10 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
         // Check for drag data from the global window object (custom drag)
         const dragData = window.__dragData;
         if (dragData) {
-            const svgPoint = this.getSvgCoordinates(event);
+            const svgPoint = this.drawingDisplayService.getSvgCoordinates(
+                event,
+                this.drawingArea.nativeElement as SVGSVGElement,
+            );
             if (!svgPoint) {
                 return;
             }
@@ -528,7 +633,7 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
                     isStartPlace: this.shouldMarkAsStartCondition(dragData.elementId),
                     innerLabel: dragData.elementId,
                 });
-                // Initiales Trail Marking für die Source-Stelle setzen:
+                // Set initial trail marking for the source place:
                 (newNode as Condition).trailMarkings = { [dragData.elementId]: 1 };
                 (newNode as Condition).updateDynamicLabel();
             } else if (isSourceEvent) {
@@ -553,7 +658,10 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
             return;
         }
 
-        const svgPoint = this.getSvgCoordinates(event);
+        const svgPoint = this.drawingDisplayService.getSvgCoordinates(
+            event,
+            this.drawingArea.nativeElement as SVGSVGElement,
+        );
         if (!svgPoint) {
             return;
         }
@@ -578,6 +686,10 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
         this.stateService.addDrawnElement(newNode);
     }
 
+    /**
+     * Mouse down event handler on canvas elements. Handles shift-clicks for debugging,
+     * middle clicks for element deletion, and left clicks to initiate dragging.
+     */
     onElementMouseDown(event: MouseEvent, element: LabeledNetNode) {
         if (this.stateService.showingSolution()) return;
         // Shift + Left Click for Debugging
@@ -626,7 +738,10 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
         this.dragStartedMergedAnchorId =
             element instanceof Condition ? this.mergeService.getMergedConditionAnchorIdOrNull(element.id) : null;
 
-        const svgPoint = this.getSvgCoordinates(event);
+        const svgPoint = this.drawingDisplayService.getSvgCoordinates(
+            event,
+            this.drawingArea.nativeElement as SVGSVGElement,
+        );
         if (svgPoint) {
             this.dragOffset.x = svgPoint.x - element.x;
             this.dragOffset.y = svgPoint.y - element.y;
@@ -636,6 +751,10 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
         document.addEventListener('mouseup', this.onDocumentMouseUp, true);
     }
 
+    /**
+     * Right-click mouse handler on canvas elements. Handles drawing new directed connections
+     * between selected conditions and events (or vice versa).
+     */
     onElementRightClick(event: MouseEvent, element: LabeledNetNode) {
         if (this.stateService.showingSolution()) return;
         if (this.stateService.displayMode() === 'puzzle') {
@@ -668,7 +787,12 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
         }
 
         // Only connect if exactly one is condition and one is event.
-        if (!this.isValidConditionEventPair(sourceNode, targetNode)) {
+        if (
+            !this.drawingDisplayService.isValidConnectionPair(
+                sourceNode instanceof Condition,
+                targetNode instanceof Condition,
+            )
+        ) {
             // If types don't match, replace selection with the newly clicked element
             this.selectedElementId.set(element.id);
             return;
@@ -690,6 +814,10 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
         this.selectedElementId.set(null);
     }
 
+    /**
+     * Double-click mouse handler on canvas elements. Handles finalization of visual
+     * merge groups or unmerging of finalized conditions back into constituent elements.
+     */
     onElementDoubleClick(event: MouseEvent, element: LabeledNetNode) {
         if (this.stateService.showingSolution()) return;
         if (this.stateService.displayMode() === 'puzzle') return;
@@ -722,6 +850,9 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
     }
 
     // Increment connection weight (used by left click)
+    /**
+     * Mouse down event handler on connection lines. Handles middle-click connection deletion.
+     */
     onConnectionMouseDown(event: MouseEvent, connectionId: string) {
         if (this.stateService.showingSolution()) return;
         if (this.stateService.displayMode() === 'puzzle') {
@@ -745,26 +876,29 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
     }
 
     onCanvasPanStart(event: MouseEvent) {
-        if (this.isDraggingElement) return;
-        const target = event.target as Element | null;
-        const isOnElement = target?.closest('.element-wrapper') || target?.classList.contains('drag-overlay');
-        if (isOnElement) {
-            return;
-        }
-        this.panningService.startPan(event, this.drawingArea);
+        this.drawingDisplayService.handleCanvasPanStart(
+            event,
+            this.isDraggingElement,
+            this.drawingArea,
+            this.panningService,
+        );
     }
 
     onCanvasPan(event: MouseEvent) {
-        if (this.isDraggingElement) return;
-        this.panningService.pan(event, this.drawingArea);
+        this.drawingDisplayService.handleCanvasPan(
+            event,
+            this.isDraggingElement,
+            this.drawingArea,
+            this.panningService,
+        );
     }
 
     onCanvasPanEnd() {
-        this.panningService.endPan(this.drawingArea);
+        this.drawingDisplayService.handleCanvasPanEnd(this.drawingArea, this.panningService);
     }
 
     onCanvasWheel(event: WheelEvent) {
-        this.panningService.zoom(event, this.drawingArea);
+        this.drawingDisplayService.handleCanvasWheel(event, this.drawingArea, this.panningService);
     }
 
     private onDocumentMouseMove = (event: MouseEvent) => {
@@ -775,7 +909,10 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
         event.preventDefault();
         event.stopImmediatePropagation();
 
-        const svgPoint = this.getSvgCoordinates(event);
+        const svgPoint = this.drawingDisplayService.getSvgCoordinates(
+            event,
+            this.drawingArea.nativeElement as SVGSVGElement,
+        );
         if (svgPoint) {
             const newX = svgPoint.x - this.dragOffset.x;
             const newY = svgPoint.y - this.dragOffset.y;
@@ -785,9 +922,6 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
                 this.hasDragged = true;
             }
 
-            // Just update coordinates directly. Due to `x` and `y` being WritableSignal getters/setters
-            // inside DiagramNode, the UI will re-render automatically. This preserves the object reference
-            // so active instances of SpringEmbedderService calculating layout can read the dragged changes.
             this.draggedElement.x = newX;
             this.draggedElement.y = newY;
 
@@ -854,10 +988,9 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
         this.handleConditionTokenDelta(element, delta);
     }
 
-    private getSvgCoordinates(event: MouseEvent | DragEvent): { x: number; y: number } | null {
-        return this.getSvgCoordinatesFromClient(event.clientX, event.clientY);
-    }
-
+    /**
+     * Adjusts the token markings on a condition based on a delta (e.g. mousewheel scroll in puzzle mode).
+     */
     private handleConditionTokenDelta(condition: Condition, delta: number) {
         const selectedPlaceId = this.stateService.selectedPetriPlaceId();
         if (!selectedPlaceId) {
@@ -895,63 +1028,11 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
         );
     }
 
-    private getSvgCoordinatesFromClient(clientX: number, clientY: number): { x: number; y: number } | null {
-        if (!this.svgElement) {
-            this.svgElement =
-                (this.drawingArea?.nativeElement as SVGSVGElement) ??
-                ((document.querySelector('.drawing-canvas') as SVGSVGElement) || null);
-        }
-
-        if (!this.svgElement) {
-            return null;
-        }
-
-        const point = this.svgElement.createSVGPoint();
-        point.x = clientX;
-        point.y = clientY;
-
-        const ctm = this.svgElement.getScreenCTM();
-        if (!ctm) {
-            return null;
-        }
-
-        const svgPoint = point.matrixTransform(ctm.inverse());
-        return { x: svgPoint.x, y: svgPoint.y };
-    }
-
-    // Compute trimmed line from center of a to center of b, shortened by shape radii/half-sizes
-    private computeTrimmedLine(
-        a: LabeledNetNode,
-        b: LabeledNetNode,
-    ): { x1: number; y1: number; x2: number; y2: number } {
-        const ax = a.x;
-        const ay = a.y;
-        const bx = b.x;
-        const by = b.y;
-        const dx = bx - ax;
-        const dy = by - ay;
-        const len = Math.hypot(dx, dy) || 1;
-        const ux = dx / len;
-        const uy = dy / len;
-
-        const aOffset = a instanceof Condition ? this.CONDITION_RADIUS : Math.min(this.EVENT_HALF_W, this.EVENT_HALF_H);
-        const bOffset = b instanceof Condition ? this.CONDITION_RADIUS : Math.min(this.EVENT_HALF_W, this.EVENT_HALF_H);
-
-        const x1 = ax + ux * aOffset;
-        const y1 = ay + uy * aOffset;
-        const x2 = bx - ux * bOffset;
-        const y2 = by - uy * bOffset;
-        return { x1, y1, x2, y2 };
-    }
-
     clearDrawing() {
         this.selectedElementId.set(null);
         this.mergeService.clearMergeState();
 
-        const diagram = this.displayService.diagram;
-        if (diagram instanceof Diagram) {
-            diagram.resetMarking();
-        }
+        this.drawingDisplayService.resetDiagramMarking();
 
         this.stateService.clear();
     }
@@ -978,57 +1059,19 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
     }
 
     isNodeInvalid(elementId: string): boolean {
-        if (this._modeService.isExamMode(Tab.TOKEN_TRAIL) || this.stateService.showingSolution()) {
-            return false;
-        }
-        return this.validationService.invalidNodeIds().has(elementId);
+        return !!this.elementMetadataMap().get(elementId)?.isInvalid;
     }
 
     isConnectionInvalid(connectionId: string): boolean {
-        if (this._modeService.isExamMode(Tab.TOKEN_TRAIL) || this.stateService.showingSolution()) {
-            return false;
-        }
-        return this.validationService.invalidConnectionIds().has(connectionId);
+        return !!this.connectionMetadataMap().get(connectionId)?.isInvalid;
     }
 
     hasElementIssues(elementId: string): boolean {
-        if (this._modeService.isExamMode(Tab.TOKEN_TRAIL) || this.stateService.showingSolution()) {
-            return false;
-        }
-        const result = this.validationService.liveValidation();
-        if (!result) return false;
-
-        let issues = result.issues.filter(
-            (issue) => (issue.eventIds ?? []).includes(elementId) || (issue.conditionIds ?? []).includes(elementId),
-        );
-
-        if (this.stateService.displayMode() === 'puzzle') {
-            const selectedPlaceId = this.stateService.selectedPetriPlaceId();
-            if (selectedPlaceId) {
-                issues = issues.filter((issue) => issue.messageParams?.['place'] === selectedPlaceId);
-            }
-        }
-
-        return issues.length > 0;
+        return !!this.elementMetadataMap().get(elementId)?.hasIssues;
     }
 
     hasConnectionIssues(connectionId: string): boolean {
-        if (this._modeService.isExamMode(Tab.TOKEN_TRAIL) || this.stateService.showingSolution()) {
-            return false;
-        }
-        const result = this.validationService.liveValidation();
-        if (!result) return false;
-
-        let issues = result.issues.filter((issue) => (issue.connectionIds ?? []).includes(connectionId));
-
-        if (this.stateService.displayMode() === 'puzzle') {
-            const selectedPlaceId = this.stateService.selectedPetriPlaceId();
-            if (selectedPlaceId) {
-                issues = issues.filter((issue) => issue.messageParams?.['place'] === selectedPlaceId);
-            }
-        }
-
-        return issues.length > 0;
+        return !!this.connectionMetadataMap().get(connectionId)?.hasIssues;
     }
 
     openValidationDetailDialog(id: string, type: 'element' | 'connection') {
@@ -1063,10 +1106,6 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
         });
     }
 
-    private isValidConditionEventPair(sourceNode: LabeledNetNode, targetNode: LabeledNetNode): boolean {
-        return sourceNode instanceof Condition !== targetNode instanceof Condition;
-    }
-
     private hasExactConnectionDirection(sourceId: string, targetId: string): boolean {
         return this.connections().some(
             (connection) => connection.source === sourceId && connection.target === targetId,
@@ -1080,7 +1119,7 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
      * Used by the template to render the merge group size indicator.
      */
     isMergeAnchor(node: LabeledNetNode): boolean {
-        return this.mergeService.isMergeAnchor(node);
+        return !!this.elementMetadataMap().get(node.id)?.isMergeAnchor;
     }
 
     /**
@@ -1088,7 +1127,7 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
      * Used by the template to apply CSS animation classes.
      */
     isMergeAnimating(node: LabeledNetNode): boolean {
-        return this.mergeService.isMergeAnimating(node);
+        return !!this.elementMetadataMap().get(node.id)?.isMergeAnimating;
     }
 
     /**
@@ -1096,7 +1135,7 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
      * Used by the template to display the merge count badge.
      */
     getConditionGroupSize(conditionId: string): number {
-        return this.mergeService.getConditionGroupSize(conditionId);
+        return this.elementMetadataMap().get(conditionId)?.groupSize ?? 1;
     }
 
     // Merge behavior moved to `TokenTrailMergeService`.
@@ -1104,19 +1143,6 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
     // Helpers for template
     getElementById(id: string): LabeledNetNode | undefined {
         return this.drawnElements().find((e) => e.id === id);
-    }
-
-    private isMarkedConditionId(conditionId: string): boolean {
-        return this.getRequiredStartConditionCount(conditionId) > 0;
-    }
-
-    private getRequiredStartConditionCount(conditionId: string): number {
-        const base = this.displayService.diagram;
-        if (!base || !(base instanceof Diagram)) {
-            return 0;
-        }
-        const tokens = base.startMarking[conditionId] ?? 0;
-        return Math.max(0, Math.floor(tokens));
     }
 
     private getCurrentStartConditionCount(conditionId: string, excludeConditionId?: string): number {
@@ -1130,12 +1156,12 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
     }
 
     private shouldMarkAsStartCondition(conditionId: string, excludeConditionId?: string): boolean {
-        if (!this.isMarkedConditionId(conditionId)) {
+        if (!this.drawingDisplayService.isMarkedId(conditionId)) {
             return false;
         }
         return (
             this.getCurrentStartConditionCount(conditionId, excludeConditionId) <
-            this.getRequiredStartConditionCount(conditionId)
+            this.drawingDisplayService.getRequiredStartCount(conditionId)
         );
     }
 
@@ -1153,6 +1179,9 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
         this.lpnService.createLPNWithSynthesis(sourceNet);
     }
 
+    /**
+     * Converts a standard layout diagram structure (Petri net) into the ILPN library format.
+     */
     private convertSourceNetToIlpn(sourceNet: Diagram): IlpnPetriNet {
         const ilpn = new IlpnPetriNet();
         for (const p of sourceNet.places) {
@@ -1175,6 +1204,9 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
         return ilpn;
     }
 
+    /**
+     * Converts the user-drawn LPN structure into the ILPN library format.
+     */
     private convertLpnToIlpn(drawnElements: LabeledNetNode[], connections: LabeledNetEdge[]): IlpnPetriNet {
         const ilpn = new IlpnPetriNet();
         for (const el of drawnElements) {
@@ -1201,6 +1233,10 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
         return ilpn;
     }
 
+    /**
+     * Toggles LPN solution validation. Invokes the ILP validator solver with source and LPN models,
+     * and maps results into solved token markings when a solution is found.
+     */
     private toggleSolution(): void {
         const nextShowing = !this.stateService.showingSolution();
         if (nextShowing) {
@@ -1256,5 +1292,9 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
                 this.originalDisplayMode = null;
             }
         }
+    }
+
+    protected shouldShowTooltip(element: LabeledNetNode): boolean {
+        return !!this.elementMetadataMap().get(element.id)?.shouldShowTooltip;
     }
 }
