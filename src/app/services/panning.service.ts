@@ -35,9 +35,10 @@ export class PanningService {
         const svg = drawingArea.nativeElement;
         const rect = svg.getBoundingClientRect();
         const vb = this._viewBoxValues();
+        const scale = Math.max(vb.width / (rect.width || 1), vb.height / (rect.height || 1));
         this._panScale = {
-            x: vb.width / rect.width,
-            y: vb.height / rect.height,
+            x: scale,
+            y: scale,
         };
 
         drawingArea.nativeElement.style.cursor = 'grabbing';

@@ -96,7 +96,9 @@
             [class.merge-anchor]="isMergeAnchor(element)"
             [class.invalid-node]="isNodeInvalid(element.id)"
             [class.merge-animating]="isMergeAnimating(element)"
-            [attr.data-element-id]="element.id">
+            [attr.data-element-id]="element.id"
+            [matTooltip]="element.displayLabel || element.label || ''"
+            [matTooltipDisabled]="!shouldShowTooltip(element)">
             <g
                 appSvgEventNode
                 [diagramNode]="element"
@@ -119,15 +121,14 @@
             }
             <rect
                 class="drag-overlay"
-                [attr.x]="element.x - 60"
-                [attr.y]="element.y - 60"
-                width="120"
-                height="120"
+                [attr.x]="element.x - 25"
+                [attr.y]="element.y - 25"
+                width="50"
+                height="50"
                 fill="none"
                 stroke="none"
                 pointer-events="all"
                 [style.cursor]="stateService.displayMode() === 'puzzle' ? 'default' : 'move'"
-                [matTooltip]="element.displayLabel || element.label || ''"
                 (mousedown)="onElementMouseDown($event, element)"
                 (dblclick)="onElementDoubleClick($event, element)"
                 (contextmenu)="onElementRightClick($event, element)"

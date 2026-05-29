@@ -42,6 +42,7 @@ import {
 } from '../../../draw-toolbar/draw-toolbar.component';
 import { ImageExportService } from '../../../../services/image-export.service';
 import { SourcePetriNetService } from '../../../../services/source-petri-net.service';
+import { DrawingDisplayService } from '../../../../services/drawing-display.service';
 
 interface GlobalDragData {
     elementType: 'place' | 'transition';
@@ -70,6 +71,7 @@ export class ProcessNetDrawDisplayComponent implements OnInit, OnDestroy, AfterV
     @ViewChild('drawingArea') drawingArea!: ElementRef<SVGGraphicsElement>;
     private firingService = inject(ProcessNetFiringService);
     private stateService = inject(ProcessNetStateService);
+    private drawingDisplayService = inject(DrawingDisplayService);
 
     // Bind to service state
     readonly drawnElements = this.stateService.drawnElements;
@@ -86,7 +88,10 @@ export class ProcessNetDrawDisplayComponent implements OnInit, OnDestroy, AfterV
                 if (!a || !b) return null;
 
                 // Compute trimmed endpoints so the line starts/ends at shape boundaries
-                const { x1, y1, x2, y2 } = this.computeTrimmedLine(a, b);
+                const { x1, y1, x2, y2 } = this.drawingDisplayService.computeTrimmedLine(
+                    { x: a.node.x, y: a.node.y, isPlace: a.node instanceof DiagramPlace },
+                    { x: b.node.x, y: b.node.y, isPlace: b.node instanceof DiagramPlace },
+                );
                 return { id: c.id, x1, y1, x2, y2, weight: c.weight };
             })
             .filter(
@@ -128,7 +133,6 @@ export class ProcessNetDrawDisplayComponent implements OnInit, OnDestroy, AfterV
 
     private draggedElement: DrawnElement | null = null;
     private dragOffset = { x: 0, y: 0 };
-    private svgElement: SVGSVGElement | null = null;
     private isDraggingElement = false;
     private elementRef = inject(ElementRef);
     private cdr = inject(ChangeDetectorRef);
@@ -166,18 +170,6 @@ export class ProcessNetDrawDisplayComponent implements OnInit, OnDestroy, AfterV
     private readonly TRANSITION_HALF_H = TRANSITION_SIZE / 2;
 
     ngOnInit() {
-        // Listen for custom drop events
-        const canvas = this.elementRef.nativeElement.querySelector('.drawing-canvas');
-        if (canvas) {
-            this.customDropListener = (event: Event) => {
-                this.handleCustomDrop(event as CustomEvent);
-            };
-            canvas.addEventListener('customDrop', this.customDropListener);
-
-            // Add mousedown listener with capture phase to intercept before child elements
-            canvas.addEventListener('mousedown', this.handleCanvasMouseDown, true);
-        }
-
         this.downloadSub = this.displayService.downloadRequest$.subscribe(({ format, target }) => {
             if (target && target !== GRAPH_IDS.PROCESS_NET) {
                 return;
@@ -201,7 +193,16 @@ export class ProcessNetDrawDisplayComponent implements OnInit, OnDestroy, AfterV
     }
 
     ngAfterViewInit() {
-        this.svgElement = (this.drawingArea?.nativeElement as SVGSVGElement) ?? null;
+        const canvas = this.elementRef.nativeElement.querySelector('.drawing-canvas');
+        if (canvas) {
+            this.customDropListener = (event: Event) => {
+                this.handleCustomDrop(event as CustomEvent);
+            };
+            canvas.addEventListener('customDrop', this.customDropListener);
+
+            // Add mousedown listener with capture phase to intercept before child elements
+            canvas.addEventListener('mousedown', this.handleCanvasMouseDown, true);
+        }
     }
 
     ngOnDestroy() {
@@ -216,27 +217,9 @@ export class ProcessNetDrawDisplayComponent implements OnInit, OnDestroy, AfterV
     }
 
     private handleCanvasMouseDown = (event: MouseEvent) => {
-        // Only handle left clicks for dragging/moving
-        if (event.button !== 0) return;
-
-        // Check if this is the drag overlay rect (which has its own handler)
-        const target = event.target as Element;
-        if (target.classList.contains('drag-overlay')) {
-            return;
-        }
-
-        // Find if we clicked on an element wrapper
-        const wrapper = target.closest('.element-wrapper');
-
-        if (wrapper) {
-            const elementId = wrapper.getAttribute('data-element-id');
-            if (elementId) {
-                const element = this.drawnElements().find((e) => e.id === elementId);
-                if (element) {
-                    this.onElementMouseDown(event, element);
-                }
-            }
-        }
+        this.drawingDisplayService.handleCanvasMouseDown(event, this.drawnElements(), (evt, el) =>
+            this.onElementMouseDown(evt, el),
+        );
     };
 
     private handleCustomDrop(event: CustomEvent) {
@@ -245,7 +228,11 @@ export class ProcessNetDrawDisplayComponent implements OnInit, OnDestroy, AfterV
             return;
         }
 
-        const svgPoint = this.getSvgCoordinatesFromClient(detail.clientX, detail.clientY);
+        const svgPoint = this.drawingDisplayService.getSvgCoordinatesFromClient(
+            detail.clientX,
+            detail.clientY,
+            this.drawingArea.nativeElement as SVGSVGElement,
+        );
         if (!svgPoint) {
             return;
         }
@@ -297,7 +284,10 @@ export class ProcessNetDrawDisplayComponent implements OnInit, OnDestroy, AfterV
         // Check for drag data from the global window object (custom drag)
         const dragData = window.__dragData;
         if (dragData) {
-            const svgPoint = this.getSvgCoordinates(event);
+            const svgPoint = this.drawingDisplayService.getSvgCoordinates(
+                event,
+                this.drawingArea.nativeElement as SVGSVGElement,
+            );
             if (!svgPoint) {
                 return;
             }
@@ -339,7 +329,10 @@ export class ProcessNetDrawDisplayComponent implements OnInit, OnDestroy, AfterV
             return;
         }
 
-        const svgPoint = this.getSvgCoordinates(event);
+        const svgPoint = this.drawingDisplayService.getSvgCoordinates(
+            event,
+            this.drawingArea.nativeElement as SVGSVGElement,
+        );
         if (!svgPoint) {
             return;
         }
@@ -387,7 +380,10 @@ export class ProcessNetDrawDisplayComponent implements OnInit, OnDestroy, AfterV
         this.isDraggingElement = true;
         this.draggedElement = element;
 
-        const svgPoint = this.getSvgCoordinates(event);
+        const svgPoint = this.drawingDisplayService.getSvgCoordinates(
+            event,
+            this.drawingArea.nativeElement as SVGSVGElement,
+        );
         if (svgPoint) {
             this.dragOffset.x = svgPoint.x - element.node.x;
             this.dragOffset.y = svgPoint.y - element.node.y;
@@ -423,13 +419,13 @@ export class ProcessNetDrawDisplayComponent implements OnInit, OnDestroy, AfterV
             return;
         }
 
-        const firstIsPlace = first.node instanceof DiagramPlace;
-        const firstIsTransition = first.node instanceof DiagramTransition;
-        const secondIsPlace = second.node instanceof DiagramPlace;
-        const secondIsTransition = second.node instanceof DiagramTransition;
-
         // Only connect if exactly one is place and one is transition
-        if ((firstIsPlace && secondIsTransition) || (firstIsTransition && secondIsPlace)) {
+        if (
+            this.drawingDisplayService.isValidConnectionPair(
+                first.node instanceof DiagramPlace,
+                second.node instanceof DiagramPlace,
+            )
+        ) {
             // Remove any existing connection between these two nodes (either direction)
             this.stateService.updateConnections((cs) =>
                 cs.filter(
@@ -465,26 +461,29 @@ export class ProcessNetDrawDisplayComponent implements OnInit, OnDestroy, AfterV
     }
 
     onCanvasPanStart(event: MouseEvent) {
-        if (this.isDraggingElement) return;
-        const target = event.target as Element | null;
-        const isOnElement = target?.closest('.element-wrapper') || target?.classList.contains('drag-overlay');
-        if (isOnElement) {
-            return;
-        }
-        this.panningService.startPan(event, this.drawingArea);
+        this.drawingDisplayService.handleCanvasPanStart(
+            event,
+            this.isDraggingElement,
+            this.drawingArea,
+            this.panningService,
+        );
     }
 
     onCanvasPan(event: MouseEvent) {
-        if (this.isDraggingElement) return;
-        this.panningService.pan(event, this.drawingArea);
+        this.drawingDisplayService.handleCanvasPan(
+            event,
+            this.isDraggingElement,
+            this.drawingArea,
+            this.panningService,
+        );
     }
 
     onCanvasPanEnd() {
-        this.panningService.endPan(this.drawingArea);
+        this.drawingDisplayService.handleCanvasPanEnd(this.drawingArea, this.panningService);
     }
 
     onCanvasWheel(event: WheelEvent) {
-        this.panningService.zoom(event, this.drawingArea);
+        this.drawingDisplayService.handleCanvasWheel(event, this.drawingArea, this.panningService);
     }
 
     private onDocumentMouseMove = (event: MouseEvent) => {
@@ -495,7 +494,10 @@ export class ProcessNetDrawDisplayComponent implements OnInit, OnDestroy, AfterV
         event.preventDefault();
         event.stopImmediatePropagation();
 
-        const svgPoint = this.getSvgCoordinates(event);
+        const svgPoint = this.drawingDisplayService.getSvgCoordinates(
+            event,
+            this.drawingArea.nativeElement as SVGSVGElement,
+        );
         if (svgPoint) {
             const newX = svgPoint.x - this.dragOffset.x;
             const newY = svgPoint.y - this.dragOffset.y;
@@ -555,69 +557,10 @@ export class ProcessNetDrawDisplayComponent implements OnInit, OnDestroy, AfterV
         document.removeEventListener('mouseup', this.onDocumentMouseUp, true);
     };
 
-    private getSvgCoordinates(event: MouseEvent | DragEvent): { x: number; y: number } | null {
-        return this.getSvgCoordinatesFromClient(event.clientX, event.clientY);
-    }
-
-    private getSvgCoordinatesFromClient(clientX: number, clientY: number): { x: number; y: number } | null {
-        if (!this.svgElement) {
-            this.svgElement =
-                (this.drawingArea?.nativeElement as SVGSVGElement) ??
-                ((document.querySelector('.drawing-canvas') as SVGSVGElement) || null);
-        }
-
-        if (!this.svgElement) {
-            return null;
-        }
-
-        const point = this.svgElement.createSVGPoint();
-        point.x = clientX;
-        point.y = clientY;
-
-        const ctm = this.svgElement.getScreenCTM();
-        if (!ctm) {
-            return null;
-        }
-
-        const svgPoint = point.matrixTransform(ctm.inverse());
-        return { x: svgPoint.x, y: svgPoint.y };
-    }
-
-    // Compute trimmed line from center of a to center of b, shortened by shape radii/half-sizes
-    private computeTrimmedLine(a: DrawnElement, b: DrawnElement): { x1: number; y1: number; x2: number; y2: number } {
-        const ax = a.node.x;
-        const ay = a.node.y;
-        const bx = b.node.x;
-        const by = b.node.y;
-        const dx = bx - ax;
-        const dy = by - ay;
-        const len = Math.hypot(dx, dy) || 1;
-        const ux = dx / len;
-        const uy = dy / len;
-
-        const aOffset =
-            a.node instanceof DiagramPlace
-                ? this.PLACE_RADIUS
-                : Math.min(this.TRANSITION_HALF_W, this.TRANSITION_HALF_H);
-        const bOffset =
-            b.node instanceof DiagramPlace
-                ? this.PLACE_RADIUS
-                : Math.min(this.TRANSITION_HALF_W, this.TRANSITION_HALF_H);
-
-        const x1 = ax + ux * aOffset;
-        const y1 = ay + uy * aOffset;
-        const x2 = bx - ux * bOffset;
-        const y2 = by - uy * bOffset;
-        return { x1, y1, x2, y2 };
-    }
-
     clearDrawing() {
         this.selectedElementId.set(null);
 
-        const diagram = this.displayService.diagram;
-        if (diagram instanceof Diagram) {
-            diagram.resetMarking();
-        }
+        this.drawingDisplayService.resetDiagramMarking();
 
         this.firingService.clear();
 
@@ -744,19 +687,6 @@ export class ProcessNetDrawDisplayComponent implements OnInit, OnDestroy, AfterV
         });
     }
 
-    private isMarkedPlaceId(placeId: string): boolean {
-        return this.getRequiredStartPlaceCount(placeId) > 0;
-    }
-
-    private getRequiredStartPlaceCount(placeId: string): number {
-        const base = this.displayService.diagram;
-        if (!base || !(base instanceof Diagram)) {
-            return 0;
-        }
-        const tokens = base.startMarking[placeId] ?? 0;
-        return Math.max(0, Math.floor(tokens));
-    }
-
     private getCurrentStartPlaceCount(placeId: string): number {
         return this.drawnElements().filter((el) => {
             if (!(el.node instanceof DiagramPlace) || !el.node.isStartPlace) {
@@ -768,9 +698,9 @@ export class ProcessNetDrawDisplayComponent implements OnInit, OnDestroy, AfterV
     }
 
     private shouldMarkAsStart(placeId: string): boolean {
-        if (!this.isMarkedPlaceId(placeId)) {
+        if (!this.drawingDisplayService.isMarkedId(placeId)) {
             return false;
         }
-        return this.getCurrentStartPlaceCount(placeId) < this.getRequiredStartPlaceCount(placeId);
+        return this.getCurrentStartPlaceCount(placeId) < this.drawingDisplayService.getRequiredStartCount(placeId);
     }
 }
