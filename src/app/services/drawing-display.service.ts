@@ -34,7 +34,17 @@ export class DrawingDisplayService {
         clientY: number,
         svgElement: SVGSVGElement | null,
     ): { x: number; y: number } | null {
-        const svg = (svgElement ?? (document.querySelector('.drawing-canvas') as SVGSVGElement)) || null;
+        let svg = svgElement;
+        if (!svg) {
+            const canvases = document.querySelectorAll('.drawing-canvas');
+            for (const canvas of Array.from(canvases)) {
+                const rect = canvas.getBoundingClientRect();
+                if (rect.width > 0 && rect.height > 0) {
+                    svg = canvas as SVGSVGElement;
+                    break;
+                }
+            }
+        }
         if (!svg) {
             return null;
         }

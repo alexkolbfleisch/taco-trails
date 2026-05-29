@@ -257,6 +257,8 @@
         "SOLUTION_FOUND_BODY": "Possible token trails calculated successfully.",
         "SOLUTION_ERROR_TITLE": "Solution Error",
         "SOLUTION_ERROR_BODY": "Failed to calculate token trails.",
+        "SOLUTION_NOT_FOUND_TITLE": "No Solution Possible",
+        "SOLUTION_NOT_FOUND_BODY": "The current LPN specification does not satisfy the token trail semantics for this Petri net. Invalid places: {{places}}",
         "NO_SOURCE_NET_TITLE": "No Petri Net Present",
         "NO_SOURCE_NET_BODY": "Please load a Petri net first.",
         "BUTTON_NEW_LPN": "Generate new LPN",
