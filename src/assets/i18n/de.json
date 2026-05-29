@@ -258,6 +258,8 @@
         "SOLUTION_FOUND_BODY": "Mögliche Token Trails wurden erfolgreich berechnet.",
         "SOLUTION_ERROR_TITLE": "Fehler bei Lösung",
         "SOLUTION_ERROR_BODY": "Berechnung der Token Trails fehlgeschlagen.",
+        "SOLUTION_NOT_FOUND_TITLE": "Keine Lösung möglich",
+        "SOLUTION_NOT_FOUND_BODY": "Die aktuelle LPN-Spezifikation erfüllt die Token-Trail-Semantik für dieses Petrinetz nicht. Ungültige Stellen: {{places}}",
         "NO_SOURCE_NET_TITLE": "Kein Petrinetz vorhanden",
         "NO_SOURCE_NET_BODY": "Bitte laden Sie zuerst ein Petrinetz.",
         "BUTTON_NEW_LPN": "Neues LPN generieren",

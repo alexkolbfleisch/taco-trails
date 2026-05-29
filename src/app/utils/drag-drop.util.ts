@@ -90,20 +90,29 @@ export class DragDropUtil {
     }
 
     private static simulateDrop(event: MouseEvent) {
-        const drawingCanvas = document.querySelector('.drawing-canvas');
-        if (!drawingCanvas) {
-            delete window.__dragData;
-            return;
+        const drawingCanvases = document.querySelectorAll('.drawing-canvas');
+        let targetCanvas: Element | null = null;
+
+        for (const canvas of Array.from(drawingCanvases)) {
+            const rect = canvas.getBoundingClientRect();
+
+            // First check if the canvas is actually visible (non-zero size)
+            if (rect.width > 0 && rect.height > 0) {
+                // Then check if the mouse is within the bounding rect of this canvas
+                const isOver =
+                    event.clientX >= rect.left &&
+                    event.clientX <= rect.right &&
+                    event.clientY >= rect.top &&
+                    event.clientY <= rect.bottom;
+
+                if (isOver) {
+                    targetCanvas = canvas;
+                    break;
+                }
+            }
         }
 
-        const rect = drawingCanvas.getBoundingClientRect();
-        const isOverCanvas =
-            event.clientX >= rect.left &&
-            event.clientX <= rect.right &&
-            event.clientY >= rect.top &&
-            event.clientY <= rect.bottom;
-
-        if (isOverCanvas && this.currentDragData) {
+        if (targetCanvas && this.currentDragData) {
             const dropEvent = new CustomEvent('customDrop', {
                 detail: {
                     ...this.currentDragData,
@@ -111,7 +120,7 @@ export class DragDropUtil {
                     clientY: event.clientY,
                 },
             });
-            drawingCanvas.dispatchEvent(dropEvent);
+            targetCanvas.dispatchEvent(dropEvent);
         }
 
         delete window.__dragData;

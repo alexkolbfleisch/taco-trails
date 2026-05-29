@@ -52,7 +52,8 @@
             <path
                 class="connection-hit-target"
                 [attr.d]="line.pathData"
-                (mousedown)="onConnectionMouseDown($event, line.id)" />
+                (mousedown)="onConnectionMouseDown($event, line.id)"
+                (wheel)="onConnectionWheel($event, line.id)" />
             <path
                 class="connection-line"
                 [attr.d]="line.pathData"

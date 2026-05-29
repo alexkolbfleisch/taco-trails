@@ -875,6 +875,29 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
         }
     }
 
+    /**
+     * Handles mouse wheel events on connection lines to adjust arc weights.
+     * Scrolling up increases weight, scrolling down decreases weight (minimum weight is 1).
+     */
+    onConnectionWheel(event: WheelEvent, connectionId: string) {
+        if (this.stateService.showingSolution()) return;
+        if (this.stateService.displayMode() === 'puzzle') return;
+
+        event.preventDefault();
+        event.stopPropagation();
+
+        const delta = Math.sign(event.deltaY) || 0;
+        if (delta === 0) return;
+
+        this.stateService.updateConnections((cs) =>
+            cs.map((c) => {
+                if (c.id !== connectionId) return c;
+                const newWeight = Math.max(1, c.weight - delta);
+                return { ...c, weight: newWeight } as LabeledNetEdge;
+            }),
+        );
+    }
+
     onCanvasPanStart(event: MouseEvent) {
         this.drawingDisplayService.handleCanvasPanStart(
             event,
@@ -1257,6 +1280,41 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
                 .pipe(take(1))
                 .subscribe({
                     next: (results) => {
+                        this.loadingService.hide();
+
+                        // A solution exists only if every place in the source Petri net has a valid token trail.
+                        const allValid = results.every((res) => res.valid);
+                        if (!allValid) {
+                            if (this.originalDisplayMode) {
+                                this.stateService.setDisplayMode(this.originalDisplayMode);
+                                this.originalDisplayMode = null;
+                            }
+
+                            const placeLabelMap = new Map<string, string>();
+                            if (sourceNet) {
+                                for (const node of sourceNet.getNodes()) {
+                                    if (node.shape === 'circle') {
+                                        placeLabelMap.set(node.id, node.displayLabel || node.id);
+                                    }
+                                }
+                            }
+
+                            const invalidPlaces = results
+                                .filter((res) => !res.valid)
+                                .map((res) => placeLabelMap.get(res.placeId) || res.placeId);
+
+                            this.toaster.showError(
+                                'TOKEN_TRAIL.SOLUTION_NOT_FOUND_TITLE',
+                                'TOKEN_TRAIL.SOLUTION_NOT_FOUND_BODY',
+                                {
+                                    messageParams: {
+                                        places: invalidPlaces.join(', '),
+                                    },
+                                },
+                            );
+                            return;
+                        }
+
                         const solvedTrailsMap = new Map<string, Record<string, number>>();
                         for (const res of results) {
                             const markingRecord: Record<string, number> = {};
@@ -1271,7 +1329,6 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
                         }
                         this.stateService.setSolvedTokenTrails(solvedTrailsMap);
                         this.stateService.setShowingSolution(true);
-                        this.loadingService.hide();
                         this.toaster.showSuccess('TOKEN_TRAIL.SOLUTION_FOUND_TITLE', 'TOKEN_TRAIL.SOLUTION_FOUND_BODY');
                     },
                     error: (err) => {
