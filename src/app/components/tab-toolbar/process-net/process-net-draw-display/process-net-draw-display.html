@@ -3,7 +3,8 @@
         #drawingArea
         class="drawing-canvas"
         data-export-id="process-net-draw"
-        [class.drag-over]="isDragOver()"
+        [class.drag-over]="isDragOver() && !isFileDrag()"
+        [class.drag-over-invalid]="isDragOver() && isFileDrag()"
         [attr.viewBox]="viewBox()"
         preserveAspectRatio="xMidYMid meet"
         (drop)="onDrop($event)"

@@ -79,6 +79,7 @@ export class ProcessNetDrawDisplayComponent implements OnInit, OnDestroy, AfterV
     readonly isDisabled = computed(() => this.drawnElements().length === 0);
 
     readonly isDragOver = signal<boolean>(false);
+    readonly isFileDrag = signal<boolean>(false);
     // Derived lines with coordinates for rendering
     readonly connectionLines = computed(() => {
         return this.connections()
@@ -267,19 +268,28 @@ export class ProcessNetDrawDisplayComponent implements OnInit, OnDestroy, AfterV
 
     onDragOver(event: DragEvent) {
         event.preventDefault();
+        const isFile = event.dataTransfer?.types.includes('Files') ?? false;
+        this.isFileDrag.set(isFile);
         if (event.dataTransfer) {
-            event.dataTransfer.dropEffect = 'copy';
+            event.dataTransfer.dropEffect = isFile ? 'none' : 'copy';
         }
         this.isDragOver.set(true);
     }
 
     onDragLeave(_event: DragEvent) {
         this.isDragOver.set(false);
+        this.isFileDrag.set(false);
     }
 
     onDrop(event: DragEvent) {
         event.preventDefault();
         this.isDragOver.set(false);
+        this.isFileDrag.set(false);
+
+        if (event.dataTransfer?.files && event.dataTransfer.files.length > 0) {
+            this.toaster.showWarning('TOASTER.HEADER.UPLOAD_RESTRICTED', 'TOASTER.BODY.UPLOAD_ONLY_IN_DRAW_TAB');
+            return;
+        }
 
         // Check for drag data from the global window object (custom drag)
         const dragData = window.__dragData;

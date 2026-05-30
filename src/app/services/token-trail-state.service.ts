@@ -32,6 +32,8 @@ export class TokenTrailStateService {
     readonly lpnGenerationDifficulty = signal<LpnGenerationDifficulty>('medium');
     readonly showingSolution = signal<boolean>(false);
     readonly solvedTokenTrails = signal<Map<string, Record<string, number>>>(new Map());
+    public solutionCache: Map<string, Record<string, number>> | null = null;
+    public lastSynthesizedNetSignature: string | null = null;
 
     private readonly _fitViewRequest$ = new Subject<void>();
     public readonly fitViewRequest$ = this._fitViewRequest$.asObservable();
@@ -41,27 +43,33 @@ export class TokenTrailStateService {
     }
 
     addDrawnElement(element: LabeledNetNode) {
+        this.solutionCache = null;
         this.drawnElements.update((el) => [...el, element]);
     }
 
     addConnection(connection: LabeledNetEdge) {
+        this.solutionCache = null;
         this.connections.update((c) => [...c, connection]);
     }
 
     removeDrawnElement(id: string) {
+        this.solutionCache = null;
         this.drawnElements.update((elements) => elements.filter((e) => e.id !== id));
         this.connections.update((connections) => connections.filter((c) => c.source !== id && c.target !== id));
     }
 
     removeConnection(id: string) {
+        this.solutionCache = null;
         this.connections.update((connections) => connections.filter((c) => c.id !== id));
     }
 
     updateDrawnElements(updater: (elements: LabeledNetNode[]) => LabeledNetNode[]) {
+        this.solutionCache = null;
         this.drawnElements.update(updater);
     }
 
     updateConnections(updater: (connections: LabeledNetEdge[]) => LabeledNetEdge[]) {
+        this.solutionCache = null;
         this.connections.update(updater);
     }
 
@@ -75,6 +83,8 @@ export class TokenTrailStateService {
         this.releasedConditionNumbers.clear();
         this.showingSolution.set(false);
         this.solvedTokenTrails.set(new Map());
+        this.solutionCache = null;
+        this.lastSynthesizedNetSignature = null;
     }
 
     setSelectedPetriPlaceId(placeId: string | null) {

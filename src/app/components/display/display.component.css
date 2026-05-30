@@ -5,4 +5,12 @@
     overflow: hidden;
     border: 1px dashed lightgrey; /* subtler border */
     display: block;
+    transition: all 0.2s ease;
+}
+
+.canvas.drag-over-invalid {
+    border-color: #f44336;
+    border-width: 3px;
+    background-color: #ffebee;
+    box-shadow: inset 0 0 20px rgba(244, 67, 54, 0.2);
 }

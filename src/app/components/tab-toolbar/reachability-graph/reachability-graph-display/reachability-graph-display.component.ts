@@ -18,6 +18,14 @@ export class ReachabilityGraphDisplayComponent extends DisplayComponent {
 
     readonly isDisabled = this._reachabilityGraphService.showingCompleteGraph;
 
+    override processDropEvent(e: DragEvent) {
+        e.preventDefault();
+        this.isDragOver.set(false);
+        if (e.dataTransfer?.files && e.dataTransfer.files.length > 0) {
+            this._toaster.showWarning('TOASTER.HEADER.UPLOAD_RESTRICTED', 'TOASTER.BODY.UPLOAD_RG_RESTRICTED');
+        }
+    }
+
     handleDisabledClick(event: Event) {
         event.stopPropagation();
         event.preventDefault();

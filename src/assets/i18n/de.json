@@ -163,7 +163,8 @@
             "MARKING_DIALOG_DISMISSED": "Dialog abgebrochen",
             "RG_CHECK_SUCCESS": "Erreichbarkeitsgraph vollständig",
             "RG_CHECK_INCOMPLETE": "Unvollständiger Graph",
-            "RG_INFO": "Wechsel zum selbst erstellten Graphen notwendig"
+            "RG_INFO": "Wechsel zum selbst erstellten Graphen notwendig",
+            "UPLOAD_RESTRICTED": "Upload eingeschränkt"
         },
         "BODY": {
             "NO_NET_TO_SAVE": "Es ist kein Petri-Netz zum Speichern vorhanden.",
@@ -198,7 +199,10 @@
             "RG_CHECK_SUCCESS": "Der erstellte Erreichbarkeitsgraph ist vollständig und korrekt.",
             "RG_CHECK_MISSING_EDGES": "Fehlende Transitionen: {{edges}}",
             "RG_CHECK_MISSING_EDGES_LIST": "Die folgenden Transitionen fehlen:",
-            "SWITCH_BACK_TO_USER_GRAPH": "Bitte wechseln Sie zurück zum selbst erstellten Graphen, um fortzufahren."
+            "SWITCH_BACK_TO_USER_GRAPH": "Bitte wechseln Sie zurück zum selbst erstellten Graphen, um fortzufahren.",
+            "UPLOAD_ONLY_IN_DRAW_TAB": "Ein neues Petrinetz kann nur im Zeichnen-Tab hochgeladen werden.",
+            "UPLOAD_PROCESS_NET_RESTRICTED": "Ein neues Petrinetz kann nur im Zeichnen-Tab hochgeladen werden. Prozessnetze können nicht direkt hochgeladen werden.",
+            "UPLOAD_RG_RESTRICTED": "Ein neues Petrinetz kann nur im Zeichnen-Tab hochgeladen werden. Erreichbarkeitsgraphen können nicht direkt hochgeladen werden."
         },
         "VALIDATION_MESSAGES": {
             "TRANSITION_NO_MATCH": "❌ Transition {{label}} hat keine passende Beschriftung im Petri-Netz.",
@@ -244,7 +248,7 @@
     },
     "TOKEN_TRAIL": {
         "LPN_SYNTHESIS_ERROR_TITLE": "LPN-Synthese fehlgeschlagen",
-        "LPN_SYNTHESIS_ERROR_BODY": "Bei der Synthese des Labeled Petri Nets ist ein Fehler aufgetreten.",
+        "LPN_SYNTHESIS_ERROR_BODY": "Bei der Synthese des Labeled Petri Nets ist ein Fehler aufgetreten. Bitte versuchen Sie es erneut.",
         "LPN_NO_START_PLACE_TITLE": "Kein Startplatz vorhanden",
         "LPN_NO_START_PLACE_BODY": "Das generierte LPN besitzt keinen markierten Startplatz.",
         "SHOW_HINT": "Hinweis anzeigen",
@@ -254,6 +258,9 @@
         "BUTTON_VALIDATE_NET": "LPN validieren",
         "BUTTON_SHOW_SOLUTION": "Lösung anzeigen",
         "BUTTON_HIDE_SOLUTION": "Lösung ausblenden",
+        "BUTTON_EXPORT_LPN": "LPN exportieren",
+        "EXPORT_JSON": "Als JSON exportieren",
+        "EXPORT_PNML": "Als PNML exportieren",
         "SOLUTION_FOUND_TITLE": "Lösung gefunden",
         "SOLUTION_FOUND_BODY": "Mögliche Token Trails wurden erfolgreich berechnet.",
         "SOLUTION_ERROR_TITLE": "Fehler bei Lösung",
@@ -272,6 +279,7 @@
         "MODE_WARNING_TITLE": "Puzzle-Modus aktiv",
         "MODE_WARNING_BODY": "Bitte wechseln Sie in den Konstruktions-Modus, um manuell Elemente hinzuzufügen.",
         "MODE_WARNING_PUZZLE_RESTRICTION": "Im Puzzle-Modus ist die LPN-Struktur fixiert. Wechseln Sie in den Konstruktions-Modus, um Elemente zu verschieben, zu verbinden oder zu löschen.",
+        "MODE_WARNING_UPLOAD_RESTRICTION": "Der Datei-Import ist im Puzzle-Modus deaktiviert. Bitte wechseln Sie in den Konstruktions-Modus, um ein Netz hochzuladen.",
         "PLACE_SELECTION_REQUIRED_TITLE": "Stelle auswählen",
         "PLACE_SELECTION_REQUIRED_BODY": "Bitte wählen Sie zuerst eine Stelle im Petrinetz aus.",
         "ACTION_DRAG_DROP": "Ziehen & Ablegen",

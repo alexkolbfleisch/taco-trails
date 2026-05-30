@@ -17,7 +17,6 @@ import {
     LabeledNetNode,
     LabeledNetEdge,
 } from '../../../../classes/labeled-net.model';
-import { Diagram } from '../../../../classes/diagram/diagram';
 import { DisplayService } from '../../../../services/display.service';
 import { TokenTrailValidationService, ValidationIssue } from '../../../../services/token-trail-validation.service';
 import { PanningService } from '../../../../services/panning.service';
@@ -30,6 +29,7 @@ import { MatDialog } from '@angular/material/dialog';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { GRAPH_FILENAMES, GRAPH_IDS, PLACE_RADIUS, TRANSITION_SIZE } from '../../../display/display.constants';
 import { LpnGenerationDifficulty, TokenTrailStateService } from '../../../../services/token-trail-state.service';
+import { SerializationService } from '../../../../services/serialization.service';
 import { Subscription, take } from 'rxjs';
 import {
     DrawToolbarAction,
@@ -49,11 +49,9 @@ import { SourcePetriNetService } from '../../../../services/source-petri-net.ser
 import { LoadingService } from '../../../../services/loading.service';
 import { ModeService } from '../../../../services/mode.service';
 import { Tab } from '../../../../classes/tabs';
-import { PetriNet as IlpnPetriNet } from '../../../../../../ilpn-components/src/lib/models/pn/model/petri-net';
-import { Place as IlpnPlace } from '../../../../../../ilpn-components/src/lib/models/pn/model/place';
-import { Transition as IlpnTransition } from '../../../../../../ilpn-components/src/lib/models/pn/model/transition';
 import { TokenTrailValidatorService } from '../../../../../../ilpn-components/src/lib/algorithms/pn/validation/token-trails/token-trail-validator.service';
 import { DrawingDisplayService } from '../../../../services/drawing-display.service';
+import { ParserService } from '../../../../services/parser.service';
 
 /**
  * TokenTrailDrawDisplayComponent is the main drawing canvas for Token Trail validation in the Token Trail tab.
@@ -100,6 +98,8 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
     private tokenTrailValidatorService = inject(TokenTrailValidatorService);
     private sourcePetriNetService = inject(SourcePetriNetService);
     private drawingDisplayService = inject(DrawingDisplayService);
+    private serializationService = inject(SerializationService);
+    private parserService = inject(ParserService);
 
     // Bind to service state
     readonly drawnElements = this.stateService.drawnElements;
@@ -206,6 +206,27 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
                     label: 'TOKEN_TRAIL.LPN_DIFFICULTY_HARD',
                     icon: 'sentiment_very_dissatisfied',
                     action: () => this.createNewLPNWithDifficulty('hard'),
+                },
+            ],
+        },
+        {
+            icon: 'file_download',
+            tooltip: 'TOKEN_TRAIL.BUTTON_EXPORT_LPN',
+            color: 'primary',
+            isActive: !this.isDisabled() && !this.stateService.showingSolution(),
+            action: () => {
+                /* empty because we trigger the menu */
+            },
+            menu: [
+                {
+                    label: 'TOKEN_TRAIL.EXPORT_JSON',
+                    icon: 'code',
+                    action: () => this.exportLpn('json'),
+                },
+                {
+                    label: 'TOKEN_TRAIL.EXPORT_PNML',
+                    icon: 'article',
+                    action: () => this.exportLpn('pnml'),
                 },
             ],
         },
@@ -498,7 +519,13 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
 
         this.sourceNetSub = this.sourcePetriNetService.sourceNet$.subscribe((net) => {
             if (this.stateService.displayMode() === 'puzzle' && net) {
-                this.createNewLPNWithSynthesis();
+                const currentSig = this.lpnService.getNetSignature(net);
+                const hasDrawnElements = this.drawnElements().length > 0;
+                const isSameSignature = currentSig === this.stateService.lastSynthesizedNetSignature;
+
+                if (!hasDrawnElements || !isSameSignature) {
+                    this.createNewLPNWithSynthesis();
+                }
             }
         });
     }
@@ -556,9 +583,6 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
         }
 
         let newNode: LabeledNetNode;
-        // Always create a unique ID for the drawing area, based on the source element
-        // Use service to generate ID
-        const uniqueId = this.stateService.generateElementId(`drawn-${detail.elementId}`);
         const elementLabel = detail.elementLabel || detail.elementId;
         const elementTokens = detail.elementTokens ?? 0;
 
@@ -566,14 +590,17 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
         const isSourceEvent = detail.elementType === 'transition';
 
         if (isSourceCondition) {
-            newNode = this.stateService.buildCondition(uniqueId, detail.elementId, elementTokens, {
+            const conditionId = this.stateService.generateConditionName();
+            newNode = this.stateService.buildCondition(conditionId, detail.elementId, elementTokens, {
                 isStartPlace: this.shouldMarkAsStartCondition(detail.elementId),
                 innerLabel: detail.elementId,
+                baseName: conditionId,
             });
             // In construction mode, the new Condition directly receives the trail marking of the dragged place:
             (newNode as Condition).trailMarkings = { [detail.elementId]: 1 };
             (newNode as Condition).updateDynamicLabel();
         } else if (isSourceEvent) {
+            const uniqueId = this.stateService.generateElementId(`drawn-${detail.elementId}`);
             newNode = this.stateService.buildEvent(uniqueId, elementLabel, elementLabel);
         } else {
             return;
@@ -586,7 +613,8 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
     }
 
     onDragOver(event: DragEvent) {
-        if (this.stateService.displayMode() === 'puzzle') return;
+        const isFileDrag = event.dataTransfer?.types.includes('Files');
+        if (this.stateService.displayMode() === 'puzzle' && !isFileDrag) return;
         event.preventDefault();
         if (event.dataTransfer) {
             event.dataTransfer.dropEffect = 'copy';
@@ -600,6 +628,49 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
 
     onDrop(event: DragEvent) {
         if (this.stateService.showingSolution()) return;
+
+        // 1. Check for dropped files (JSON / PNML LPN representation)
+        if (event.dataTransfer?.files && event.dataTransfer.files.length > 0) {
+            event.preventDefault();
+            this.isDragOver.set(false);
+
+            if (this.stateService.displayMode() === 'puzzle') {
+                this.toaster.showWarning(
+                    'TOKEN_TRAIL.MODE_WARNING_TITLE',
+                    'TOKEN_TRAIL.MODE_WARNING_UPLOAD_RESTRICTION',
+                );
+                return;
+            }
+
+            const file = event.dataTransfer.files[0];
+            const fileReader = new FileReader();
+            fileReader.onload = (e) => {
+                const content = e.target?.result as string;
+                if (content) {
+                    try {
+                        const parsedDiagram = this.parserService.parse(content);
+                        if (parsedDiagram) {
+                            this.lpnService.loadLpnFromDiagram(parsedDiagram);
+                            this.toaster.showSuccess('TOASTER.HEADER.SUCCESS', 'TOASTER.BODY.NET_LOADED_SUCCESSFULLY');
+                        } else {
+                            this.toaster.showWarning(
+                                'TOASTER.HEADER.PARSER_ERROR',
+                                'TOASTER.BODY.FILE_NOT_INTERPRETABLE',
+                            );
+                        }
+                    } catch (err) {
+                        console.error('Error importing LPN file:', err);
+                        this.toaster.showError(
+                            'TOASTER.HEADER.PROCESSING_ERROR',
+                            'TOASTER.BODY.CRITICAL_PARSING_ERROR',
+                        );
+                    }
+                }
+            };
+            fileReader.readAsText(file);
+            return;
+        }
+
         if (this.stateService.displayMode() === 'puzzle') {
             this.toaster.showWarning('TOKEN_TRAIL.MODE_WARNING_TITLE', 'TOKEN_TRAIL.MODE_WARNING_PUZZLE_RESTRICTION');
             return;
@@ -608,7 +679,7 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
         event.preventDefault();
         this.isDragOver.set(false);
 
-        // Check for drag data from the global window object (custom drag)
+        // 2. Check for drag data from the global window object (custom drag)
         const dragData = window.__dragData;
         if (dragData) {
             const svgPoint = this.drawingDisplayService.getSvgCoordinates(
@@ -620,8 +691,6 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
             }
 
             let newNode: LabeledNetNode;
-            // Always create a unique ID for the drawing area
-            const uniqueId = this.stateService.generateElementId(`drawn-${dragData.elementId || 'element'}`);
             const elementLabel = dragData.elementLabel || dragData.elementId;
             const elementTokens = dragData.elementTokens ?? 0;
 
@@ -629,14 +698,17 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
             const isSourceEvent = dragData.elementType === 'transition';
 
             if (isSourceCondition) {
-                newNode = this.stateService.buildCondition(uniqueId, dragData.elementId, elementTokens, {
+                const conditionId = this.stateService.generateConditionName();
+                newNode = this.stateService.buildCondition(conditionId, dragData.elementId, elementTokens, {
                     isStartPlace: this.shouldMarkAsStartCondition(dragData.elementId),
                     innerLabel: dragData.elementId,
+                    baseName: conditionId,
                 });
                 // Set initial trail marking for the source place:
                 (newNode as Condition).trailMarkings = { [dragData.elementId]: 1 };
                 (newNode as Condition).updateDynamicLabel();
             } else if (isSourceEvent) {
+                const uniqueId = this.stateService.generateElementId(`drawn-${dragData.elementId || 'element'}`);
                 newNode = this.stateService.buildEvent(uniqueId, elementLabel, elementLabel);
             } else {
                 return;
@@ -667,14 +739,16 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
         }
 
         let newNode: LabeledNetNode;
-        const uniqueId = this.stateService.generateElementId('drawn-element');
-
         const isSourceCondition = elementType === 'place';
         const isSourceEvent = elementType === 'transition';
 
         if (isSourceCondition) {
-            newNode = this.stateService.buildCondition(uniqueId, undefined, 0);
+            const conditionId = this.stateService.generateConditionName();
+            newNode = this.stateService.buildCondition(conditionId, undefined, 0, {
+                baseName: conditionId,
+            });
         } else if (isSourceEvent) {
+            const uniqueId = this.stateService.generateElementId('drawn-element');
             newNode = this.stateService.buildEvent(uniqueId, uniqueId, uniqueId);
         } else {
             return;
@@ -1202,67 +1276,18 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
         this.lpnService.createLPNWithSynthesis(sourceNet);
     }
 
-    /**
-     * Converts a standard layout diagram structure (Petri net) into the ILPN library format.
-     */
-    private convertSourceNetToIlpn(sourceNet: Diagram): IlpnPetriNet {
-        const ilpn = new IlpnPetriNet();
-        for (const p of sourceNet.places) {
-            ilpn.addPlace(new IlpnPlace(p.tokenCount(), p.id));
-        }
-        for (const t of sourceNet.transitions) {
-            ilpn.addTransition(new IlpnTransition(t.label, t.id));
-        }
-        for (const edge of sourceNet.arcs) {
-            const sourceNode = ilpn.getPlace(edge.source) || ilpn.getTransition(edge.source);
-            const destNode = ilpn.getPlace(edge.target) || ilpn.getTransition(edge.target);
-            if (sourceNode && destNode) {
-                if (sourceNode instanceof IlpnPlace) {
-                    ilpn.addArc(sourceNode, destNode as IlpnTransition, edge.weight || 1);
-                } else {
-                    ilpn.addArc(sourceNode, destNode as IlpnPlace, edge.weight || 1);
-                }
-            }
-        }
-        return ilpn;
-    }
-
-    /**
-     * Converts the user-drawn LPN structure into the ILPN library format.
-     */
-    private convertLpnToIlpn(drawnElements: LabeledNetNode[], connections: LabeledNetEdge[]): IlpnPetriNet {
-        const ilpn = new IlpnPetriNet();
-        for (const el of drawnElements) {
-            if (el instanceof Condition) {
-                ilpn.addPlace(new IlpnPlace(el.isStartPlace ? 1 : 0, el.id));
-            }
-        }
-        for (const el of drawnElements) {
-            if (el instanceof LabeledEvent) {
-                ilpn.addTransition(new IlpnTransition(el.label, el.id));
-            }
-        }
-        for (const conn of connections) {
-            const sourceNode = ilpn.getPlace(conn.source) || ilpn.getTransition(conn.source);
-            const destNode = ilpn.getPlace(conn.target) || ilpn.getTransition(conn.target);
-            if (sourceNode && destNode) {
-                if (sourceNode instanceof IlpnPlace) {
-                    ilpn.addArc(sourceNode, destNode as IlpnTransition, conn.weight || 1);
-                } else {
-                    ilpn.addArc(sourceNode, destNode as IlpnPlace, conn.weight || 1);
-                }
-            }
-        }
-        return ilpn;
-    }
-
-    /**
-     * Toggles LPN solution validation. Invokes the ILP validator solver with source and LPN models,
-     * and maps results into solved token markings when a solution is found.
-     */
     private toggleSolution(): void {
         const nextShowing = !this.stateService.showingSolution();
         if (nextShowing) {
+            if (this.stateService.solutionCache) {
+                this.originalDisplayMode = this.stateService.displayMode();
+                this.stateService.setDisplayMode('puzzle');
+                this.stateService.setSolvedTokenTrails(this.stateService.solutionCache);
+                this.stateService.setShowingSolution(true);
+                this.toaster.showSuccess('TOKEN_TRAIL.SOLUTION_FOUND_TITLE', 'TOKEN_TRAIL.SOLUTION_FOUND_BODY');
+                return;
+            }
+
             const sourceNet = this.validationService.resolveSourceNetForValidation();
             if (!sourceNet) {
                 this.toaster.showError('TOKEN_TRAIL.NO_SOURCE_NET_TITLE', 'TOKEN_TRAIL.NO_SOURCE_NET_BODY');
@@ -1271,8 +1296,8 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
             this.originalDisplayMode = this.stateService.displayMode();
             this.stateService.setDisplayMode('puzzle');
 
-            const ilpnSource = this.convertSourceNetToIlpn(sourceNet);
-            const ilpnSpec = this.convertLpnToIlpn(this.drawnElements(), this.connections());
+            const ilpnSource = this.lpnService.convertSourceNetToIlpn(sourceNet);
+            const ilpnSpec = this.lpnService.convertLpnToIlpn(this.drawnElements(), this.connections());
             this.loadingService.show();
 
             this.tokenTrailValidatorService
@@ -1315,18 +1340,8 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
                             return;
                         }
 
-                        const solvedTrailsMap = new Map<string, Record<string, number>>();
-                        for (const res of results) {
-                            const markingRecord: Record<string, number> = {};
-                            for (const key of res.tokenTrail.getKeys()) {
-                                const prefix = 'n0_';
-                                if (key.startsWith(prefix)) {
-                                    const elId = key.substring(prefix.length);
-                                    markingRecord[elId] = res.tokenTrail.get(key) ?? 0;
-                                }
-                            }
-                            solvedTrailsMap.set(res.placeId, markingRecord);
-                        }
+                        const solvedTrailsMap = this.lpnService.mapValidatorResultsToSolvedTrails(results);
+                        this.stateService.solutionCache = solvedTrailsMap;
                         this.stateService.setSolvedTokenTrails(solvedTrailsMap);
                         this.stateService.setShowingSolution(true);
                         this.toaster.showSuccess('TOKEN_TRAIL.SOLUTION_FOUND_TITLE', 'TOKEN_TRAIL.SOLUTION_FOUND_BODY');
@@ -1349,6 +1364,25 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
                 this.originalDisplayMode = null;
             }
         }
+    }
+
+    private exportLpn(format: 'json' | 'pnml'): void {
+        const content = this.serializationService.serializeLpn(this.drawnElements(), this.connections(), format);
+        const fileName = `lpn.${format}`;
+        const fileType = format === 'pnml' ? 'application/xml' : 'application/json';
+
+        const blob = new Blob([content], { type: fileType });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.style.display = 'none';
+        a.href = url;
+        a.download = fileName;
+
+        document.body.appendChild(a);
+        a.click();
+
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
     }
 
     protected shouldShowTooltip(element: LabeledNetNode): boolean {

@@ -287,6 +287,7 @@ export class TokenTrailMergeService implements OnDestroy {
                     hideTokens: anchorNode.hideTokens,
                     isStartPlace: shouldMarkAsStartCondition(parsedLabels[0]),
                     labelPlacement: anchorNode.labelPlacement,
+                    baseName: anchorConditionId,
                 },
             );
             firstClone.trailMarkings = { [parsedLabels[0]]: 1 };
@@ -303,18 +304,19 @@ export class TokenTrailMergeService implements OnDestroy {
                 const newX = anchorNode.x + Math.cos(angle) * radius;
                 const newY = anchorNode.y + Math.sin(angle) * radius;
 
-                const newId = this.stateService.generateElementId(`drawn-${label}`);
-                const clone = this.stateService.buildCondition(newId, label, 0, {
+                const conditionId = this.stateService.generateConditionName();
+                const clone = this.stateService.buildCondition(conditionId, label, 0, {
                     hideTokens: anchorNode.hideTokens,
                     isStartPlace: shouldMarkAsStartCondition(label),
                     labelPlacement: anchorNode.labelPlacement,
+                    baseName: conditionId,
                 });
                 clone.trailMarkings = { [label]: 1 };
                 clone.updateDynamicLabel();
                 clone.x = newX;
                 clone.y = newY;
                 updated.push(clone);
-                newIds.push(newId);
+                newIds.push(conditionId);
             });
 
             return updated;

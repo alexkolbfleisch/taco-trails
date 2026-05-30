@@ -9,13 +9,17 @@ import { PetriNet as IlpnPetriNet } from '../../../ilpn-components/src/lib/model
 import { Place as IlpnPlace } from '../../../ilpn-components/src/lib/models/pn/model/place';
 import { Transition as IlpnTransition } from '../../../ilpn-components/src/lib/models/pn/model/transition';
 import { Diagram } from '../classes/diagram/diagram';
-import { LabeledNetEdge } from '../classes/labeled-net.model';
+import { Condition, Event as LabeledEvent, LabeledNetEdge, LabeledNetNode } from '../classes/labeled-net.model';
 import { PanningService } from './panning.service';
 import { ModeService } from './mode.service';
 import { Tab } from '../classes/tabs';
-import { DIFFICULTY_CONFIGURATIONS } from './token-trail-lpn.config';
+import { DIFFICULTY_CONFIGURATIONS, LpnGenerationConfiguration } from './token-trail-lpn.config';
 import { LoadingService } from './loading.service';
 import { ToasterNotificationService } from './toaster-notification.service';
+import { TokenTrailValidatorService } from '../../../ilpn-components/src/lib/algorithms/pn/validation/token-trails/token-trail-validator.service';
+import { TokenTrailValidationResult } from '../../../ilpn-components/src/lib/algorithms/pn/validation/classes/validation-result';
+import { TabStateService } from './tab-state.service';
+import { take } from 'rxjs';
 
 @Injectable({
     providedIn: 'root',
@@ -30,6 +34,8 @@ export class TokenTrailLpnService {
     private modeService = inject(ModeService);
     private loadingService = inject(LoadingService);
     private toaster = inject(ToasterNotificationService);
+    private validatorService = inject(TokenTrailValidatorService);
+    private tabStateService = inject(TabStateService);
     private _lastSelectedEntriesHash = '';
 
     /**
@@ -60,6 +66,25 @@ export class TokenTrailLpnService {
 
         if (validEntries.length === 0) return;
 
+        this.loadingService.show();
+
+        // Clear existing solution cache
+        this.stateService.solutionCache = null;
+
+        const ilpnSource = this.convertSourceNetToIlpn(sourceNet);
+
+        this.attemptSynthesis(sourceNet, ilpnSource, validEntries, maxTraces, maxEdges, config, 1);
+    }
+
+    private attemptSynthesis(
+        sourceNet: Diagram,
+        ilpnSource: IlpnPetriNet,
+        validEntries: FiringEntry[],
+        maxTraces: number,
+        maxEdges: number,
+        config: LpnGenerationConfiguration,
+        attempt: number,
+    ) {
         const selectedEntries = this._selectEntriesWithVariation(validEntries, maxTraces);
         const inputNets: IlpnPetriNet[] = [];
 
@@ -107,17 +132,166 @@ export class TokenTrailLpnService {
             inputNets.push(net);
         }
 
-        this.loadingService.show();
-        this.regionSynthesisService.synthesise(inputNets, config.synthesisConfig).subscribe({
-            next: (result) => {
-                this.renderMinedNet(result.result, maxEdges);
-                this.loadingService.hide();
-            },
-            error: () => {
-                this.loadingService.hide();
-                this.toaster.showError('TOKEN_TRAIL.LPN_SYNTHESIS_ERROR_TITLE', 'TOKEN_TRAIL.LPN_SYNTHESIS_ERROR_BODY');
-            },
-        });
+        this.regionSynthesisService
+            .synthesise(inputNets, config.synthesisConfig)
+            .pipe(take(1))
+            .subscribe({
+                next: (result) => {
+                    // Render the mined net visually
+                    this.renderMinedNet(result.result, maxEdges);
+
+                    // Convert LPN to ilpn components representation for verification
+                    const ilpnSpec = this.convertLpnToIlpn(
+                        this.stateService.drawnElements(),
+                        this.stateService.connections(),
+                    );
+
+                    // Perform direct check using validator service
+                    this.validatorService
+                        .validate(ilpnSource, ilpnSpec)
+                        .pipe(take(1))
+                        .subscribe({
+                            next: (results) => {
+                                const allValid = results.every((res) => res.valid);
+                                if (allValid) {
+                                    // Valid! Cache the solution
+                                    const solvedTrailsMap = this.mapValidatorResultsToSolvedTrails(results);
+                                    this.stateService.solutionCache = solvedTrailsMap;
+                                    this.stateService.lastSynthesizedNetSignature = this.getNetSignature(sourceNet);
+                                    this.loadingService.hide();
+                                } else {
+                                    // Invalid LPN check failed, retry if under max retries limit
+                                    if (attempt < 15) {
+                                        console.warn(
+                                            `Generated LPN not valid for all source places. Retrying synthesis attempt ${attempt + 1}...`,
+                                        );
+                                        this.attemptSynthesis(
+                                            sourceNet,
+                                            ilpnSource,
+                                            validEntries,
+                                            maxTraces,
+                                            maxEdges,
+                                            config,
+                                            attempt + 1,
+                                        );
+                                    } else {
+                                        this.stateService.clear();
+                                        this.loadingService.hide();
+                                        if (this.tabStateService.currentTab() === Tab.TOKEN_TRAIL) {
+                                            this.toaster.showWarning(
+                                                'TOKEN_TRAIL.LPN_SYNTHESIS_ERROR_TITLE',
+                                                'TOKEN_TRAIL.LPN_SYNTHESIS_ERROR_BODY',
+                                            );
+                                        }
+                                    }
+                                }
+                            },
+                            error: (err) => {
+                                console.error('LPN check validator solver error:', err);
+                                this.stateService.clear();
+                                this.loadingService.hide();
+                                if (this.tabStateService.currentTab() === Tab.TOKEN_TRAIL) {
+                                    this.toaster.showError(
+                                        'TOKEN_TRAIL.LPN_SYNTHESIS_ERROR_TITLE',
+                                        'TOKEN_TRAIL.LPN_SYNTHESIS_ERROR_BODY',
+                                    );
+                                }
+                            },
+                        });
+                },
+                error: () => {
+                    this.stateService.clear();
+                    this.loadingService.hide();
+                    if (this.tabStateService.currentTab() === Tab.TOKEN_TRAIL) {
+                        this.toaster.showError(
+                            'TOKEN_TRAIL.LPN_SYNTHESIS_ERROR_TITLE',
+                            'TOKEN_TRAIL.LPN_SYNTHESIS_ERROR_BODY',
+                        );
+                    }
+                },
+            });
+    }
+
+    public convertSourceNetToIlpn(sourceNet: Diagram): IlpnPetriNet {
+        const ilpn = new IlpnPetriNet();
+        for (const p of sourceNet.places) {
+            ilpn.addPlace(new IlpnPlace(p.tokenCount(), p.id));
+        }
+        for (const t of sourceNet.transitions) {
+            ilpn.addTransition(new IlpnTransition(t.label, t.id));
+        }
+        for (const edge of sourceNet.arcs) {
+            const sourceNode = ilpn.getPlace(edge.source) || ilpn.getTransition(edge.source);
+            const destNode = ilpn.getPlace(edge.target) || ilpn.getTransition(edge.target);
+            if (sourceNode && destNode) {
+                if (sourceNode instanceof IlpnPlace) {
+                    ilpn.addArc(sourceNode, destNode as IlpnTransition, edge.weight || 1);
+                } else {
+                    ilpn.addArc(sourceNode, destNode as IlpnPlace, edge.weight || 1);
+                }
+            }
+        }
+        return ilpn;
+    }
+
+    public convertLpnToIlpn(drawnElements: LabeledNetNode[], connections: LabeledNetEdge[]): IlpnPetriNet {
+        const ilpn = new IlpnPetriNet();
+        for (const el of drawnElements) {
+            if (el instanceof Condition) {
+                ilpn.addPlace(new IlpnPlace(el.isStartPlace ? 1 : 0, el.id));
+            }
+        }
+        for (const el of drawnElements) {
+            if (el instanceof LabeledEvent) {
+                ilpn.addTransition(new IlpnTransition(el.label, el.id));
+            }
+        }
+        for (const conn of connections) {
+            const sourceNode = ilpn.getPlace(conn.source) || ilpn.getTransition(conn.source);
+            const destNode = ilpn.getPlace(conn.target) || ilpn.getTransition(conn.target);
+            if (sourceNode && destNode) {
+                if (sourceNode instanceof IlpnPlace) {
+                    ilpn.addArc(sourceNode, destNode as IlpnTransition, conn.weight || 1);
+                } else {
+                    ilpn.addArc(sourceNode, destNode as IlpnPlace, conn.weight || 1);
+                }
+            }
+        }
+        return ilpn;
+    }
+
+    public mapValidatorResultsToSolvedTrails(
+        results: TokenTrailValidationResult[],
+    ): Map<string, Record<string, number>> {
+        const solvedTrailsMap = new Map<string, Record<string, number>>();
+        for (const res of results) {
+            const markingRecord: Record<string, number> = {};
+            for (const key of res.tokenTrail.getKeys()) {
+                const prefix = 'n0_';
+                if (key.startsWith(prefix)) {
+                    const elId = key.substring(prefix.length);
+                    markingRecord[elId] = res.tokenTrail.get(key) ?? 0;
+                }
+            }
+            solvedTrailsMap.set(res.placeId, markingRecord);
+        }
+        return solvedTrailsMap;
+    }
+
+    public getNetSignature(net: Diagram): string {
+        const nodes = net.allNodes
+            .map((n) => `${n.id}:${n.label ?? ''}`)
+            .sort()
+            .join('|');
+        const markings = Object.entries(net.startMarking || {})
+            .map(([placeId, tokenCount]) => `${placeId}:${tokenCount}`)
+            .sort()
+            .join('|');
+        const edges = net.arcs
+            .map((a) => `${a.source}->${a.target}:${a.weight || 1}`)
+            .sort()
+            .join('|');
+        return `${nodes}::${markings}::${edges}`;
     }
 
     /**
@@ -217,12 +391,13 @@ export class TokenTrailLpnService {
             const pId = p.id || this.stateService.generateElementId('p');
             p.id = pId;
 
-            const uniqueId = this.stateService.generateElementId(`drawn-place`);
+            const uniqueId = this.stateService.generateConditionName();
             placeMap.set(pId, uniqueId);
 
-            const condition = this.stateService.buildCondition(uniqueId, pId, p.marking, {
+            const condition = this.stateService.buildCondition(uniqueId, uniqueId, p.marking, {
                 isStartPlace: p.marking > 0,
                 hideTokens: !(p.marking > 0), //TODO: currently showing initial marking of the LPN if no place is selected
+                baseName: uniqueId,
             });
             const pos = getRandomPos();
             condition.x = pos.x;
@@ -268,6 +443,77 @@ export class TokenTrailLpnService {
         });
 
         this.sugiyamaService.calculateLayout(this.stateService.drawnElements(), this.stateService.connections());
+        this.stateService.updateDrawnElements((e) => [...e]);
+        this.stateService.updateConnections((c) => [...c]);
+        this.stateService.requestFitView();
+    }
+
+    /**
+     * Loads a parsed Petri Net / LPN structure from a Diagram object into the state service.
+     * Restores LPN Condition trail markings, baseNames, event coordinates, and edge bendPoints.
+     */
+    public loadLpnFromDiagram(diagram: Diagram) {
+        this.stateService.clear();
+
+        // 1. Map places to LPN Conditions
+        for (const p of diagram.places) {
+            const rawLabel = p.label ?? p.displayLabel ?? p.id;
+
+            // Extract baseName: if it is e.g. c1 or c2, use it. Otherwise use a new one.
+            let baseName = rawLabel;
+            if (!/^c\d+$/.test(rawLabel)) {
+                if (/^c\d+$/.test(p.id)) {
+                    baseName = p.id;
+                } else {
+                    baseName = this.stateService.generateConditionName();
+                }
+            }
+
+            // Build condition
+            const condition = this.stateService.buildCondition(p.id, rawLabel, p.tokenCount(), {
+                isStartPlace: p.isStartPlace || p.tokenCount() > 0,
+                hideTokens: !(p.tokenCount() > 0),
+                baseName: baseName,
+            });
+
+            condition.x = p.x;
+            condition.y = p.y;
+
+            // Parse label to recover trail markings
+            const trailMarkings: Record<string, number> = {};
+            const parts = rawLabel.split(' + ').map((part) => part.trim());
+            for (const part of parts) {
+                const match = part.match(/^(\d+)\*(.+)$|^(.+)$/);
+                if (match) {
+                    const multiplier = match[1] ? parseInt(match[1], 10) : 1;
+                    const singleLabel = match[2] || match[3];
+                    if (singleLabel !== baseName) {
+                        trailMarkings[singleLabel] = (trailMarkings[singleLabel] ?? 0) + multiplier;
+                    }
+                }
+            }
+            condition.trailMarkings = trailMarkings;
+            condition.updateDynamicLabel();
+
+            this.stateService.addDrawnElement(condition);
+        }
+
+        // 2. Map transitions to LPN Events
+        for (const t of diagram.transitions) {
+            const label = t.label ?? t.displayLabel ?? t.id;
+            const eventNode = this.stateService.buildEvent(t.id, label, label);
+            eventNode.x = t.x;
+            eventNode.y = t.y;
+            this.stateService.addDrawnElement(eventNode);
+        }
+
+        // 3. Map arcs to LPN Connections
+        for (const arc of diagram.arcs) {
+            const edge = new LabeledNetEdge(arc.id, arc.source, arc.target, arc.weight);
+            edge.bendPoints = arc.bendPoints ? arc.bendPoints.map((bp) => ({ x: bp.x, y: bp.y })) : [];
+            this.stateService.addConnection(edge);
+        }
+
         this.stateService.updateDrawnElements((e) => [...e]);
         this.stateService.updateConnections((c) => [...c]);
         this.stateService.requestFitView();
