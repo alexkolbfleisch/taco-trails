@@ -14,7 +14,8 @@
         #drawingArea
         class="drawing-canvas"
         data-export-id="process-net-draw"
-        [class.drag-over]="isDragOver()"
+        [class.drag-over]="isDragOver() && stateService.displayMode() !== 'puzzle'"
+        [class.drag-over-invalid]="isDragOver() && stateService.displayMode() === 'puzzle'"
         [class.showing-solution]="stateService.showingSolution()"
         [attr.viewBox]="viewBox()"
         preserveAspectRatio="xMidYMid meet"

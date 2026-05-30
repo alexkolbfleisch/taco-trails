@@ -14,6 +14,7 @@ import { StateNode } from '../../../../classes/reachability-graph.model';
 import { ModeService } from '../../../../services/mode.service';
 import { Tab } from '../../../../classes/tabs';
 import { TranslateModule } from '@ngx-translate/core';
+import { ToasterNotificationService } from '../../../../services/toaster-notification.service';
 
 @Component({
     selector: 'app-reachability-graph-draw-display',
@@ -25,6 +26,16 @@ import { TranslateModule } from '@ngx-translate/core';
 })
 export class ReachabilityGraphDrawDisplayComponent extends DisplayComponent {
     protected override graphId = GRAPH_IDS.REACHABILITY;
+    private _toasterService = inject(ToasterNotificationService);
+
+    override processDropEvent(e: DragEvent) {
+        e.preventDefault();
+        this.isDragOver.set(false);
+        if (e.dataTransfer?.files && e.dataTransfer.files.length > 0) {
+            this._toasterService.showWarning('TOASTER.HEADER.UPLOAD_RESTRICTED', 'TOASTER.BODY.UPLOAD_RG_RESTRICTED');
+        }
+    }
+
     readonly userReachabilityGraphDiagram = this._reachabilityGraphService.reachabilityGraphSignal;
     readonly completeReachabilityGraphDiagram = this._reachabilityGraphService.completeReachabilityGraph;
     readonly showCompleteGraph = this._reachabilityGraphService.showingCompleteGraph;

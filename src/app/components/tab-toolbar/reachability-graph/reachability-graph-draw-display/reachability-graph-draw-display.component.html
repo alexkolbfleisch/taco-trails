@@ -4,9 +4,13 @@
     <svg
         #drawingArea
         class="drawing-canvas"
+        [class.drag-over-invalid]="isDragOver()"
         data-export-id="reachability-graph-draw"
         [attr.viewBox]="viewBox()"
         preserveAspectRatio="xMidYMid meet"
+        (drop)="processDropEvent($event)"
+        (dragover)="onDragOver($event)"
+        (dragleave)="onDragLeave()"
         (mousedown)="($event.target === drawingArea || $event.target === gridRect) && startPan($event)"
         (mousemove)="pan($event)"
         (mouseup)="endPan()"

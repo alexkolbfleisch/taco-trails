@@ -162,7 +162,8 @@
             "MARKING_DIALOG_DISMISSED": "Dialog Dismissed",
             "RG_CHECK_SUCCESS": "Reachability Graph Complete",
             "RG_CHECK_INCOMPLETE": "Incomplete Graph",
-            "RG_INFO": "Switch back to the self-created Graph necessary"
+            "RG_INFO": "Switch back to the self-created Graph necessary",
+            "UPLOAD_RESTRICTED": "Upload Restricted"
         },
         "BODY": {
             "NO_NET_TO_SAVE": "There is no Petri net to save.",
@@ -197,7 +198,10 @@
             "RG_CHECK_SUCCESS": "The created reachability graph is complete and correct.",
             "RG_CHECK_MISSING_EDGES": "Missing transitions: {{edges}}",
             "RG_CHECK_MISSING_EDGES_LIST": "The following transitions are missing:",
-            "SWITCH_BACK_TO_USER_GRAPH": "Please switch back to your self-created Graph to continue editing."
+            "SWITCH_BACK_TO_USER_GRAPH": "Please switch back to your self-created Graph to continue editing.",
+            "UPLOAD_ONLY_IN_DRAW_TAB": "It is only possible to upload a new Petri net in the Draw tab.",
+            "UPLOAD_PROCESS_NET_RESTRICTED": "It is only possible to upload a Petri net in the Draw tab. Process nets cannot be uploaded directly.",
+            "UPLOAD_RG_RESTRICTED": "It is only possible to upload a Petri net in the Draw tab. Reachability graphs cannot be uploaded directly."
         },
         "VALIDATION_MESSAGES": {
             "TRANSITION_NO_MATCH": "❌ Transition {{label}} has no matching label in the Petri net.",
@@ -243,7 +247,7 @@
     },
     "TOKEN_TRAIL": {
         "LPN_SYNTHESIS_ERROR_TITLE": "LPN Synthesis Failed",
-        "LPN_SYNTHESIS_ERROR_BODY": "An error occurred while synthesizing the Labeled Petri Net.",
+        "LPN_SYNTHESIS_ERROR_BODY": "An error occurred while synthesizing the Labeled Petri Net. Please try again.",
         "LPN_NO_START_PLACE_TITLE": "No Start Place Present",
         "LPN_NO_START_PLACE_BODY": "The generated LPN does not contain a marked start place.",
         "SHOW_HINT": "Show Hint",
@@ -253,6 +257,9 @@
         "BUTTON_VALIDATE_NET": "Validate LPN",
         "BUTTON_SHOW_SOLUTION": "Show Solution",
         "BUTTON_HIDE_SOLUTION": "Hide Solution",
+        "BUTTON_EXPORT_LPN": "Export LPN",
+        "EXPORT_JSON": "Export as JSON",
+        "EXPORT_PNML": "Export as PNML",
         "SOLUTION_FOUND_TITLE": "Solution Found",
         "SOLUTION_FOUND_BODY": "Possible token trails calculated successfully.",
         "SOLUTION_ERROR_TITLE": "Solution Error",
@@ -271,6 +278,7 @@
         "MODE_WARNING_TITLE": "Puzzle Mode Active",
         "MODE_WARNING_BODY": "Please switch to Construction Mode to add new elements.",
         "MODE_WARNING_PUZZLE_RESTRICTION": "In Puzzle Mode, the LPN structure is fixed. Switch to Construction Mode to move, connect, or delete elements.",
+        "MODE_WARNING_UPLOAD_RESTRICTION": "File import is disabled in Puzzle Mode. Please switch to Construction Mode to upload a net.",
         "PLACE_SELECTION_REQUIRED_TITLE": "Select a Place",
         "PLACE_SELECTION_REQUIRED_BODY": "Please select a place in the Petri net first.",
         "LPN_DIFFICULTY_EASY": "Easy",

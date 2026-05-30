@@ -7,6 +7,8 @@ import { DiagramArc } from '../classes/diagram/diagram-arc';
 import { XMLBuilder } from 'fast-xml-parser';
 import { PnmlArc, PnmlPlace, PnmlPosition, PnmlTransition } from '../classes/pnml-petri-net';
 
+import { Condition, Event as LabeledEvent, LabeledNetEdge, LabeledNetNode } from '../classes/labeled-net.model';
+
 export type SUPPORTED_FORMAT = 'pnml' | 'json';
 
 const formatTupleSet = (items: string[]) => `{${items.join(', ')}}`;
@@ -24,6 +26,19 @@ export class SerializationService {
             default:
                 throw new Error(`Unsupported format: ${format}`);
         }
+    }
+
+    public serializeLpn(
+        drawnElements: LabeledNetNode[],
+        connections: LabeledNetEdge[],
+        format: SUPPORTED_FORMAT,
+    ): string {
+        const places = drawnElements.filter((el): el is Condition => el instanceof Condition);
+        const transitions = drawnElements.filter((el): el is LabeledEvent => el instanceof LabeledEvent);
+        const arcs = connections.map((c) => new DiagramArc(c.id, c.source, c.target, c.weight, c.bendPoints));
+
+        const diagram = new Diagram(places, transitions, arcs);
+        return this.serialize(diagram, format);
     }
 
     public serializeTuple(diagram: Diagram): string {
@@ -161,6 +176,9 @@ export class SerializationService {
     private _mapPlaceToPnml(place: DiagramPlace): PnmlPlace {
         return {
             '@_id': place.id,
+            name: {
+                text: place.label || place.id,
+            },
             graphics: {
                 position: {
                     '@_x': place.x,

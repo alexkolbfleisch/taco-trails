@@ -8,6 +8,15 @@
     -moz-user-select: none;
     -ms-user-select: none;
     background-color: #fcfcfc;
+    transition: all 0.2s ease;
+}
+
+.canvas.drag-over-invalid {
+    border-color: #f44336 !important;
+    border-width: 3px !important;
+    background-color: #ffebee !important;
+    box-shadow: inset 0 0 20px rgba(244, 67, 54, 0.2) !important;
+    border-style: dashed !important;
 }
 
 :host {

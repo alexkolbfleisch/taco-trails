@@ -1,4 +1,4 @@
-import { Component, computed, ElementRef, inject, OnDestroy, OnInit, ViewChild } from '@angular/core';
+import { Component, computed, ElementRef, inject, OnDestroy, OnInit, signal, ViewChild } from '@angular/core';
 import { DisplayService } from '../../services/display.service';
 import { Subscription } from 'rxjs';
 import { SvgNodeComponent } from './svg-node/svg-node.component';
@@ -43,6 +43,8 @@ export class DisplayComponent implements OnInit, OnDestroy {
     protected _processNetFiringService = inject(ProcessNetFiringService);
     private _notificationService = inject(ToasterNotificationService);
 
+    readonly isDragOver = signal<boolean>(false);
+
     readonly viewBox = this._panningService.viewBoxAsString;
     readonly viewBoxObj = this._panningService.viewBox;
     readonly diagram = toSignal(this._displayService.diagram$);
@@ -82,11 +84,12 @@ export class DisplayComponent implements OnInit, OnDestroy {
 
     public processDropEvent(e: DragEvent) {
         e.preventDefault();
-        if (e.dataTransfer?.files) {
-            const files = e.dataTransfer.files;
-            if (files.length > 0) {
-                this._loaderService.loadFile(files[0]);
-            }
+        this.isDragOver.set(false);
+        if (e.dataTransfer?.files && e.dataTransfer.files.length > 0) {
+            this._notificationService.showWarning(
+                'TOASTER.HEADER.UPLOAD_RESTRICTED',
+                'TOASTER.BODY.UPLOAD_ONLY_IN_DRAW_TAB',
+            );
         }
     }
 
@@ -128,6 +131,21 @@ export class DisplayComponent implements OnInit, OnDestroy {
             console.log('StateNode clicked.' + node.id);
             this._reachabilityGraphService.switchPnStateToClickedState(node as StateNode);
         }
+    }
+
+    public onDragOver(event: DragEvent) {
+        const isFileDrag = event.dataTransfer?.types.includes('Files');
+        if (isFileDrag) {
+            event.preventDefault();
+            if (event.dataTransfer) {
+                event.dataTransfer.dropEffect = 'copy';
+            }
+            this.isDragOver.set(true);
+        }
+    }
+
+    public onDragLeave() {
+        this.isDragOver.set(false);
     }
 
     public prevent(e: DragEvent) {

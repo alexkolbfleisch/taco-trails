@@ -69,12 +69,7 @@ export class SvgEventNodeComponent {
      */
     readonly displayLabel = computed(() => {
         const n = this.diagramNode();
-        let label = n?.displayLabel || '';
-
-        // If it's a Condition and we are in puzzle mode, use baseName as the visual label.
-        if (n instanceof Condition && this.displayMode() === 'puzzle') {
-            label = n.baseName || label;
-        }
+        const label = n?.displayLabel || '';
 
         if (label.length > this.MAX_CHARS && !(n instanceof StateNode)) {
             return label.substring(0, this.MAX_CHARS) + '...';
