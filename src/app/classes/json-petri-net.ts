@@ -6,6 +6,7 @@ export interface JsonPetriNet {
     labels?: Record<string, string>;
     marking?: Record<string, number>;
     layout?: Record<string, Coords | Coords[]>;
+    lpnStartPlaces?: string[];
 }
 
 export interface Coords {

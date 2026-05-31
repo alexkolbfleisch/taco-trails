@@ -455,6 +455,8 @@ export class TokenTrailLpnService {
     public loadLpnFromDiagram(diagram: Diagram) {
         this.stateService.clear();
 
+        const hasStartPlaces = diagram.places.some((place) => place.isStartPlace);
+
         // 1. Map places to LPN Conditions
         for (const p of diagram.places) {
             const rawLabel = p.label ?? p.displayLabel ?? p.id;
@@ -469,10 +471,12 @@ export class TokenTrailLpnService {
                 }
             }
 
+            const isStart = hasStartPlaces ? p.isStartPlace : p.isStartPlace || p.tokenCount() > 0;
+
             // Build condition
             const condition = this.stateService.buildCondition(p.id, rawLabel, p.tokenCount(), {
-                isStartPlace: p.isStartPlace || p.tokenCount() > 0,
-                hideTokens: !(p.tokenCount() > 0),
+                isStartPlace: isStart,
+                hideTokens: !isStart,
                 baseName: baseName,
             });
 

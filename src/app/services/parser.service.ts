@@ -80,7 +80,8 @@ export class ParserService {
 
             const marking = rawData.marking || {};
             const labels = rawData.labels || {};
-            const places = this.parsePlaces(rawData.places, marking, labels);
+            const lpnStartPlacesSet = rawData.lpnStartPlaces ? new Set<string>(rawData.lpnStartPlaces) : undefined;
+            const places = this.parsePlaces(rawData.places, marking, labels, lpnStartPlacesSet);
             const arcs = this.parseArcs(rawData.arcs, rawData.layout);
             const transitions = this.parseTransitions(rawData.transitions, labels, places, arcs);
 
@@ -98,6 +99,7 @@ export class ParserService {
         placeIds: string[] | undefined,
         marking: Record<string, number>,
         labels: Record<string, string>,
+        lpnStartPlacesSet?: Set<string>,
     ): DiagramPlace[] {
         if (!placeIds || !Array.isArray(placeIds)) {
             return [];
@@ -105,7 +107,10 @@ export class ParserService {
         return placeIds.map((id) => {
             const initialTokens = marking[id] || 0;
             const label = labels[id] || id;
-            return new DiagramPlace(id, initialTokens, label);
+            const isStart = lpnStartPlacesSet?.has(id) ?? false;
+            return new DiagramPlace(id, initialTokens, label, {
+                isStartPlace: isStart,
+            });
         });
     }
 

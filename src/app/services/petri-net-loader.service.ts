@@ -93,6 +93,14 @@ export class PetriNetLoaderService {
             const parsedNet = this._parser.parse(content);
 
             if (parsedNet) {
+                // If we import an LPN as a normal source net,
+                // we should show the c1 to cx naming schema (the place ID) instead of the combined labels.
+                for (const place of parsedNet.places) {
+                    if (/^c\d+$/.test(place.id)) {
+                        place.label = place.id;
+                    }
+                }
+
                 this._processNetSateService.clear();
                 this._reachabilityGraphService.clear(false);
                 const inDrawTab = this._tabStateService.currentTab() === Tab.DRAW;
