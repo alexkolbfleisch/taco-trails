@@ -132,11 +132,7 @@ export class SvgNodeComponent {
     });
 
     readonly isStartPlace = computed(() => {
-        const node = this.diagramNode();
-        const isStart = node instanceof DiagramPlace ? node.isStartPlace : false;
-        if (!isStart) return false;
-
-        return !this._modeService.isExamMode(this._tabStateService.currentTab());
+        return false;
     });
 
     readonly shouldShowInnerLabel = computed(() => this.showInnerLabel() && !!this.innerLabel());

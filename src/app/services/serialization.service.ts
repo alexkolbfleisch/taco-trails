@@ -33,7 +33,17 @@ export class SerializationService {
         connections: LabeledNetEdge[],
         format: SUPPORTED_FORMAT,
     ): string {
-        const places = drawnElements.filter((el): el is Condition => el instanceof Condition);
+        const places = drawnElements
+            .filter((el): el is Condition => el instanceof Condition)
+            .map((cond) => {
+                const dp = new DiagramPlace(cond.id, cond.isStartPlace ? 1 : 0, cond.label, {
+                    isStartPlace: cond.isStartPlace,
+                    hideTokens: !cond.isStartPlace,
+                });
+                dp.x = cond.x;
+                dp.y = cond.y;
+                return dp;
+            });
         const transitions = drawnElements.filter((el): el is LabeledEvent => el instanceof LabeledEvent);
         const arcs = connections.map((c) => new DiagramArc(c.id, c.source, c.target, c.weight, c.bendPoints));
 
@@ -88,6 +98,11 @@ export class SerializationService {
         this._serializePlaces(diagram.places, rawNet);
         this._serializeTransitions(diagram.transitions, rawNet);
         this._serializeArcs(diagram.arcs, rawNet);
+
+        const startPlaces = diagram.places.filter((p) => p.isStartPlace).map((p) => p.id);
+        if (startPlaces.length > 0) {
+            rawNet.lpnStartPlaces = startPlaces;
+        }
 
         return JSON.stringify(rawNet, null, 2);
     }
