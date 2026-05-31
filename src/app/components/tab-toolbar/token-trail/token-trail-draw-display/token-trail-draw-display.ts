@@ -627,12 +627,18 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
     }
 
     onDrop(event: DragEvent) {
-        if (this.stateService.showingSolution()) return;
-
         // 1. Check for dropped files (JSON / PNML LPN representation)
         if (event.dataTransfer?.files && event.dataTransfer.files.length > 0) {
             event.preventDefault();
             this.isDragOver.set(false);
+
+            if (this.stateService.showingSolution()) {
+                this.toaster.showWarning(
+                    'TOKEN_TRAIL.MODE_SOLUTION_ACTIVE',
+                    'TOKEN_TRAIL.MODE_WARNING_SOLUTION_UPLOAD_RESTRICTION',
+                );
+                return;
+            }
 
             if (this.stateService.displayMode() === 'puzzle') {
                 this.toaster.showWarning(
@@ -670,6 +676,8 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
             fileReader.readAsText(file);
             return;
         }
+
+        if (this.stateService.showingSolution()) return;
 
         if (this.stateService.displayMode() === 'puzzle') {
             this.toaster.showWarning('TOKEN_TRAIL.MODE_WARNING_TITLE', 'TOKEN_TRAIL.MODE_WARNING_PUZZLE_RESTRICTION');

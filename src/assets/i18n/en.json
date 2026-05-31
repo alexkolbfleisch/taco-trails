@@ -279,6 +279,7 @@
         "MODE_WARNING_BODY": "Please switch to Construction Mode to add new elements.",
         "MODE_WARNING_PUZZLE_RESTRICTION": "In Puzzle Mode, the LPN structure is fixed. Switch to Construction Mode to move, connect, or delete elements.",
         "MODE_WARNING_UPLOAD_RESTRICTION": "File import is disabled in Puzzle Mode. Please switch to Construction Mode to upload a net.",
+        "MODE_WARNING_SOLUTION_UPLOAD_RESTRICTION": "File import is disabled while showing the solution. Please hide the solution first.",
         "PLACE_SELECTION_REQUIRED_TITLE": "Select a Place",
         "PLACE_SELECTION_REQUIRED_BODY": "Please select a place in the Petri net first.",
         "LPN_DIFFICULTY_EASY": "Easy",

@@ -69,7 +69,11 @@ export class SvgEventNodeComponent {
      */
     readonly displayLabel = computed(() => {
         const n = this.diagramNode();
-        const label = n?.displayLabel || '';
+        let label = n?.displayLabel || '';
+
+        if (n instanceof Condition && this.displayMode() === 'puzzle') {
+            label = n.baseName || n.displayLabel || '';
+        }
 
         if (label.length > this.MAX_CHARS && !(n instanceof StateNode)) {
             return label.substring(0, this.MAX_CHARS) + '...';
@@ -82,6 +86,9 @@ export class SvgEventNodeComponent {
      */
     readonly fullLabel = computed(() => {
         const n = this.diagramNode();
+        if (n instanceof Condition && this.displayMode() === 'puzzle') {
+            return n.baseName || n.displayLabel || '';
+        }
         return n?.displayLabel || '';
     });
 
