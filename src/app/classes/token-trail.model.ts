@@ -54,4 +54,5 @@ export interface ValidationIssue {
     eventIds?: string[];
     conditionIds?: string[];
     connectionIds?: string[];
+    placeId?: string;
 }

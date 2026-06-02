@@ -235,3 +235,13 @@ svg text {
 .drawing-canvas.showing-solution .drag-overlay {
     cursor: default !important;
 }
+
+.node-info-button.active {
+    background-color: #f1f5f9 !important;
+    color: #64748b !important;
+}
+
+.node-bubble-fo,
+.connection-bubble-fo {
+    overflow: visible !important;
+}

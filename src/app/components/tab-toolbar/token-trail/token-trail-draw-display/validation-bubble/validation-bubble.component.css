@@ -1,0 +1,158 @@
+:host {
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+}
+
+.validation-bubble {
+    position: relative;
+    box-sizing: border-box;
+    width: 100%;
+    height: auto;
+    max-height: 280px;
+    background-color: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    box-shadow:
+        0 10px 25px -5px rgba(0, 0, 0, 0.1),
+        0 8px 10px -6px rgba(0, 0, 0, 0.1);
+    padding: 12px 16px;
+    font-family: Inter, Roboto, sans-serif;
+    display: flex;
+    flex-direction: column;
+    pointer-events: auto;
+}
+
+.bubble-content {
+    flex: 1;
+    overflow-y: auto;
+    font-size: 12px;
+    line-height: 1.5;
+    color: #334155;
+    padding-right: 18px;
+    margin-top: 22px;
+}
+
+.bubble-close-button {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 24px;
+    height: 24px;
+    min-width: 24px;
+    padding: 0 !important;
+    line-height: 24px;
+    color: #94a3b8;
+    background: transparent;
+    border: none;
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+    z-index: 20;
+}
+
+.bubble-close-button:hover {
+    background-color: #f1f5f9;
+    color: #475569;
+}
+
+.bubble-close-button .mat-icon {
+    font-size: 16px;
+    width: 16px;
+    height: 16px;
+    line-height: 16px;
+}
+
+.bubble-content::-webkit-scrollbar {
+    width: 5px;
+}
+.bubble-content::-webkit-scrollbar-track {
+    background: transparent;
+}
+.bubble-content::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 4px;
+}
+.bubble-content::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
+}
+
+.bubble-issue-item {
+    margin-bottom: 12px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #f1f5f9;
+}
+
+.bubble-issue-item:last-child {
+    margin-bottom: 0;
+    padding-bottom: 0;
+    border-bottom: none;
+}
+
+.bubble-rule-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 4px;
+}
+
+.bubble-rule-icon {
+    font-size: 16px;
+    width: 16px;
+    height: 16px;
+    color: #ef4444;
+}
+
+.connection-bubble .bubble-rule-icon {
+    color: #f97316;
+}
+
+.bubble-rule-name {
+    font-size: 10px;
+    font-weight: 700;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.bubble-issue-text {
+    color: #1e293b;
+    font-weight: 400;
+}
+
+.bubble-issue-text ::ng-deep strong {
+    color: #0f172a;
+    font-weight: 600;
+}
+
+.bubble-arrow {
+    position: absolute;
+    bottom: -8px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 0;
+    height: 0;
+    border-left: 8px solid transparent;
+    border-right: 8px solid transparent;
+    border-top: 8px solid #e2e8f0;
+    z-index: 10;
+}
+
+.bubble-arrow::after {
+    content: '';
+    position: absolute;
+    top: -9px;
+    left: -8px;
+    width: 0;
+    height: 0;
+    border-left: 8px solid transparent;
+    border-right: 8px solid transparent;
+    border-top: 8px solid #ffffff;
+    z-index: 11;
+}

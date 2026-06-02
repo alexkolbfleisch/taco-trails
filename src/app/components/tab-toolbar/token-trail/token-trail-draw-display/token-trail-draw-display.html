@@ -10,6 +10,7 @@
         {{ (stateService.showingSolution() ? 'TOKEN_TRAIL.MODE_SOLUTION_ACTIVE' : (stateService.displayMode() ===
         'puzzle' ? 'TOKEN_TRAIL.MODE_PUZZLE_ACTIVE' : 'TOKEN_TRAIL.MODE_CONSTRUCTION_ACTIVE')) | translate }}
     </div>
+
     <svg
         #drawingArea
         class="drawing-canvas"
@@ -81,11 +82,12 @@
                 <button
                     mat-icon-button
                     class="node-info-button"
-                    (click)="openValidationDetailDialog(line.id, 'connection')"
+                    [class.active]="isConnectionBubbleOpen(line.id)"
+                    (click)="toggleConnectionBubble(line.id); $event.stopPropagation()"
                     [matTooltip]="'TOKEN_TRAIL.SHOW_HINT' | translate"
                     type="button"
                     aria-label="Show validation info">
-                    <mat-icon>info</mat-icon>
+                    <mat-icon>{{ isConnectionBubbleOpen(line.id) ? 'cancel' : 'info' }}</mat-icon>
                 </button>
             </foreignObject>
             }
@@ -146,16 +148,43 @@
                 <button
                     mat-icon-button
                     class="node-info-button"
-                    (click)="openValidationDetailDialog(element.id, 'element')"
+                    [class.active]="isElementBubbleOpen(element.id)"
+                    (click)="toggleElementBubble(element.id); $event.stopPropagation()"
                     [matTooltip]="'TOKEN_TRAIL.SHOW_HINT' | translate"
                     type="button"
                     aria-label="Show validation info">
-                    <mat-icon>info</mat-icon>
+                    <mat-icon>{{ isElementBubbleOpen(element.id) ? 'cancel' : 'info' }}</mat-icon>
                 </button>
             </foreignObject>
             }
         </g>
         }
+
+        <!-- Validation bubbles overlay (rendered last to always stay on top and avoid parent filter effects like red glowing) -->
+        @for (line of connectionLines(); track line.id) { @if (hasConnectionIssues(line.id) &&
+        isConnectionBubbleOpen(line.id)) { @let issues = getConnectionIssues(line.id);
+        <foreignObject
+            class="connection-bubble-fo"
+            [attr.x]="(line.x1 + line.x2) / 2 - 150"
+            [attr.y]="(line.y1 + line.y2) / 2 - 300 - 20"
+            width="300"
+            height="300">
+            <app-validation-bubble
+                [issues]="issues"
+                [isConnection]="true"
+                (closeBubble)="toggleConnectionBubble(line.id)" />
+        </foreignObject>
+        } } @for (element of drawnElements(); track element.id) { @if (hasElementIssues(element.id) &&
+        isElementBubbleOpen(element.id)) { @let issues = getElementIssues(element.id);
+        <foreignObject
+            class="node-bubble-fo"
+            [attr.x]="element.x - 128"
+            [attr.y]="element.y - 300 - 44"
+            width="300"
+            height="300">
+            <app-validation-bubble [issues]="issues" (closeBubble)="toggleElementBubble(element.id)" />
+        </foreignObject>
+        } }
     </svg>
     <div class="instruction-panel">
         <app-draw-toolbar
