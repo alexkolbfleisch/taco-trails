@@ -25,6 +25,7 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonToggleModule } from '@angular/material/button-toggle';
+import { MatCardModule } from '@angular/material/card';
 import { MatDialog } from '@angular/material/dialog';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { GRAPH_FILENAMES, GRAPH_IDS, PLACE_RADIUS, TRANSITION_SIZE } from '../../../display/display.constants';
@@ -52,6 +53,7 @@ import { Tab } from '../../../../classes/tabs';
 import { TokenTrailValidatorService } from '../../../../../../ilpn-components/src/lib/algorithms/pn/validation/token-trails/token-trail-validator.service';
 import { DrawingDisplayService } from '../../../../services/drawing-display.service';
 import { ParserService } from '../../../../services/parser.service';
+import { ValidationBubbleComponent } from './validation-bubble/validation-bubble.component';
 
 /**
  * TokenTrailDrawDisplayComponent is the main drawing canvas for Token Trail validation in the Token Trail tab.
@@ -81,6 +83,8 @@ import { ParserService } from '../../../../services/parser.service';
         MatIconModule,
         MatButtonToggleModule,
         MatProgressSpinnerModule,
+        MatCardModule,
+        ValidationBubbleComponent,
     ],
     templateUrl: './token-trail-draw-display.html',
     providers: [PanningService, TokenTrailMergeService],
@@ -105,6 +109,84 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
     readonly drawnElements = this.stateService.drawnElements;
     readonly connections = this.stateService.connections;
     readonly isDisabled = computed(() => this.drawnElements().length === 0);
+
+    protected readonly isExamMode = computed(() => this._modeService.isExamMode(Tab.TOKEN_TRAIL));
+
+    // Bubble open states mapping
+    private readonly _openElementBubbles = signal<Set<string>>(new Set<string>());
+    private readonly _openConnectionBubbles = signal<Set<string>>(new Set<string>());
+
+    isElementBubbleOpen(elementId: string): boolean {
+        return this._openElementBubbles().has(elementId);
+    }
+
+    toggleElementBubble(elementId: string): void {
+        this._openElementBubbles.update((prev) => {
+            const next = new Set(prev);
+            if (next.has(elementId)) {
+                next.delete(elementId);
+            } else {
+                next.add(elementId);
+            }
+            return next;
+        });
+    }
+
+    isConnectionBubbleOpen(connectionId: string): boolean {
+        return this._openConnectionBubbles().has(connectionId);
+    }
+
+    toggleConnectionBubble(connectionId: string): void {
+        this._openConnectionBubbles.update((prev) => {
+            const next = new Set(prev);
+            if (next.has(connectionId)) {
+                next.delete(connectionId);
+            } else {
+                next.add(connectionId);
+            }
+            return next;
+        });
+    }
+
+    getElementIssues(elementId: string): ValidationIssue[] {
+        const isExam = this.isExamMode();
+        if (isExam) return [];
+
+        const result = this.validationService.liveValidation();
+        if (!result) return [];
+
+        const displayMode = this.stateService.displayMode();
+        const selectedPlaceId = this.stateService.selectedPetriPlaceId();
+
+        let issues = result.issues.filter(
+            (issue) => (issue.eventIds ?? []).includes(elementId) || (issue.conditionIds ?? []).includes(elementId),
+        );
+
+        if (displayMode === 'puzzle' && selectedPlaceId) {
+            issues = issues.filter((issue) => issue.placeId === selectedPlaceId);
+        }
+
+        return issues;
+    }
+
+    getConnectionIssues(connectionId: string): ValidationIssue[] {
+        const isExam = this.isExamMode();
+        if (isExam) return [];
+
+        const result = this.validationService.liveValidation();
+        if (!result) return [];
+
+        const displayMode = this.stateService.displayMode();
+        const selectedPlaceId = this.stateService.selectedPetriPlaceId();
+
+        let issues = result.issues.filter((issue) => (issue.connectionIds ?? []).includes(connectionId));
+
+        if (displayMode === 'puzzle' && selectedPlaceId) {
+            issues = issues.filter((issue) => issue.placeId === selectedPlaceId);
+        }
+
+        return issues;
+    }
 
     readonly isDragOver = signal<boolean>(false);
     // Derived lines with coordinates for rendering
@@ -341,7 +423,7 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
                 );
 
                 if (displayMode === 'puzzle' && selectedPlaceId) {
-                    issues = issues.filter((issue) => issue.messageParams?.['place'] === selectedPlaceId);
+                    issues = issues.filter((issue) => issue.placeId === selectedPlaceId);
                 }
                 hasIssues = issues.length > 0;
             }
@@ -385,9 +467,13 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
 
             let hasIssues = false;
             if (!isExam && !showingSolution && validationResult) {
-                const issues = validationResult.issues.filter((issue) =>
+                let issues = validationResult.issues.filter((issue) =>
                     (issue.connectionIds ?? []).includes(connection.id),
                 );
+                if (this.stateService.displayMode() === 'puzzle' && this.stateService.selectedPetriPlaceId()) {
+                    const selectedPlaceId = this.stateService.selectedPetriPlaceId();
+                    issues = issues.filter((issue) => issue.placeId === selectedPlaceId);
+                }
                 hasIssues = issues.length > 0;
             }
 
@@ -1195,7 +1281,7 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
         if (this.stateService.displayMode() === 'puzzle') {
             const selectedPlaceId = this.stateService.selectedPetriPlaceId();
             if (selectedPlaceId) {
-                issues = issues.filter((issue) => issue.messageParams?.['place'] === selectedPlaceId);
+                issues = issues.filter((issue) => issue.placeId === selectedPlaceId);
             }
         }
 

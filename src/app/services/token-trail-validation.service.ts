@@ -314,6 +314,7 @@ export class TokenTrailValidationService {
             issues.push({
                 rule: 'INITIALIZATION',
                 messageKey: 'TOKEN_TRAIL.VALIDATION.RULE_INITIALIZATION.INITIAL_MARKING_MISMATCH',
+                placeId,
                 messageParams: {
                     place: `<strong>${net.placeLabels?.[placeId] || placeId}</strong>`,
                     expected: `<strong>${initialMarking}</strong>`,
@@ -351,6 +352,7 @@ export class TokenTrailValidationService {
             issues.push({
                 rule: 'ACTIVATION',
                 messageKey: 'TOKEN_TRAIL.VALIDATION.RULE_ACTIVATION.NOT_ENOUGH_PRESET_WEIGHT',
+                placeId,
                 messageParams: {
                     place: `<strong>${net.placeLabels?.[placeId] || placeId}</strong>`,
                     event: `<strong>${net.labels[transitionId] || transitionId}</strong>`,
@@ -393,6 +395,7 @@ export class TokenTrailValidationService {
             issues.push({
                 rule: 'RISE',
                 messageKey: 'TOKEN_TRAIL.VALIDATION.RULE_RISE.RISE_MISMATCH',
+                placeId,
                 messageParams: {
                     place: `<strong>${net.placeLabels?.[placeId] || placeId}</strong>`,
                     event: `<strong>${net.labels[transitionId] || transitionId}</strong>`,

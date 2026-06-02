@@ -1,0 +1,25 @@
+<div
+    class="validation-bubble"
+    [class.connection-bubble]="isConnection()"
+    (wheel)="$event.stopPropagation()"
+    (mousedown)="$event.stopPropagation()">
+    <button
+        mat-icon-button
+        class="bubble-close-button"
+        (click)="closeBubble.emit(); $event.stopPropagation()"
+        aria-label="Close bubble">
+        <mat-icon>close</mat-icon>
+    </button>
+    <div class="bubble-arrow"></div>
+    <div class="bubble-content">
+        @for (issue of issues(); track $index) {
+            <div class="bubble-issue-item">
+                <div class="bubble-rule-header">
+                    <mat-icon class="bubble-rule-icon">error_outline</mat-icon>
+                    <span class="bubble-rule-name">{{ issue.rule }}</span>
+                </div>
+                <div class="bubble-issue-text" [innerHTML]="issue.messageKey | translate: issue.messageParams"></div>
+            </div>
+        }
+    </div>
+</div>
