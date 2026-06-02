@@ -399,18 +399,6 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
             const isMergeAnchor = this.mergeService.isMergeAnchor(element);
             const isMergeAnimating = this.mergeService.isMergeAnimating(element);
 
-            // isNodeInvalid logic
-            const isInvalid = !isExam && !showingSolution && invalidNodeIds.has(element.id);
-
-            // shouldShowTooltip logic
-            const label = element.displayLabel || element.label || '';
-            let shouldShowTooltip = false;
-            if (label.length > 15) {
-                shouldShowTooltip = true;
-            } else if (displayMode === 'puzzle') {
-                shouldShowTooltip = label.length > 5;
-            }
-
             // groupSize logic
             const groupSize = this.mergeService.getConditionGroupSize(element.id);
 
@@ -426,6 +414,21 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
                     issues = issues.filter((issue) => issue.placeId === selectedPlaceId);
                 }
                 hasIssues = issues.length > 0;
+            }
+
+            // isNodeInvalid logic
+            let isInvalid = !isExam && !showingSolution && invalidNodeIds.has(element.id);
+            if (isInvalid && displayMode === 'puzzle' && selectedPlaceId) {
+                isInvalid = hasIssues;
+            }
+
+            // shouldShowTooltip logic
+            const label = element.displayLabel || element.label || '';
+            let shouldShowTooltip = false;
+            if (label.length > 15) {
+                shouldShowTooltip = true;
+            } else if (displayMode === 'puzzle') {
+                shouldShowTooltip = label.length > 5;
             }
 
             map.set(element.id, {
@@ -450,6 +453,8 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
         const connections = this.connections();
         const showingSolution = this.stateService.showingSolution();
         const isExam = this._modeService.isExamMode(Tab.TOKEN_TRAIL);
+        const displayMode = this.stateService.displayMode();
+        const selectedPlaceId = this.stateService.selectedPetriPlaceId();
 
         const invalidConnectionIds = this.validationService.invalidConnectionIds();
         const validationResult = this.validationService.liveValidation();
@@ -463,18 +468,20 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
         >();
 
         for (const connection of connections) {
-            const isInvalid = !isExam && !showingSolution && invalidConnectionIds.has(connection.id);
-
             let hasIssues = false;
             if (!isExam && !showingSolution && validationResult) {
                 let issues = validationResult.issues.filter((issue) =>
                     (issue.connectionIds ?? []).includes(connection.id),
                 );
-                if (this.stateService.displayMode() === 'puzzle' && this.stateService.selectedPetriPlaceId()) {
-                    const selectedPlaceId = this.stateService.selectedPetriPlaceId();
+                if (displayMode === 'puzzle' && selectedPlaceId) {
                     issues = issues.filter((issue) => issue.placeId === selectedPlaceId);
                 }
                 hasIssues = issues.length > 0;
+            }
+
+            let isInvalid = !isExam && !showingSolution && invalidConnectionIds.has(connection.id);
+            if (isInvalid && displayMode === 'puzzle' && selectedPlaceId) {
+                isInvalid = hasIssues;
             }
 
             map.set(connection.id, {
