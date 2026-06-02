@@ -4,7 +4,7 @@
         [class.puzzle-mode]="stateService.displayMode() === 'puzzle' && !stateService.showingSolution()"
         [class.solution-mode]="stateService.showingSolution()">
         <mat-icon
-            >{{ stateService.showingSolution() ? 'visibility' : (stateService.displayMode() === 'puzzle' ? 'extension' :
+            >{{ stateService.showingSolution() ? 'lightbulb' : (stateService.displayMode() === 'puzzle' ? 'extension' :
             'construction') }}</mat-icon
         >
         {{ (stateService.showingSolution() ? 'TOKEN_TRAIL.MODE_SOLUTION_ACTIVE' : (stateService.displayMode() ===

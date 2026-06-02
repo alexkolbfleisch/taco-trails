@@ -175,7 +175,7 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
             action: () => this.toggleMode(),
         },
         {
-            icon: this.stateService.showingSolution() ? 'visibility_off' : 'visibility',
+            icon: this.stateService.showingSolution() ? 'lightbulb' : 'lightbulb_outline',
             tooltip: this.stateService.showingSolution()
                 ? 'TOKEN_TRAIL.BUTTON_HIDE_SOLUTION'
                 : 'TOKEN_TRAIL.BUTTON_SHOW_SOLUTION',
