@@ -144,6 +144,14 @@ export class TokenTrailValidationService {
 
         this.lastExplicitValidationTriggerKey.set(this.validationTriggerKey());
         this.stateService.setSelectedPetriPlaceId(null);
+
+        if (result.valid) {
+            this.toaster.showSuccess('TOKEN_TRAIL.VALIDATION_SUCCESS_TITLE', 'TOKEN_TRAIL.VALIDATION_SUCCESS_BODY');
+        } else {
+            this.toaster.showError('TOKEN_TRAIL.VALIDATION_FAILED_TITLE', 'TOKEN_TRAIL.VALIDATION_FAILED_BODY', {
+                duration: 0,
+            });
+        }
     }
 
     resolveSourceNetForValidation(): Diagram | null {
