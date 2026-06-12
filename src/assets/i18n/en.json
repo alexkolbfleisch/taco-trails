@@ -255,6 +255,8 @@
             "STEP2_TEXT": "The view is split: on the left side, you see the original Petri Net. On the right side, you see the corresponding Labeled Petri Net (LPN).",
             "STEP3_TITLE": "Puzzle Mode: Try it!",
             "STEP3_TEXT": "You are currently in Puzzle Mode. To configure the token trail for a place:\n1. Click a place (circle) in the Petri Net on the left.\n2. Hover over a condition (circle) in the LPN on the right and scroll your mouse wheel up or down to adjust its token count.\n\nTry adjusting a condition's token count now to unlock the next step!",
+            "STEP_MODE_TOGGLE_TITLE": "Switching Modes",
+            "STEP_MODE_TOGGLE_TEXT": "This button allows you to switch between <strong>Puzzle Mode</strong> and <strong>Construction Mode</strong> manually. In Puzzle Mode, the LPN structure is automatically generated for you. In Construction Mode, you build your LPN completely from scratch.",
             "STEP4_TITLE": "Construction Mode: Try it!",
             "STEP4_TEXT": "We have switched to Construction Mode! In this mode, you can build your own LPN. Try dragging a place or transition from the left Petri Net and dropping it onto the right LPN canvas. Drop an element now to unlock the next step!",
             "STEP5_TITLE": "Upload Your Net",
