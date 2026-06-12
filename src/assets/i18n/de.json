@@ -256,6 +256,8 @@
             "STEP2_TEXT": "Die Ansicht ist geteilt: Auf der linken Seite sehen Sie das Original-Petrinetz. Auf der rechten Seite sehen Sie das zugehörige Labeled Petri Net (LPN).",
             "STEP3_TITLE": "Puzzle-Modus: Ausprobieren!",
             "STEP3_TEXT": "Sie befinden sich im Puzzle-Modus. Um den Token-Trail für eine Stelle zu konfigurieren:\n1. Klicken Sie links im Petrinetz auf eine Stelle (Kreis).\n2. Bewegen Sie den Mauszeiger rechts über eine Condition (Kreis) im LPN und drehen Sie das Mausrad nach oben oder unten, um die Anzahl der Marken anzupassen.\n\nPassen Sie jetzt die Anzahl der Marken einer Condition an, um den nächsten Schritt freizuschalten!",
+            "STEP_MODE_TOGGLE_TITLE": "Modus wechseln",
+            "STEP_MODE_TOGGLE_TEXT": "Mit dieser Schaltfläche können Sie manuell zwischen dem <strong>Puzzle-Modus</strong> und dem <strong>Konstruktions-Modus</strong> wechseln. Im Puzzle-Modus wird die LPN-Struktur automatisch generiert. Im Konstruktions-Modus bauen Sie Ihr LPN komplett von Grund auf neu auf.",
             "STEP4_TITLE": "Konstruktions-Modus: Ausprobieren!",
             "STEP4_TEXT": "Wir haben in den Konstruktions-Modus gewechselt! In diesem Modus können Sie Ihr eigenes LPN erstellen. Versuchen Sie, eine Stelle oder Transition links aus dem Petrinetz zu ziehen und rechts auf der LPN-Leinwand abzuwerfen. Platzieren Sie jetzt ein Element, um den nächsten Schritt freizuschalten!",
             "STEP5_TITLE": "Eigenes Netz hochladen",

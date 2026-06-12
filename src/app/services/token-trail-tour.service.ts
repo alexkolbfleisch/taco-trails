@@ -159,6 +159,42 @@ export class TokenTrailTourService {
                 buttons: this.getStepPuzzleButtons(true),
             },
             {
+                id: 'step-mode-toggle',
+                attachTo: {
+                    element: 'button[data-tour="construction"]',
+                    on: 'bottom' as const,
+                },
+                title: this.translate.instant('TOKEN_TRAIL.TOUR.STEP_MODE_TOGGLE_TITLE'),
+                text: this.translate.instant('TOKEN_TRAIL.TOUR.STEP_MODE_TOGGLE_TEXT'),
+                when: {
+                    show: () => {
+                        this.stateService.setDisplayMode('puzzle');
+                        // Regenerate LPN if it was cleared
+                        const sourceNet = this.validationService.resolveSourceNetForValidation();
+                        if (sourceNet) {
+                            this.lpnService.createLPNWithSynthesis(sourceNet);
+                        }
+                    },
+                },
+                buttons: [
+                    {
+                        type: 'cancel',
+                        classes: 'shepherd-button-secondary',
+                        text: this.translate.instant('TOKEN_TRAIL.TOUR.BUTTON_SKIP'),
+                    },
+                    {
+                        type: 'back',
+                        classes: 'shepherd-button-secondary',
+                        text: this.translate.instant('TOKEN_TRAIL.TOUR.BUTTON_BACK'),
+                    },
+                    {
+                        type: 'next',
+                        classes: 'shepherd-button-primary',
+                        text: this.translate.instant('TOKEN_TRAIL.TOUR.BUTTON_NEXT'),
+                    },
+                ],
+            },
+            {
                 id: 'step-construction',
                 attachTo: {
                     element: 'app-split-view',
