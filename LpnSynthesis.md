@@ -42,7 +42,7 @@ graph TD
     H -- Yes --> I[Retry with different traces]
     I --> B
     H -- No --> J[Clear faulty LPN from canvas]
-    J --> K[Show error with "try again" instruction & Stop]
+    J --> K[Show error with try again instruction & Stop]
 ```
 
 ### 2.1 The Retry Mechanism

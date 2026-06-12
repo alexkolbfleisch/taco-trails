@@ -29,7 +29,8 @@
                         [color]="action.color ?? 'primary'"
                         [matTooltip]="action.tooltip | translate"
                         [matMenuTriggerFor]="actionMenu"
-                        (click)="$event.stopPropagation()">
+                        (click)="$event.stopPropagation()"
+                        [attr.data-tour]="action.icon">
                         <mat-icon>{{ action.icon }}</mat-icon>
                     </button>
                     <mat-menu #actionMenu="matMenu">
@@ -48,7 +49,8 @@
                         [disabled]="!action.isActive"
                         [color]="action.color ?? 'primary'"
                         [matTooltip]="action.tooltip | translate"
-                        (click)="action.action(); $event.stopPropagation()">
+                        (click)="action.action(); $event.stopPropagation()"
+                        [attr.data-tour]="action.icon">
                         <mat-icon>{{ action.icon }}</mat-icon>
                     </button>
                 }
