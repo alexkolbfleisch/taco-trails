@@ -1,4 +1,5 @@
 /* You can add global styles to this file, and also import other style files */
+@import 'shepherd.js/dist/css/shepherd.css';
 
 html,
 body {
@@ -141,4 +142,99 @@ body {
     .mdc-tooltip__surface {
         max-width: unset;
     }
+}
+
+/* --- Shepherd Tour Custom Styles --- */
+.shepherd-element.shepherd-theme-custom {
+    background: rgba(255, 255, 255, 0.95) !important;
+    backdrop-filter: blur(10px) !important;
+    border: 1px solid rgba(0, 0, 0, 0.1) !important;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15) !important;
+    border-radius: 12px !important;
+    font-family: Roboto, sans-serif !important;
+    max-width: 400px !important;
+    padding: 18px !important;
+}
+
+.shepherd-element.shepherd-theme-custom .shepherd-header {
+    background: transparent !important;
+    padding: 0 0 10px 0 !important;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.08) !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+}
+
+.shepherd-element.shepherd-theme-custom .shepherd-title {
+    font-size: 1.15rem !important;
+    font-weight: 700 !important;
+    color: #1976d2 !important;
+    margin: 0 !important;
+}
+
+.shepherd-element.shepherd-theme-custom .shepherd-text {
+    font-size: 0.95rem !important;
+    line-height: 1.6 !important;
+    color: #333333 !important;
+    padding: 14px 0 !important;
+}
+
+.shepherd-element.shepherd-theme-custom .shepherd-footer {
+    padding: 10px 0 0 0 !important;
+    display: flex !important;
+    justify-content: flex-end !important;
+    gap: 10px !important;
+    border-top: 1px solid rgba(0, 0, 0, 0.08) !important;
+}
+
+.shepherd-element.shepherd-theme-custom .shepherd-button {
+    border-radius: 6px !important;
+    font-weight: 600 !important;
+    font-size: 0.85rem !important;
+    padding: 8px 16px !important;
+    border: none !important;
+    cursor: pointer !important;
+    transition: all 0.2s ease-in-out !important;
+    outline: none !important;
+}
+
+.shepherd-element.shepherd-theme-custom .shepherd-button-secondary {
+    background: #f1f3f4 !important;
+    color: #3c4043 !important;
+}
+
+.shepherd-element.shepherd-theme-custom .shepherd-button-secondary:hover {
+    background: #e8eaed !important;
+}
+
+.shepherd-element.shepherd-theme-custom .shepherd-button-primary {
+    background: #1976d2 !important;
+    color: #ffffff !important;
+    box-shadow: 0 2px 4px rgba(25, 118, 210, 0.2) !important;
+}
+
+.shepherd-element.shepherd-theme-custom .shepherd-button-primary:hover {
+    background: #1565c0 !important;
+    box-shadow: 0 4px 8px rgba(21, 101, 192, 0.3) !important;
+}
+
+.shepherd-element.shepherd-theme-custom .shepherd-button:disabled,
+.shepherd-element.shepherd-theme-custom .shepherd-button-disabled {
+    opacity: 0.4 !important;
+    cursor: not-allowed !important;
+    pointer-events: none !important;
+}
+
+.shepherd-element.shepherd-theme-custom .shepherd-cancel-icon {
+    color: #70757a !important;
+    font-size: 1.4em !important;
+    font-weight: normal !important;
+    transition: color 0.2s !important;
+    background: transparent !important;
+    border: none !important;
+    cursor: pointer !important;
+}
+
+.shepherd-element.shepherd-theme-custom .shepherd-cancel-icon:hover {
+    color: #1976d2 !important;
 }

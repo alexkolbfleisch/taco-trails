@@ -1,0 +1,4 @@
+- mini Tutorial dafür wenn Personen das erste mal auf dem Token Trail Tab landen? Durch Cokies herausfinden? Und expliziter Show tutorial button?
+- den Spring Embedder Button in einen allgemeinen Layout Button verwandeln und zwischen Sugiyama und Spring Embedder wechseln zu können
+- PROBLEM: wenn Bildschirm zu klein und die zeichenfelder werden untereinander angezeigt, kann man den slider für das größer verstellen nciht mehr nutzen und die zeichenbereiche sind viel zu klein.
+-

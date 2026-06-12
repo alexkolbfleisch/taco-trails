@@ -54,6 +54,7 @@ import { TokenTrailValidatorService } from '../../../../../../ilpn-components/sr
 import { DrawingDisplayService } from '../../../../services/drawing-display.service';
 import { ParserService } from '../../../../services/parser.service';
 import { ValidationBubbleComponent } from './validation-bubble/validation-bubble.component';
+import { TokenTrailTourService } from '../../../../services/token-trail-tour.service';
 
 /**
  * TokenTrailDrawDisplayComponent is the main drawing canvas for Token Trail validation in the Token Trail tab.
@@ -104,6 +105,7 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
     private drawingDisplayService = inject(DrawingDisplayService);
     private serializationService = inject(SerializationService);
     private parserService = inject(ParserService);
+    protected tourService = inject(TokenTrailTourService);
 
     // Bind to service state
     readonly drawnElements = this.stateService.drawnElements;
@@ -312,6 +314,13 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
                 },
             ],
         },
+        {
+            icon: 'explore',
+            tooltip: 'TOKEN_TRAIL.TOUR.RESTART_BUTTON',
+            color: 'primary',
+            isActive: true,
+            action: () => this.tourService.startTour(true),
+        },
     ]);
 
     private getModeToggleIcon(): string {
@@ -326,7 +335,15 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
 
     private toggleMode(): void {
         const nextMode = this.stateService.displayMode() === 'puzzle' ? 'construction' : 'puzzle';
+
+        // Always clean the LPN drawing area first before switching modes
+        this.clearDrawing();
+
         this.stateService.setDisplayMode(nextMode);
+
+        if (nextMode === 'puzzle') {
+            this.createNewLPNWithSynthesis();
+        }
     }
 
     protected readonly toolbarInstructions = computed<DrawToolbarInstruction[]>(() => {
@@ -703,6 +720,7 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
         newNode.y = svgPoint.y;
 
         this.stateService.addDrawnElement(newNode);
+        this.tourService.notifyElementDropped();
     }
 
     onDragOver(event: DragEvent) {
@@ -819,6 +837,7 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
             newNode.y = svgPoint.y;
 
             this.stateService.addDrawnElement(newNode);
+            this.tourService.notifyElementDropped();
 
             // Clear the global drag data
             delete window.__dragData;
@@ -859,6 +878,7 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
         newNode.y = svgPoint.y;
 
         this.stateService.addDrawnElement(newNode);
+        this.tourService.notifyElementDropped();
     }
 
     /**
@@ -1190,6 +1210,7 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
      * Adjusts the token markings on a condition based on a delta (e.g. mousewheel scroll in puzzle mode).
      */
     private handleConditionTokenDelta(condition: Condition, delta: number) {
+        this.tourService.notifyTokenAdjusted();
         const selectedPlaceId = this.stateService.selectedPetriPlaceId();
         if (!selectedPlaceId) {
             return;
