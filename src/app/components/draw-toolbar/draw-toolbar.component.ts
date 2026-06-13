@@ -11,6 +11,7 @@ export interface MenuAction {
     label: string;
     icon?: string;
     action: () => void;
+    disabled?: boolean;
 }
 
 export interface DrawToolbarAction {

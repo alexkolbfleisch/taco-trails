@@ -1,4 +1,5 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
+import { Subject } from 'rxjs';
 import { TokenTrailStateService } from './token-trail-state.service';
 import { SourcePetriNetService } from './source-petri-net.service';
 import { DisplayService } from './display.service';
@@ -32,6 +33,9 @@ export class TokenTrailValidationService {
     private modeService = inject(ModeService);
 
     readonly lastExplicitValidationTriggerKey = signal<string | null>(null);
+
+    private readonly _explicitValidation$ = new Subject<{ valid: boolean }>();
+    readonly explicitValidation$ = this._explicitValidation$.asObservable();
 
     readonly validPetriPlaceIds = computed(() => {
         const isExamMode = this.modeService.isExamMode(Tab.TOKEN_TRAIL);
@@ -145,13 +149,7 @@ export class TokenTrailValidationService {
         this.lastExplicitValidationTriggerKey.set(this.validationTriggerKey());
         this.stateService.setSelectedPetriPlaceId(null);
 
-        if (result.valid) {
-            this.toaster.showSuccess('TOKEN_TRAIL.VALIDATION_SUCCESS_TITLE', 'TOKEN_TRAIL.VALIDATION_SUCCESS_BODY');
-        } else {
-            this.toaster.showError('TOKEN_TRAIL.VALIDATION_FAILED_TITLE', 'TOKEN_TRAIL.VALIDATION_FAILED_BODY', {
-                duration: 0,
-            });
-        }
+        this._explicitValidation$.next({ valid: result.valid });
     }
 
     resolveSourceNetForValidation(): Diagram | null {

@@ -11,6 +11,42 @@
         'puzzle' ? 'TOKEN_TRAIL.MODE_PUZZLE_ACTIVE' : 'TOKEN_TRAIL.MODE_CONSTRUCTION_ACTIVE')) | translate }}
     </div>
 
+    @if (stateService.displayMode() === 'construction' && !stateService.showingSolution() &&
+    goalsService.activeGoals().length > 0) {
+    <mat-card class="goals-panel" [class.minimized]="isGoalsMinimized()">
+        <button
+            class="goals-header"
+            type="button"
+            (click)="isGoalsMinimized.set(!isGoalsMinimized())"
+            aria-label="Toggle goals list">
+            <span class="goals-title">
+                <mat-icon>emoji_events</mat-icon>
+                <span>{{ 'TOKEN_TRAIL.GOALS.PANEL_TITLE' | translate }}</span>
+            </span>
+            <div class="goals-header-actions">
+                <span class="difficulty-badge" [class]="goalsService.currentDifficulty()">
+                    {{ ('TOKEN_TRAIL.LPN_DIFFICULTY_' + goalsService.currentDifficulty().toUpperCase()) | translate }}
+                </span>
+                <mat-icon class="minimize-icon">{{ isGoalsMinimized() ? 'expand_more' : 'expand_less' }}</mat-icon>
+            </div>
+        </button>
+        @if (!isGoalsMinimized()) {
+        <mat-card-content class="goals-content">
+            <div class="goals-list">
+                @for (goal of goalsService.activeGoals(); track goal.id) {
+                <div class="goal-item" [class.completed]="goal.completed">
+                    <mat-icon class="status-icon">
+                        {{ goal.completed ? 'check_circle' : 'radio_button_unchecked' }}
+                    </mat-icon>
+                    <span class="goal-description">{{ goal.description }}</span>
+                </div>
+                }
+            </div>
+        </mat-card-content>
+        }
+    </mat-card>
+    }
+
     <svg
         #drawingArea
         class="drawing-canvas"
