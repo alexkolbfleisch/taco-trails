@@ -451,11 +451,24 @@ export class TokenTrailMergeService implements OnDestroy {
             return;
         }
         this.mergedConditionAnchorById.update((currentMap) => {
-            if (!currentMap[conditionId]) {
-                return currentMap;
-            }
             const nextMap = { ...currentMap };
-            delete nextMap[conditionId];
+            if (nextMap[conditionId]) {
+                delete nextMap[conditionId];
+                return nextMap;
+            }
+
+            const mergedChildren = Object.entries(nextMap)
+                .filter(([, anchorId]) => anchorId === conditionId)
+                .map(([id]) => id);
+
+            if (mergedChildren.length > 0) {
+                const [newAnchorId, ...otherChildren] = mergedChildren;
+                delete nextMap[newAnchorId];
+                for (const childId of otherChildren) {
+                    nextMap[childId] = newAnchorId;
+                }
+            }
+
             return nextMap;
         });
     }
@@ -617,7 +630,7 @@ export class TokenTrailMergeService implements OnDestroy {
         this.lastPhysicalMergeSnapshot.set(null);
     }
 
-    private cloneDrawnElements(elements: LabeledNetNode[]): LabeledNetNode[] {
+    public cloneDrawnElements(elements: LabeledNetNode[]): LabeledNetNode[] {
         return elements.map((node) => {
             if (node instanceof Condition) {
                 const clone = this.stateService.buildCondition(
@@ -643,7 +656,7 @@ export class TokenTrailMergeService implements OnDestroy {
         });
     }
 
-    private cloneConnections(connections: LabeledNetEdge[]): LabeledNetEdge[] {
+    public cloneConnections(connections: LabeledNetEdge[]): LabeledNetEdge[] {
         return connections.map((connection) => {
             const clone = new LabeledNetEdge(connection.id, connection.source, connection.target, connection.weight);
             clone.displayLabel = connection.displayLabel;

@@ -35,7 +35,7 @@
                     </button>
                     <mat-menu #actionMenu="matMenu">
                         @for (item of action.menu; track item.label) {
-                            <button mat-menu-item (click)="item.action()">
+                            <button mat-menu-item [disabled]="item.disabled" (click)="item.action()">
                                 @if (item.icon) {
                                     <mat-icon>{{ item.icon }}</mat-icon>
                                 }

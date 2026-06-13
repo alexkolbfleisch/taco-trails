@@ -327,6 +327,17 @@
         "INSTRUCTION_VALIDATE_TOAST": "Klicken Sie auf Validieren Schaltfläche, um Ihr LPN zu überprüfen.",
         "INSTRUCTION_CHANGE_TOKENS": "Marken ändern",
         "INSTRUCTION_CHANGE_TOKENS_TEXT": "Wählen Sie im Puzzle-Modus eine Stelle im Petrinetz aus und verwenden Sie das Mausrad über einer Condition im LPN, um deren Markenzahl zu ändern.",
+        "BUTTON_GOAL_DIFFICULTY": "Zielschwierigkeit",
+        "GOALS": {
+            "PANEL_TITLE": "Aktive Ziele",
+            "CONGRATS_TITLE": "Glückwunsch!",
+            "CONGRATS_PUZZLE_BODY": "Du hast die nächste Puzzle-Modus-Schwierigkeit freigeschaltet: {{nextDifficulty}}!",
+            "CONGRATS_CONSTRUCTION_BODY": "Du hast die nächste Ziel-Schwierigkeit freigeschaltet: {{nextDifficulty}}!",
+            "LOCKED_TITLE": "Schwierigkeit gesperrt",
+            "LOCKED_BODY": "Du musst die aktuelle Schwierigkeit erfolgreich lösen, um diese Stufe freizuschalten.",
+            "VALIDATION_WARNING_TITLE": "Ziele ausstehend",
+            "VALIDATION_WARNING_BODY": "Das LPN ist ein gültiger Token Trail, aber einige Ziele sind noch nicht erfüllt."
+        },
         "VALIDATION": {
             "RULE_ACTIVATION": {
                 "EVENT_WITHOUT_INCOMING_CONDITION": "Event {{event}} hat keine eingehende Verbindung von einer Condition.",

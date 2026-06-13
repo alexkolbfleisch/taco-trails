@@ -34,6 +34,8 @@ export class TokenTrailStateService {
     readonly solvedTokenTrails = signal<Map<string, Record<string, number>>>(new Map());
     public solutionCache: Map<string, Record<string, number>> | null = null;
     public lastSynthesizedNetSignature: string | null = null;
+    public cachedConstructionSolutionElements: LabeledNetNode[] | null = null;
+    public cachedConstructionSolutionConnections: LabeledNetEdge[] | null = null;
 
     private readonly _fitViewRequest$ = new Subject<void>();
     public readonly fitViewRequest$ = this._fitViewRequest$.asObservable();
@@ -43,37 +45,49 @@ export class TokenTrailStateService {
     }
 
     addDrawnElement(element: LabeledNetNode) {
-        this.solutionCache = null;
+        if (!this.showingSolution()) {
+            this.solutionCache = null;
+        }
         this.drawnElements.update((el) => [...el, element]);
     }
 
     addConnection(connection: LabeledNetEdge) {
-        this.solutionCache = null;
+        if (!this.showingSolution()) {
+            this.solutionCache = null;
+        }
         this.connections.update((c) => [...c, connection]);
     }
 
     removeDrawnElement(id: string) {
-        this.solutionCache = null;
+        if (!this.showingSolution()) {
+            this.solutionCache = null;
+        }
         this.drawnElements.update((elements) => elements.filter((e) => e.id !== id));
         this.connections.update((connections) => connections.filter((c) => c.source !== id && c.target !== id));
     }
 
     removeConnection(id: string) {
-        this.solutionCache = null;
+        if (!this.showingSolution()) {
+            this.solutionCache = null;
+        }
         this.connections.update((connections) => connections.filter((c) => c.id !== id));
     }
 
     updateDrawnElements(updater: (elements: LabeledNetNode[]) => LabeledNetNode[]) {
-        this.solutionCache = null;
+        if (!this.showingSolution()) {
+            this.solutionCache = null;
+        }
         this.drawnElements.update(updater);
     }
 
     updateConnections(updater: (connections: LabeledNetEdge[]) => LabeledNetEdge[]) {
-        this.solutionCache = null;
+        if (!this.showingSolution()) {
+            this.solutionCache = null;
+        }
         this.connections.update(updater);
     }
 
-    clear() {
+    clear(clearCache = true) {
         this.drawnElements.set([]);
         this.connections.set([]);
         this.selectedPetriPlaceId.set(null);
@@ -83,8 +97,12 @@ export class TokenTrailStateService {
         this.releasedConditionNumbers.clear();
         this.showingSolution.set(false);
         this.solvedTokenTrails.set(new Map());
-        this.solutionCache = null;
-        this.lastSynthesizedNetSignature = null;
+        if (clearCache) {
+            this.solutionCache = null;
+            this.lastSynthesizedNetSignature = null;
+            this.cachedConstructionSolutionElements = null;
+            this.cachedConstructionSolutionConnections = null;
+        }
     }
 
     setSelectedPetriPlaceId(placeId: string | null) {
@@ -162,6 +180,13 @@ export class TokenTrailStateService {
         },
     ): Condition {
         const generatedBaseName = options?.baseName || this.generateConditionName();
+        if (options?.baseName) {
+            const match = /^c(\d+)$/.exec(options.baseName.trim());
+            if (match) {
+                const num = Number.parseInt(match[1], 10);
+                this.releasedConditionNumbers.delete(num);
+            }
+        }
         const condition = new Condition(id, initialTokens, label || generatedBaseName, {
             hideTokens: options?.hideTokens ?? true,
             labelPlacement: options?.labelPlacement ?? 'below',
@@ -182,5 +207,35 @@ export class TokenTrailStateService {
 
     setSolvedTokenTrails(trails: Map<string, Record<string, number>>) {
         this.solvedTokenTrails.set(trails);
+    }
+
+    public cloneDrawnElements(elements: LabeledNetNode[]): LabeledNetNode[] {
+        return elements.map((node) => {
+            if (node instanceof Condition) {
+                const clone = this.buildCondition(node.id, node.label ?? node.displayLabel, node.tokenCount(), {
+                    hideTokens: node.hideTokens,
+                    isStartPlace: node.isStartPlace,
+                    baseName: node.baseName,
+                });
+                clone.trailMarkings = { ...node.trailMarkings };
+                clone.x = node.x;
+                clone.y = node.y;
+                return clone;
+            }
+
+            const clone = this.buildEvent(node.id, node.displayLabel, node.transitionId);
+            clone.x = node.x;
+            clone.y = node.y;
+            return clone;
+        });
+    }
+
+    public cloneConnections(connections: LabeledNetEdge[]): LabeledNetEdge[] {
+        return connections.map((connection) => {
+            const clone = new LabeledNetEdge(connection.id, connection.source, connection.target, connection.weight);
+            clone.displayLabel = connection.displayLabel;
+            clone.bendPoints = connection.bendPoints.map((point) => ({ x: point.x, y: point.y }));
+            return clone;
+        });
     }
 }

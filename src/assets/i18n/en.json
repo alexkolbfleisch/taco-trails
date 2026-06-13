@@ -329,6 +329,17 @@
         "INSTRUCTION_VALIDATE_TOAST": "Click the checklist button to validate the labeled petri net.",
         "INSTRUCTION_CHANGE_TOKENS": "Change Tokens",
         "INSTRUCTION_CHANGE_TOKENS_TEXT": "In puzzle mode, select a place in the Petri net and use the mouse wheel over a condition in the LPN to change its token count.",
+        "BUTTON_GOAL_DIFFICULTY": "Goal Difficulty",
+        "GOALS": {
+            "PANEL_TITLE": "Active Goals",
+            "CONGRATS_TITLE": "Congratulations!",
+            "CONGRATS_PUZZLE_BODY": "You unlocked the next Puzzle Mode difficulty: {{nextDifficulty}}!",
+            "CONGRATS_CONSTRUCTION_BODY": "You unlocked the next goal difficulty: {{nextDifficulty}}!",
+            "LOCKED_TITLE": "Difficulty Locked",
+            "LOCKED_BODY": "You need to successfully solve the current difficulty to unlock this level.",
+            "VALIDATION_WARNING_TITLE": "Goals Pending",
+            "VALIDATION_WARNING_BODY": "The LPN is a valid token trail, but some goals are still pending."
+        },
         "VALIDATION": {
             "RULE_ACTIVATION": {
                 "EVENT_WITHOUT_INCOMING_CONDITION": "Event {{event}} has no incoming connection from a condition.",

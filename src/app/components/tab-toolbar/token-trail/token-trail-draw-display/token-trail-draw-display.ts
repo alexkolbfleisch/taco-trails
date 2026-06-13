@@ -55,6 +55,7 @@ import { DrawingDisplayService } from '../../../../services/drawing-display.serv
 import { ParserService } from '../../../../services/parser.service';
 import { ValidationBubbleComponent } from './validation-bubble/validation-bubble.component';
 import { TokenTrailTourService } from '../../../../services/token-trail-tour.service';
+import { TokenTrailGoalsService } from '../../../../services/token-trail-goals.service';
 
 /**
  * TokenTrailDrawDisplayComponent is the main drawing canvas for Token Trail validation in the Token Trail tab.
@@ -97,6 +98,7 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
     private lpnService = inject(TokenTrailLpnService);
     protected validationService = inject(TokenTrailValidationService);
     protected loadingService = inject(LoadingService);
+    protected goalsService = inject(TokenTrailGoalsService);
     private _modeService = inject(ModeService);
     private dialog = inject(MatDialog);
     private toaster = inject(ToasterNotificationService);
@@ -113,6 +115,7 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
     readonly isDisabled = computed(() => this.drawnElements().length === 0);
 
     protected readonly isExamMode = computed(() => this._modeService.isExamMode(Tab.TOKEN_TRAIL));
+    readonly isGoalsMinimized = signal<boolean>(false);
 
     // Bubble open states mapping
     private readonly _openElementBubbles = signal<Set<string>>(new Set<string>());
@@ -233,71 +236,119 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
     readonly selectedElementId = signal<string | null>(null);
 
     // Toolbar configuration
-    protected readonly toolbarActions = computed<DrawToolbarAction[]>(() => [
-        {
-            icon: 'delete',
-            tooltip: 'TOKEN_TRAIL.BUTTON_CLEAR_DRAWING',
-            color: 'warn',
-            isActive:
-                !this.isDisabled() &&
-                !this.stateService.showingSolution() &&
-                this.stateService.displayMode() !== 'puzzle',
-            action: () => this.clearDrawing(),
-        },
-        {
+    protected readonly toolbarActions = computed<DrawToolbarAction[]>(() => {
+        const mode = this.stateService.displayMode();
+        const showingSolution = this.stateService.showingSolution();
+        const tourRunning = this.tourService.isTourRunning();
+        const disabled = this.isDisabled();
+
+        const actions: DrawToolbarAction[] = [];
+
+        // 1. Delete Action (Construction mode only)
+        if (mode === 'construction') {
+            actions.push({
+                icon: 'delete',
+                tooltip: 'TOKEN_TRAIL.BUTTON_CLEAR_DRAWING',
+                color: 'warn',
+                isActive: !disabled && !showingSolution,
+                action: () => this.clearDrawing(),
+            });
+        }
+
+        // 2. Validate Action (Both modes)
+        actions.push({
             icon: 'checklist',
             tooltip: 'TOKEN_TRAIL.BUTTON_VALIDATE_NET',
             color: 'primary',
-            isActive: !this.isDisabled() && !this.stateService.showingSolution(),
+            isActive: !disabled && !showingSolution,
             action: () => this.validationService.onValidate(),
-        },
-        {
+        });
+
+        // 3. Toggle Mode Action (Both modes)
+        actions.push({
             icon: this.getModeToggleIcon(),
             tooltip: this.getModeToggleTooltip(),
             color: 'accent',
-            isActive: !this.stateService.showingSolution() && !this.tourService.isTourRunning(),
+            isActive: !showingSolution && !tourRunning,
             action: () => this.toggleMode(),
-        },
-        {
-            icon: this.stateService.showingSolution() ? 'lightbulb' : 'lightbulb_outline',
-            tooltip: this.stateService.showingSolution()
-                ? 'TOKEN_TRAIL.BUTTON_HIDE_SOLUTION'
-                : 'TOKEN_TRAIL.BUTTON_SHOW_SOLUTION',
+        });
+
+        // 4. Solution Action (Both modes)
+        actions.push({
+            icon: showingSolution ? 'lightbulb' : 'lightbulb_outline',
+            tooltip: showingSolution ? 'TOKEN_TRAIL.BUTTON_HIDE_SOLUTION' : 'TOKEN_TRAIL.BUTTON_SHOW_SOLUTION',
             color: 'primary',
-            isActive: !this.isDisabled(),
+            isActive: showingSolution || mode === 'construction' || !disabled,
             action: () => this.toggleSolution(),
-        },
-        {
-            icon: 'science',
-            tooltip: 'TOKEN_TRAIL.BUTTON_SYNTHESIZE_LPN',
-            color: 'accent',
-            isActive: this.stateService.displayMode() === 'puzzle' && !this.stateService.showingSolution(),
-            action: () => {
-                /* empty because we trigger the menu */
-            },
-            menu: [
-                {
-                    label: 'TOKEN_TRAIL.LPN_DIFFICULTY_EASY',
-                    icon: 'sentiment_satisfied',
-                    action: () => this.createNewLPNWithDifficulty('easy'),
+        });
+
+        // 5. Synthesize Action (Puzzle mode only) or Goals Difficulty Action (Construction mode only)
+        if (mode === 'puzzle') {
+            actions.push({
+                icon: 'science',
+                tooltip: 'TOKEN_TRAIL.BUTTON_SYNTHESIZE_LPN',
+                color: 'accent',
+                isActive: !showingSolution,
+                action: () => {
+                    /* empty because we trigger the menu */
                 },
-                {
-                    label: 'TOKEN_TRAIL.LPN_DIFFICULTY_MEDIUM',
-                    icon: 'sentiment_neutral',
-                    action: () => this.createNewLPNWithDifficulty('medium'),
+                menu: [
+                    {
+                        label: 'TOKEN_TRAIL.LPN_DIFFICULTY_EASY',
+                        icon: 'sentiment_satisfied',
+                        action: () => this.createNewLPNWithDifficulty('easy'),
+                    },
+                    {
+                        label: 'TOKEN_TRAIL.LPN_DIFFICULTY_MEDIUM',
+                        icon: 'sentiment_neutral',
+                        action: () => this.createNewLPNWithDifficulty('medium'),
+                        disabled: !this.goalsService.unlockedPuzzle().has('medium'),
+                    },
+                    {
+                        label: 'TOKEN_TRAIL.LPN_DIFFICULTY_HARD',
+                        icon: 'sentiment_very_dissatisfied',
+                        action: () => this.createNewLPNWithDifficulty('hard'),
+                        disabled: !this.goalsService.unlockedPuzzle().has('hard'),
+                    },
+                ],
+            });
+        } else {
+            actions.push({
+                icon: 'emoji_events',
+                tooltip: 'TOKEN_TRAIL.BUTTON_GOAL_DIFFICULTY',
+                color: 'accent',
+                isActive: !showingSolution,
+                action: () => {
+                    /* empty because we trigger the menu */
                 },
-                {
-                    label: 'TOKEN_TRAIL.LPN_DIFFICULTY_HARD',
-                    icon: 'sentiment_very_dissatisfied',
-                    action: () => this.createNewLPNWithDifficulty('hard'),
-                },
-            ],
-        },
-        {
+                menu: [
+                    {
+                        label: 'TOKEN_TRAIL.LPN_DIFFICULTY_EASY',
+                        icon: 'sentiment_satisfied',
+                        action: () => this.goalsService.setDifficulty('easy'),
+                    },
+                    {
+                        label: 'TOKEN_TRAIL.LPN_DIFFICULTY_MEDIUM',
+                        icon: 'sentiment_neutral',
+                        action: () => this.goalsService.setDifficulty('medium'),
+                        disabled: !this.goalsService.unlockedConstruction().has('medium'),
+                    },
+                    {
+                        label: 'TOKEN_TRAIL.LPN_DIFFICULTY_HARD',
+                        icon: 'sentiment_very_dissatisfied',
+                        action: () => this.goalsService.setDifficulty('hard'),
+                        disabled: !this.goalsService.unlockedConstruction().has('hard'),
+                    },
+                ],
+            });
+        }
+
+        // 6. Export Action (Both modes)
+        actions.push({
             icon: 'file_download',
             tooltip: 'TOKEN_TRAIL.BUTTON_EXPORT_LPN',
             color: 'primary',
-            isActive: !this.isDisabled() && !this.stateService.showingSolution(),
+            isActive: !disabled && !showingSolution,
             action: () => {
                 /* empty because we trigger the menu */
             },
@@ -313,15 +364,19 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
                     action: () => this.exportLpn('pnml'),
                 },
             ],
-        },
-        {
+        });
+
+        // 7. Tour Action (Both modes)
+        actions.push({
             icon: 'explore',
             tooltip: 'TOKEN_TRAIL.TOUR.RESTART_BUTTON',
             color: 'primary',
             isActive: true,
             action: () => this.tourService.startTour(true),
-        },
-    ]);
+        });
+
+        return actions;
+    });
 
     private getModeToggleIcon(): string {
         return this.stateService.displayMode() === 'puzzle' ? 'construction' : 'extension';
@@ -372,6 +427,8 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
 
     private mergeService = inject(TokenTrailMergeService);
     private originalDisplayMode: 'puzzle' | 'construction' | null = null;
+    private backedUpDrawnElements: LabeledNetNode[] = [];
+    private backedUpConnections: LabeledNetEdge[] = [];
 
     private customDropListener: ((event: Event) => void) | null = null;
     private displayService = inject(DisplayService);
@@ -525,7 +582,7 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
         const showSolution = this.stateService.showingSolution();
         const solvedTrails = this.stateService.solvedTokenTrails();
 
-        if (displayMode !== 'puzzle') {
+        if (displayMode !== 'puzzle' && !showSolution) {
             // In construction mode, tokens are never visible
             let hasChanges = false;
             for (const node of this.drawnElements()) {
@@ -1401,6 +1458,57 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
     private toggleSolution(): void {
         const nextShowing = !this.stateService.showingSolution();
         if (nextShowing) {
+            const sourceNet = this.validationService.resolveSourceNetForValidation();
+            if (!sourceNet) {
+                this.toaster.showError('TOKEN_TRAIL.NO_SOURCE_NET_TITLE', 'TOKEN_TRAIL.NO_SOURCE_NET_BODY');
+                return;
+            }
+
+            if (this.stateService.displayMode() === 'construction') {
+                // Back up the current elements and connections
+                this.backedUpDrawnElements = this.stateService.cloneDrawnElements(this.stateService.drawnElements());
+                this.backedUpConnections = this.stateService.cloneConnections(this.stateService.connections());
+
+                // Check if we already have a cached solution for the current goals
+                if (
+                    this.stateService.cachedConstructionSolutionElements &&
+                    this.stateService.cachedConstructionSolutionConnections
+                ) {
+                    this.stateService.drawnElements.set(
+                        this.stateService.cloneDrawnElements(this.stateService.cachedConstructionSolutionElements),
+                    );
+                    this.stateService.connections.set(
+                        this.stateService.cloneConnections(this.stateService.cachedConstructionSolutionConnections),
+                    );
+                    if (this.stateService.solutionCache) {
+                        this.stateService.setSolvedTokenTrails(this.stateService.solutionCache);
+                    }
+                    this.stateService.setShowingSolution(true);
+                    this.stateService.requestFitView();
+                    this.toaster.showSuccess('TOKEN_TRAIL.SOLUTION_FOUND_TITLE', 'TOKEN_TRAIL.SOLUTION_FOUND_BODY');
+                    return;
+                }
+
+                // Trigger LPN synthesis to generate the solution
+                this.lpnService.createLPNWithSynthesis(sourceNet, this.goalsService.currentDifficulty(), () => {
+                    // On failure: restore backup
+                    this.stateService.clear(false);
+                    for (const el of this.backedUpDrawnElements) {
+                        this.stateService.addDrawnElement(el);
+                    }
+                    for (const conn of this.backedUpConnections) {
+                        this.stateService.addConnection(conn);
+                    }
+                    this.stateService.updateDrawnElements((e) => [...e]);
+                    this.stateService.updateConnections((c) => [...c]);
+                    this.stateService.requestFitView();
+                    this.backedUpDrawnElements = [];
+                    this.backedUpConnections = [];
+                });
+                return;
+            }
+
+            // Puzzle mode solution logic:
             if (this.stateService.solutionCache) {
                 this.originalDisplayMode = this.stateService.displayMode();
                 this.stateService.setDisplayMode('puzzle');
@@ -1410,11 +1518,6 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
                 return;
             }
 
-            const sourceNet = this.validationService.resolveSourceNetForValidation();
-            if (!sourceNet) {
-                this.toaster.showError('TOKEN_TRAIL.NO_SOURCE_NET_TITLE', 'TOKEN_TRAIL.NO_SOURCE_NET_BODY');
-                return;
-            }
             this.originalDisplayMode = this.stateService.displayMode();
             this.stateService.setDisplayMode('puzzle');
 
@@ -1481,7 +1584,21 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
         } else {
             this.stateService.setShowingSolution(false);
             this.stateService.setSolvedTokenTrails(new Map());
-            if (this.originalDisplayMode) {
+            if (this.stateService.displayMode() === 'construction') {
+                // Restore the backed up elements and connections
+                this.stateService.clear(false);
+                for (const el of this.backedUpDrawnElements) {
+                    this.stateService.addDrawnElement(el);
+                }
+                for (const conn of this.backedUpConnections) {
+                    this.stateService.addConnection(conn);
+                }
+                this.stateService.updateDrawnElements((e) => [...e]);
+                this.stateService.updateConnections((c) => [...c]);
+                this.stateService.requestFitView();
+                this.backedUpDrawnElements = [];
+                this.backedUpConnections = [];
+            } else if (this.originalDisplayMode) {
                 this.stateService.setDisplayMode(this.originalDisplayMode);
                 this.originalDisplayMode = null;
             }
