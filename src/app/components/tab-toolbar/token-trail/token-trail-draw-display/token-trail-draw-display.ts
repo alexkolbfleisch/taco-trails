@@ -389,15 +389,42 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
     }
 
     private toggleMode(): void {
-        const nextMode = this.stateService.displayMode() === 'puzzle' ? 'construction' : 'puzzle';
+        const currentMode = this.stateService.displayMode();
+        const nextMode = currentMode === 'puzzle' ? 'construction' : 'puzzle';
 
-        // Always clean the LPN drawing area first before switching modes
-        this.clearDrawing();
+        // 1. If showing solution, toggle it off first so we don't save the solution state as the snapshot
+        if (this.stateService.showingSolution()) {
+            this.toggleSolution();
+        }
 
+        // 2. Save snapshot of the current mode
+        const currentMergeState =
+            currentMode === 'construction' ? this.mergeService.getMergeStateSnapshot() : undefined;
+        this.stateService.saveSnapshot(currentMode, currentMergeState);
+
+        const hasNextSnapshot = this.stateService.hasSnapshot(nextMode);
+
+        // 3. Set the display mode to the next mode
         this.stateService.setDisplayMode(nextMode);
 
-        if (nextMode === 'puzzle') {
-            this.createNewLPNWithSynthesis();
+        // 4. Try to restore snapshot of the next mode
+        if (hasNextSnapshot) {
+            const restoredMergeState = this.stateService.restoreSnapshot(nextMode);
+            // Restore was successful!
+            if (nextMode === 'construction' && restoredMergeState) {
+                this.mergeService.restoreMergeStateSnapshot(restoredMergeState);
+            }
+            // Fit view after a brief timeout to let UI update
+            setTimeout(() => {
+                this.stateService.requestFitView();
+            }, 50);
+        } else {
+            // No snapshot exists for the next mode (first time entering it)
+            this.clearDrawingStateOnly();
+
+            if (nextMode === 'puzzle') {
+                this.createNewLPNWithSynthesis();
+            }
         }
     }
 
@@ -685,13 +712,19 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
         });
 
         this.sourceNetSub = this.sourcePetriNetService.sourceNet$.subscribe((net) => {
-            if (this.stateService.displayMode() === 'puzzle' && net) {
+            if (net) {
                 const currentSig = this.lpnService.getNetSignature(net);
-                const hasDrawnElements = this.drawnElements().length > 0;
                 const isSameSignature = currentSig === this.stateService.lastSynthesizedNetSignature;
 
-                if (!hasDrawnElements || !isSameSignature) {
-                    this.createNewLPNWithSynthesis();
+                if (!isSameSignature) {
+                    this.stateService.clearSnapshots();
+                }
+
+                if (this.stateService.displayMode() === 'puzzle') {
+                    const hasDrawnElements = this.drawnElements().length > 0;
+                    if (!hasDrawnElements || !isSameSignature) {
+                        this.createNewLPNWithSynthesis();
+                    }
                 }
             }
         });
@@ -1313,6 +1346,15 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
         this.stateService.clear();
     }
 
+    clearDrawingStateOnly() {
+        this.selectedElementId.set(null);
+        this.mergeService.clearMergeState();
+
+        this.drawingDisplayService.resetDiagramMarking();
+
+        this.stateService.clear(false);
+    }
+
     deleteElement(element: LabeledNetNode) {
         if (element instanceof Condition) {
             this.mergeService.handleConditionDelete(element);
@@ -1412,6 +1454,14 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
      */
     getConditionGroupSize(conditionId: string): number {
         return this.elementMetadataMap().get(conditionId)?.groupSize ?? 1;
+    }
+
+    showScrollIndicator(elementId: string): boolean {
+        if (!this.tourService.isTourRunning() || this.tourService.currentStepId() !== 'step-puzzle') {
+            return false;
+        }
+        const firstCondition = this.drawnElements().find((el) => el instanceof Condition);
+        return firstCondition ? firstCondition.id === elementId : false;
     }
 
     // Merge behavior moved to `TokenTrailMergeService`.

@@ -3,6 +3,7 @@ import { effect, inject, Injectable, OnDestroy, signal } from '@angular/core';
 import { Condition, LabeledNetEdge, LabeledNetNode } from '../../../../classes/labeled-net.model';
 import { PLACE_RADIUS } from '../../../display/display.constants';
 import { TokenTrailStateService } from '../../../../services/token-trail-state.service';
+import { TokenTrailTourService } from '../../../../services/token-trail-tour.service';
 
 /**
  * Snapshot of a physical condition merge, used for potential undo (finalization reversal).
@@ -38,6 +39,7 @@ export class TokenTrailMergeService implements OnDestroy {
     private mergeAnimationTimeout?: ReturnType<typeof setTimeout>;
 
     private readonly stateService = inject(TokenTrailStateService);
+    private readonly tourService = inject(TokenTrailTourService);
 
     constructor() {
         effect(() => {
@@ -146,11 +148,12 @@ export class TokenTrailMergeService implements OnDestroy {
             .filter((node): node is Condition => node instanceof Condition);
 
         allMemberNodes.forEach((node) => {
-            if (node.baseName) {
+            if (node.baseName && node.id !== anchorConditionId) {
                 this.stateService.releaseConditionName(node.baseName);
             }
         });
-        const newMergedBaseName = this.stateService.generateConditionName();
+        const anchorNode = allMemberNodes.find((node) => node.id === anchorConditionId);
+        const newMergedBaseName = anchorNode?.baseName || anchorConditionId;
 
         this.commitLastPhysicalMergeSnapshot();
         this.lastPhysicalMergeSnapshot.set({
@@ -270,10 +273,6 @@ export class TokenTrailMergeService implements OnDestroy {
             return;
         }
 
-        if (anchorNode.baseName) {
-            this.stateService.releaseConditionName(anchorNode.baseName);
-        }
-
         const newIds: string[] = [];
 
         this.stateService.updateDrawnElements((elements) => {
@@ -360,6 +359,7 @@ export class TokenTrailMergeService implements OnDestroy {
         });
 
         this.playMergeAnimation(anchorConditionId);
+        this.tourService.notifyConditionUnmerged();
     }
 
     /**
@@ -444,6 +444,7 @@ export class TokenTrailMergeService implements OnDestroy {
 
         this.animateMergedConditionsTowardsAnchor(targetAnchorId);
         this.playMergeAnimation(targetAnchorId);
+        this.tourService.notifyConditionMerged();
     }
 
     unmergeCondition(conditionId: string): void {
@@ -471,6 +472,7 @@ export class TokenTrailMergeService implements OnDestroy {
 
             return nextMap;
         });
+        this.tourService.notifyConditionUnmerged();
     }
 
     private removeConditionFromMergeGraph(conditionId: string): void {
@@ -663,5 +665,23 @@ export class TokenTrailMergeService implements OnDestroy {
             clone.bendPoints = connection.bendPoints.map((point) => ({ x: point.x, y: point.y }));
             return clone;
         });
+    }
+
+    public getMergeStateSnapshot(): {
+        mergedConditionAnchorById: Record<string, string>;
+        lastPhysicalMergeSnapshot: unknown;
+    } {
+        return {
+            mergedConditionAnchorById: { ...this.mergedConditionAnchorById() },
+            lastPhysicalMergeSnapshot: this.lastPhysicalMergeSnapshot(),
+        };
+    }
+
+    public restoreMergeStateSnapshot(snapshot: {
+        mergedConditionAnchorById: Record<string, string>;
+        lastPhysicalMergeSnapshot: unknown;
+    }) {
+        this.mergedConditionAnchorById.set(snapshot.mergedConditionAnchorById);
+        this.lastPhysicalMergeSnapshot.set(snapshot.lastPhysicalMergeSnapshot as LastPhysicalMergeSnapshot | null);
     }
 }

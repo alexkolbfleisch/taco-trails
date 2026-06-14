@@ -158,6 +158,38 @@
                     {{ getConditionGroupSize(element.id) }}
                 </text>
             </g>
+            } @if (showScrollIndicator(element.id)) {
+            <g
+                class="tour-scroll-indicator"
+                pointer-events="none"
+                [attr.transform]="'translate(' + (element.x + 35) + ',' + (element.y - 35) + ')'">
+                <rect x="-10" y="-18" width="20" height="30" rx="10" fill="none" stroke="#2196f3" stroke-width="2" />
+                <line
+                    class="mouse-wheel-wheel"
+                    x1="0"
+                    y1="-10"
+                    x2="0"
+                    y2="-4"
+                    stroke="#2196f3"
+                    stroke-width="2"
+                    stroke-linecap="round" />
+                <path
+                    class="mouse-wheel-arrow-up"
+                    d="M -4 -22 L 0 -26 L 4 -22"
+                    fill="none"
+                    stroke="#2196f3"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round" />
+                <path
+                    class="mouse-wheel-arrow-down"
+                    d="M -4 16 L 0 20 L 4 16"
+                    fill="none"
+                    stroke="#2196f3"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round" />
+            </g>
             }
             <rect
                 class="drag-overlay"

@@ -31,7 +31,10 @@ export class TokenTrailTourService {
 
     readonly tokenCountChangedInTour = signal<boolean>(false);
     readonly elementDroppedInTour = signal<boolean>(false);
+    readonly conditionMergedInTour = signal<boolean>(false);
+    readonly conditionUnmergedInTour = signal<boolean>(false);
     readonly isTourRunning = signal<boolean>(false);
+    readonly currentStepId = signal<string | null>(null);
 
     startTour(restart = false) {
         if (!restart && localStorage.getItem('token-trail-tour-completed') === 'true') {
@@ -45,6 +48,8 @@ export class TokenTrailTourService {
 
         this.isTourRunning.set(true);
         this.tokenCountChangedInTour.set(false);
+        this.conditionMergedInTour.set(false);
+        this.conditionUnmergedInTour.set(false);
 
         // Back up the current net and text if they exist
         const currentNet = this.sourceNetService.getCurrentSourceNet();
@@ -129,7 +134,7 @@ export class TokenTrailTourService {
 
                         // Regenerate LPN if it was cleared during the tour steps
                         const sourceNet = this.validationService.resolveSourceNetForValidation();
-                        if (sourceNet) {
+                        if (sourceNet && this.stateService.drawnElements().length === 0) {
                             this.lpnService.createLPNWithSynthesis(sourceNet);
                         }
 
@@ -159,6 +164,83 @@ export class TokenTrailTourService {
                 buttons: this.getStepPuzzleButtons(true),
             },
             {
+                id: 'step-synthesize',
+                attachTo: {
+                    element: 'button[data-tour="science"]',
+                    on: 'bottom' as const,
+                },
+                title: this.translate.instant('TOKEN_TRAIL.TOUR.STEP_SYNTHESIZE_TITLE'),
+                text: this.translate.instant('TOKEN_TRAIL.TOUR.STEP_SYNTHESIZE_TEXT'),
+                beforeShowPromise: () => {
+                    return new Promise<void>((resolve) => {
+                        this.stateService.setDisplayMode('puzzle');
+                        // Regenerate LPN if it was cleared
+                        const sourceNet = this.validationService.resolveSourceNetForValidation();
+                        if (sourceNet && this.stateService.drawnElements().length === 0) {
+                            this.lpnService.createLPNWithSynthesis(sourceNet);
+                        }
+                        setTimeout(() => {
+                            resolve();
+                        }, 50);
+                    });
+                },
+                buttons: [
+                    {
+                        type: 'cancel',
+                        classes: 'shepherd-button-secondary',
+                        text: this.translate.instant('TOKEN_TRAIL.TOUR.BUTTON_SKIP'),
+                    },
+                    {
+                        type: 'back',
+                        classes: 'shepherd-button-secondary',
+                        text: this.translate.instant('TOKEN_TRAIL.TOUR.BUTTON_BACK'),
+                    },
+                    {
+                        type: 'next',
+                        classes: 'shepherd-button-primary',
+                        text: this.translate.instant('TOKEN_TRAIL.TOUR.BUTTON_NEXT'),
+                    },
+                ],
+            },
+            {
+                id: 'step-puzzle-solution',
+                attachTo: {
+                    element: 'button[data-tour="lightbulb_outline"]',
+                    on: 'bottom' as const,
+                },
+                title: this.translate.instant('TOKEN_TRAIL.TOUR.STEP_PUZZLE_SOLUTION_TITLE'),
+                text: this.translate.instant('TOKEN_TRAIL.TOUR.STEP_PUZZLE_SOLUTION_TEXT'),
+                beforeShowPromise: () => {
+                    return new Promise<void>((resolve) => {
+                        this.stateService.setDisplayMode('puzzle');
+                        const sourceNet = this.validationService.resolveSourceNetForValidation();
+                        if (sourceNet && this.stateService.drawnElements().length === 0) {
+                            this.lpnService.createLPNWithSynthesis(sourceNet);
+                        }
+                        setTimeout(() => {
+                            resolve();
+                        }, 50);
+                    });
+                },
+                buttons: [
+                    {
+                        type: 'cancel',
+                        classes: 'shepherd-button-secondary',
+                        text: this.translate.instant('TOKEN_TRAIL.TOUR.BUTTON_SKIP'),
+                    },
+                    {
+                        type: 'back',
+                        classes: 'shepherd-button-secondary',
+                        text: this.translate.instant('TOKEN_TRAIL.TOUR.BUTTON_BACK'),
+                    },
+                    {
+                        type: 'next',
+                        classes: 'shepherd-button-primary',
+                        text: this.translate.instant('TOKEN_TRAIL.TOUR.BUTTON_NEXT'),
+                    },
+                ],
+            },
+            {
                 id: 'step-mode-toggle',
                 attachTo: {
                     element: 'button[data-tour="construction"]',
@@ -166,15 +248,17 @@ export class TokenTrailTourService {
                 },
                 title: this.translate.instant('TOKEN_TRAIL.TOUR.STEP_MODE_TOGGLE_TITLE'),
                 text: this.translate.instant('TOKEN_TRAIL.TOUR.STEP_MODE_TOGGLE_TEXT'),
-                when: {
-                    show: () => {
+                beforeShowPromise: () => {
+                    return new Promise<void>((resolve) => {
                         this.stateService.setDisplayMode('puzzle');
-                        // Regenerate LPN if it was cleared
                         const sourceNet = this.validationService.resolveSourceNetForValidation();
-                        if (sourceNet) {
+                        if (sourceNet && this.stateService.drawnElements().length === 0) {
                             this.lpnService.createLPNWithSynthesis(sourceNet);
                         }
-                    },
+                        setTimeout(() => {
+                            resolve();
+                        }, 50);
+                    });
                 },
                 buttons: [
                     {
@@ -202,13 +286,11 @@ export class TokenTrailTourService {
                 },
                 title: this.translate.instant('TOKEN_TRAIL.TOUR.STEP4_TITLE'),
                 text: this.translate.instant('TOKEN_TRAIL.TOUR.STEP4_TEXT'),
-                when: {
-                    show: () => {
-                        this.stateService.clear(); // Clean LPN draw area first
-                        this.stateService.setDisplayMode('construction'); // Then switch to construction mode
+                beforeShowPromise: () => {
+                    return new Promise<void>((resolve) => {
+                        this.stateService.clear();
+                        this.stateService.setDisplayMode('construction');
                         this.elementDroppedInTour.set(false);
-
-                        // Force button to be disabled initially
                         setTimeout(() => {
                             const step = this.shepherdService.tourObject?.getCurrentStep();
                             if (step) {
@@ -216,10 +298,182 @@ export class TokenTrailTourService {
                                     buttons: this.getStepConstructionButtons(true),
                                 });
                             }
+                            resolve();
                         }, 50);
-                    },
+                    });
                 },
                 buttons: this.getStepConstructionButtons(true),
+            },
+            {
+                id: 'step-merge',
+                attachTo: {
+                    element: 'app-split-view',
+                    on: 'top' as const,
+                },
+                title: this.translate.instant('TOKEN_TRAIL.TOUR.STEP_MERGE_TITLE'),
+                text: this.translate.instant('TOKEN_TRAIL.TOUR.STEP_MERGE_TEXT'),
+                beforeShowPromise: () => {
+                    return new Promise<void>((resolve) => {
+                        this.stateService.clear();
+                        this.stateService.setDisplayMode('construction');
+                        (this.stateService as unknown as { conditionCounter: number }).conditionCounter = 2;
+                        this.conditionMergedInTour.set(false);
+
+                        // Preload c1 and c2
+                        const c1 = this.stateService.buildCondition('c1', 'c1', 0, { baseName: 'c1' });
+                        c1.x = 200;
+                        c1.y = 200;
+                        c1.trailMarkings = { p1: 1 };
+                        c1.updateDynamicLabel();
+
+                        const c2 = this.stateService.buildCondition('c2', 'c2', 0, { baseName: 'c2' });
+                        c2.x = 300;
+                        c2.y = 200;
+                        c2.trailMarkings = { p2: 1 };
+                        c2.updateDynamicLabel();
+
+                        this.stateService.addDrawnElement(c1);
+                        this.stateService.addDrawnElement(c2);
+
+                        setTimeout(() => {
+                            const step = this.shepherdService.tourObject?.getCurrentStep();
+                            if (step) {
+                                step.updateStepOptions({
+                                    buttons: this.getStepMergeButtons(true),
+                                });
+                            }
+                            resolve();
+                        }, 50);
+                    });
+                },
+                buttons: this.getStepMergeButtons(true),
+            },
+            {
+                id: 'step-unmerge',
+                attachTo: {
+                    element: 'app-split-view',
+                    on: 'top' as const,
+                },
+                title: this.translate.instant('TOKEN_TRAIL.TOUR.STEP_UNMERGE_TITLE'),
+                text: this.translate.instant('TOKEN_TRAIL.TOUR.STEP_UNMERGE_TEXT'),
+                beforeShowPromise: () => {
+                    return new Promise<void>((resolve) => {
+                        this.stateService.setDisplayMode('construction');
+                        this.conditionUnmergedInTour.set(false);
+                        setTimeout(() => {
+                            const step = this.shepherdService.tourObject?.getCurrentStep();
+                            if (step) {
+                                step.updateStepOptions({
+                                    buttons: this.getStepUnmergeButtons(true),
+                                });
+                            }
+                            resolve();
+                        }, 50);
+                    });
+                },
+                buttons: this.getStepUnmergeButtons(true),
+            },
+            {
+                id: 'step-active-goals',
+                attachTo: {
+                    element: '.goals-panel',
+                    on: 'left' as const,
+                },
+                title: this.translate.instant('TOKEN_TRAIL.TOUR.STEP_ACTIVE_GOALS_TITLE'),
+                text: this.translate.instant('TOKEN_TRAIL.TOUR.STEP_ACTIVE_GOALS_TEXT'),
+                beforeShowPromise: () => {
+                    return new Promise<void>((resolve) => {
+                        this.stateService.setDisplayMode('construction');
+                        setTimeout(() => {
+                            resolve();
+                        }, 50);
+                    });
+                },
+                buttons: [
+                    {
+                        type: 'cancel',
+                        classes: 'shepherd-button-secondary',
+                        text: this.translate.instant('TOKEN_TRAIL.TOUR.BUTTON_SKIP'),
+                    },
+                    {
+                        type: 'back',
+                        classes: 'shepherd-button-secondary',
+                        text: this.translate.instant('TOKEN_TRAIL.TOUR.BUTTON_BACK'),
+                    },
+                    {
+                        type: 'next',
+                        classes: 'shepherd-button-primary',
+                        text: this.translate.instant('TOKEN_TRAIL.TOUR.BUTTON_NEXT'),
+                    },
+                ],
+            },
+            {
+                id: 'step-goals-difficulty',
+                attachTo: {
+                    element: 'button[data-tour="emoji_events"]',
+                    on: 'bottom' as const,
+                },
+                title: this.translate.instant('TOKEN_TRAIL.TOUR.STEP_GOALS_DIFFICULTY_TITLE'),
+                text: this.translate.instant('TOKEN_TRAIL.TOUR.STEP_GOALS_DIFFICULTY_TEXT'),
+                beforeShowPromise: () => {
+                    return new Promise<void>((resolve) => {
+                        this.stateService.setDisplayMode('construction');
+                        setTimeout(() => {
+                            resolve();
+                        }, 50);
+                    });
+                },
+                buttons: [
+                    {
+                        type: 'cancel',
+                        classes: 'shepherd-button-secondary',
+                        text: this.translate.instant('TOKEN_TRAIL.TOUR.BUTTON_SKIP'),
+                    },
+                    {
+                        type: 'back',
+                        classes: 'shepherd-button-secondary',
+                        text: this.translate.instant('TOKEN_TRAIL.TOUR.BUTTON_BACK'),
+                    },
+                    {
+                        type: 'next',
+                        classes: 'shepherd-button-primary',
+                        text: this.translate.instant('TOKEN_TRAIL.TOUR.BUTTON_NEXT'),
+                    },
+                ],
+            },
+            {
+                id: 'step-construction-solution',
+                attachTo: {
+                    element: 'button[data-tour="lightbulb_outline"]',
+                    on: 'bottom' as const,
+                },
+                title: this.translate.instant('TOKEN_TRAIL.TOUR.STEP_CONSTRUCTION_SOLUTION_TITLE'),
+                text: this.translate.instant('TOKEN_TRAIL.TOUR.STEP_CONSTRUCTION_SOLUTION_TEXT'),
+                beforeShowPromise: () => {
+                    return new Promise<void>((resolve) => {
+                        this.stateService.setDisplayMode('construction');
+                        setTimeout(() => {
+                            resolve();
+                        }, 50);
+                    });
+                },
+                buttons: [
+                    {
+                        type: 'cancel',
+                        classes: 'shepherd-button-secondary',
+                        text: this.translate.instant('TOKEN_TRAIL.TOUR.BUTTON_SKIP'),
+                    },
+                    {
+                        type: 'back',
+                        classes: 'shepherd-button-secondary',
+                        text: this.translate.instant('TOKEN_TRAIL.TOUR.BUTTON_BACK'),
+                    },
+                    {
+                        type: 'next',
+                        classes: 'shepherd-button-primary',
+                        text: this.translate.instant('TOKEN_TRAIL.TOUR.BUTTON_NEXT'),
+                    },
+                ],
             },
             {
                 id: 'step-upload',
@@ -274,32 +528,6 @@ export class TokenTrailTourService {
                 ],
             },
             {
-                id: 'step-synthesize',
-                attachTo: {
-                    element: 'button[data-tour="science"]',
-                    on: 'bottom' as const,
-                },
-                title: this.translate.instant('TOKEN_TRAIL.TOUR.STEP7_TITLE'),
-                text: this.translate.instant('TOKEN_TRAIL.TOUR.STEP7_TEXT'),
-                buttons: [
-                    {
-                        type: 'cancel',
-                        classes: 'shepherd-button-secondary',
-                        text: this.translate.instant('TOKEN_TRAIL.TOUR.BUTTON_SKIP'),
-                    },
-                    {
-                        type: 'back',
-                        classes: 'shepherd-button-secondary',
-                        text: this.translate.instant('TOKEN_TRAIL.TOUR.BUTTON_BACK'),
-                    },
-                    {
-                        type: 'next',
-                        classes: 'shepherd-button-primary',
-                        text: this.translate.instant('TOKEN_TRAIL.TOUR.BUTTON_NEXT'),
-                    },
-                ],
-            },
-            {
                 id: 'step-finish',
                 title: this.translate.instant('TOKEN_TRAIL.TOUR.STEP8_TITLE'),
                 text: this.translate.instant('TOKEN_TRAIL.TOUR.STEP8_TEXT'),
@@ -319,6 +547,7 @@ export class TokenTrailTourService {
         // Track completion or cancellation
         const cleanup = () => {
             this.isTourRunning.set(false);
+            this.currentStepId.set(null);
             localStorage.setItem('token-trail-tour-completed', 'true');
             this.stateService.setDisplayMode('puzzle'); // Ensure we return to puzzle mode
 
@@ -343,6 +572,12 @@ export class TokenTrailTourService {
 
         const tour = this.shepherdService.tourObject;
         if (tour) {
+            tour.on('show', () => {
+                const step = tour.getCurrentStep();
+                if (step) {
+                    this.currentStepId.set(step.id);
+                }
+            });
             tour.on('complete', cleanup);
             tour.on('cancel', cleanup);
         }
@@ -372,6 +607,32 @@ export class TokenTrailTourService {
         if (step && step.id === 'step-construction') {
             step.updateStepOptions({
                 buttons: this.getStepConstructionButtons(false),
+            });
+        }
+    }
+
+    notifyConditionMerged() {
+        if (!this.isTourRunning()) {
+            return;
+        }
+        this.conditionMergedInTour.set(true);
+        const step = this.shepherdService.tourObject?.getCurrentStep();
+        if (step && step.id === 'step-merge') {
+            step.updateStepOptions({
+                buttons: this.getStepMergeButtons(false),
+            });
+        }
+    }
+
+    notifyConditionUnmerged() {
+        if (!this.isTourRunning()) {
+            return;
+        }
+        this.conditionUnmergedInTour.set(true);
+        const step = this.shepherdService.tourObject?.getCurrentStep();
+        if (step && step.id === 'step-unmerge') {
+            step.updateStepOptions({
+                buttons: this.getStepUnmergeButtons(false),
             });
         }
     }
@@ -418,6 +679,56 @@ export class TokenTrailTourService {
                 text: this.translate.instant('TOKEN_TRAIL.TOUR.BUTTON_NEXT'),
                 action: () => {
                     if (this.elementDroppedInTour()) {
+                        this.shepherdService.next();
+                    }
+                },
+                disabled,
+            },
+        ];
+    }
+
+    private getStepMergeButtons(disabled: boolean) {
+        return [
+            {
+                type: 'cancel',
+                classes: 'shepherd-button-secondary',
+                text: this.translate.instant('TOKEN_TRAIL.TOUR.BUTTON_SKIP'),
+            },
+            {
+                type: 'back',
+                classes: 'shepherd-button-secondary',
+                text: this.translate.instant('TOKEN_TRAIL.TOUR.BUTTON_BACK'),
+            },
+            {
+                classes: 'shepherd-button-primary shepherd-next-button',
+                text: this.translate.instant('TOKEN_TRAIL.TOUR.BUTTON_NEXT'),
+                action: () => {
+                    if (this.conditionMergedInTour()) {
+                        this.shepherdService.next();
+                    }
+                },
+                disabled,
+            },
+        ];
+    }
+
+    private getStepUnmergeButtons(disabled: boolean) {
+        return [
+            {
+                type: 'cancel',
+                classes: 'shepherd-button-secondary',
+                text: this.translate.instant('TOKEN_TRAIL.TOUR.BUTTON_SKIP'),
+            },
+            {
+                type: 'back',
+                classes: 'shepherd-button-secondary',
+                text: this.translate.instant('TOKEN_TRAIL.TOUR.BUTTON_BACK'),
+            },
+            {
+                classes: 'shepherd-button-primary shepherd-next-button',
+                text: this.translate.instant('TOKEN_TRAIL.TOUR.BUTTON_NEXT'),
+                action: () => {
+                    if (this.conditionUnmergedInTour()) {
                         this.shepherdService.next();
                     }
                 },
