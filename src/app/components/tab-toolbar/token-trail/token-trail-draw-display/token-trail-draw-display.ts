@@ -244,18 +244,7 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
 
         const actions: DrawToolbarAction[] = [];
 
-        // 1. Delete Action (Construction mode only)
-        if (mode === 'construction') {
-            actions.push({
-                icon: 'delete',
-                tooltip: 'TOKEN_TRAIL.BUTTON_CLEAR_DRAWING',
-                color: 'warn',
-                isActive: !disabled && !showingSolution,
-                action: () => this.clearDrawing(),
-            });
-        }
-
-        // 2. Validate Action (Both modes)
+        // 1. Validate Action (Both modes)
         actions.push({
             icon: 'checklist',
             tooltip: 'TOKEN_TRAIL.BUTTON_VALIDATE_NET',
@@ -264,7 +253,7 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
             action: () => this.validationService.onValidate(),
         });
 
-        // 3. Toggle Mode Action (Both modes)
+        // 2. Toggle Mode Action (Both modes)
         actions.push({
             icon: this.getModeToggleIcon(),
             tooltip: this.getModeToggleTooltip(),
@@ -273,7 +262,7 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
             action: () => this.toggleMode(),
         });
 
-        // 4. Solution Action (Both modes)
+        // 3. Solution Action (Both modes)
         actions.push({
             icon: showingSolution ? 'lightbulb' : 'lightbulb_outline',
             tooltip: showingSolution ? 'TOKEN_TRAIL.BUTTON_HIDE_SOLUTION' : 'TOKEN_TRAIL.BUTTON_SHOW_SOLUTION',
@@ -282,7 +271,7 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
             action: () => this.toggleSolution(),
         });
 
-        // 5. Synthesize Action (Puzzle mode only) or Goals Difficulty Action (Construction mode only)
+        // 4. Synthesize Action (Puzzle mode only) or Goals Difficulty Action (Construction mode only)
         if (mode === 'puzzle') {
             actions.push({
                 icon: 'science',
@@ -343,7 +332,7 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
             });
         }
 
-        // 6. Export Action (Both modes)
+        // 5. Export Action (Both modes)
         actions.push({
             icon: 'file_download',
             tooltip: 'TOKEN_TRAIL.BUTTON_EXPORT_LPN',
@@ -366,7 +355,7 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
             ],
         });
 
-        // 7. Tour Action (Both modes)
+        // 6. Tour Action (Both modes)
         actions.push({
             icon: 'explore',
             tooltip: 'TOKEN_TRAIL.TOUR.RESTART_BUTTON',
@@ -374,6 +363,17 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
             isActive: true,
             action: () => this.tourService.startTour(true),
         });
+
+        // 7. Delete Action (Construction mode only) - Placed last
+        if (mode === 'construction') {
+            actions.push({
+                icon: 'delete',
+                tooltip: 'TOKEN_TRAIL.BUTTON_CLEAR_DRAWING',
+                color: 'warn',
+                isActive: !disabled && !showingSolution,
+                action: () => this.clearDrawing(),
+            });
+        }
 
         return actions;
     });
@@ -432,6 +432,11 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
         if (this.stateService.displayMode() === 'puzzle') {
             return [
                 { label: 'TOKEN_TRAIL.INSTRUCTION_CHANGE_TOKENS', text: 'TOKEN_TRAIL.INSTRUCTION_CHANGE_TOKENS_TEXT' },
+                {
+                    label: 'TOKEN_TRAIL.INSTRUCTION_PUZZLE_DIFFICULTY',
+                    text: 'TOKEN_TRAIL.INSTRUCTION_PUZZLE_DIFFICULTY_TEXT',
+                },
+                { label: 'TOKEN_TRAIL.INSTRUCTION_SOLUTION', text: 'TOKEN_TRAIL.INSTRUCTION_SOLUTION_PUZZLE_TEXT' },
                 { label: 'TOKEN_TRAIL.INSTRUCTION_VALIDATE', text: 'TOKEN_TRAIL.INSTRUCTION_VALIDATE_TOAST' },
             ];
         }
@@ -441,6 +446,11 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
             { label: 'TOKEN_TRAIL.INSTRUCTION_CONNECT', text: 'TOKEN_TRAIL.INSTRUCTION_RIGHT_CLICK_CONNECT' },
             { label: 'TOKEN_TRAIL.INSTRUCTION_DELETE', text: 'TOKEN_TRAIL.INSTRUCTION_MIDDLE_CLICK_DELETE' },
             { label: 'TOKEN_TRAIL.INSTRUCTION_DELETE_CONN', text: 'TOKEN_TRAIL.INSTRUCTION_MIDDLE_CLICK_DELETE_CONN' },
+            { label: 'TOKEN_TRAIL.INSTRUCTION_MERGE', text: 'TOKEN_TRAIL.INSTRUCTION_MERGE_TEXT' },
+            { label: 'TOKEN_TRAIL.INSTRUCTION_UNMERGE', text: 'TOKEN_TRAIL.INSTRUCTION_UNMERGE_TEXT' },
+            { label: 'TOKEN_TRAIL.INSTRUCTION_ACTIVE_GOALS', text: 'TOKEN_TRAIL.INSTRUCTION_ACTIVE_GOALS_TEXT' },
+            { label: 'TOKEN_TRAIL.INSTRUCTION_GOAL_DIFFICULTY', text: 'TOKEN_TRAIL.INSTRUCTION_GOAL_DIFFICULTY_TEXT' },
+            { label: 'TOKEN_TRAIL.INSTRUCTION_SOLUTION', text: 'TOKEN_TRAIL.INSTRUCTION_SOLUTION_CONSTRUCTION_TEXT' },
             { label: 'TOKEN_TRAIL.INSTRUCTION_VALIDATE', text: 'TOKEN_TRAIL.INSTRUCTION_VALIDATE_TOAST' },
         ];
     });
