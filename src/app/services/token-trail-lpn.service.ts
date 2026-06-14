@@ -184,6 +184,24 @@ export class TokenTrailLpnService {
                                 }
 
                                 if (allValid && allGoalsMet) {
+                                    const solvedTrailsMap = this.mapValidatorResultsToSolvedTrails(results);
+
+                                    // If we are in construction mode, compute trail markings and update labels for condition elements
+                                    if (this.stateService.displayMode() === 'construction') {
+                                        for (const el of candidate.elements) {
+                                            if (el instanceof Condition) {
+                                                el.trailMarkings = {};
+                                                for (const [petriPlaceId, markings] of solvedTrailsMap.entries()) {
+                                                    const tokens = markings[el.id] ?? 0;
+                                                    if (tokens > 0) {
+                                                        el.trailMarkings[petriPlaceId] = tokens;
+                                                    }
+                                                }
+                                                el.updateDynamicLabel();
+                                            }
+                                        }
+                                    }
+
                                     // Valid and goals satisfied! Render it visually by updating the state service
                                     this.stateService.clear(false);
                                     for (const el of candidate.elements) {
@@ -202,7 +220,6 @@ export class TokenTrailLpnService {
                                     this.stateService.requestFitView();
 
                                     // Cache the solution
-                                    const solvedTrailsMap = this.mapValidatorResultsToSolvedTrails(results);
                                     this.stateService.solutionCache = solvedTrailsMap;
                                     this.stateService.lastSynthesizedNetSignature = this.getNetSignature(sourceNet);
                                     if (this.stateService.displayMode() === 'construction') {

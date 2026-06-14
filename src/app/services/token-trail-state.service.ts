@@ -12,6 +12,23 @@ import { Subject } from 'rxjs';
 
 export type LpnGenerationDifficulty = 'easy' | 'medium' | 'hard';
 
+export interface TokenTrailModeSnapshot {
+    drawnElements: LabeledNetNode[];
+    connections: LabeledNetEdge[];
+    conditionCounter: number;
+    releasedConditionNumbers: Set<number>;
+    elementIdCounter: number;
+    connectionIdCounter: number;
+    showingSolution: boolean;
+    solvedTokenTrails: Map<string, Record<string, number>>;
+    solutionCache: Map<string, Record<string, number>> | null;
+    selectedPetriPlaceId: string | null;
+    mergeState?: {
+        mergedConditionAnchorById: Record<string, string>;
+        lastPhysicalMergeSnapshot: unknown;
+    };
+}
+
 @Injectable({ providedIn: 'root' })
 export class TokenTrailStateService {
     readonly graph = signal<LabeledNetGraph>(new LabeledNetGraph());
@@ -36,6 +53,9 @@ export class TokenTrailStateService {
     public lastSynthesizedNetSignature: string | null = null;
     public cachedConstructionSolutionElements: LabeledNetNode[] | null = null;
     public cachedConstructionSolutionConnections: LabeledNetEdge[] | null = null;
+
+    private puzzleSnapshot: TokenTrailModeSnapshot | null = null;
+    private constructionSnapshot: TokenTrailModeSnapshot | null = null;
 
     private readonly _fitViewRequest$ = new Subject<void>();
     public readonly fitViewRequest$ = this._fitViewRequest$.asObservable();
@@ -102,6 +122,7 @@ export class TokenTrailStateService {
             this.lastSynthesizedNetSignature = null;
             this.cachedConstructionSolutionElements = null;
             this.cachedConstructionSolutionConnections = null;
+            this.clearSnapshots();
         }
     }
 
@@ -237,5 +258,67 @@ export class TokenTrailStateService {
             clone.bendPoints = connection.bendPoints.map((point) => ({ x: point.x, y: point.y }));
             return clone;
         });
+    }
+
+    saveSnapshot(
+        mode: 'puzzle' | 'construction',
+        mergeState?: {
+            mergedConditionAnchorById: Record<string, string>;
+            lastPhysicalMergeSnapshot: unknown;
+        },
+    ) {
+        const snapshot: TokenTrailModeSnapshot = {
+            drawnElements: this.cloneDrawnElements(this.drawnElements()),
+            connections: this.cloneConnections(this.connections()),
+            conditionCounter: this.conditionCounter,
+            releasedConditionNumbers: new Set(this.releasedConditionNumbers),
+            elementIdCounter: this.elementIdCounter,
+            connectionIdCounter: this.connectionIdCounter,
+            showingSolution: this.showingSolution(),
+            solvedTokenTrails: new Map(this.solvedTokenTrails()),
+            solutionCache: this.solutionCache ? new Map(this.solutionCache) : null,
+            selectedPetriPlaceId: this.selectedPetriPlaceId(),
+            mergeState,
+        };
+
+        if (mode === 'puzzle') {
+            this.puzzleSnapshot = snapshot;
+        } else {
+            this.constructionSnapshot = snapshot;
+        }
+    }
+
+    hasSnapshot(mode: 'puzzle' | 'construction'): boolean {
+        return (mode === 'puzzle' ? this.puzzleSnapshot : this.constructionSnapshot) !== null;
+    }
+
+    restoreSnapshot(mode: 'puzzle' | 'construction'):
+        | {
+              mergedConditionAnchorById: Record<string, string>;
+              lastPhysicalMergeSnapshot: unknown;
+          }
+        | undefined {
+        const snapshot = mode === 'puzzle' ? this.puzzleSnapshot : this.constructionSnapshot;
+        if (!snapshot) {
+            return undefined;
+        }
+
+        this.drawnElements.set(this.cloneDrawnElements(snapshot.drawnElements));
+        this.connections.set(this.cloneConnections(snapshot.connections));
+        this.conditionCounter = snapshot.conditionCounter;
+        this.releasedConditionNumbers = new Set(snapshot.releasedConditionNumbers);
+        this.elementIdCounter = snapshot.elementIdCounter;
+        this.connectionIdCounter = snapshot.connectionIdCounter;
+        this.showingSolution.set(snapshot.showingSolution);
+        this.solvedTokenTrails.set(new Map(snapshot.solvedTokenTrails));
+        this.solutionCache = snapshot.solutionCache ? new Map(snapshot.solutionCache) : null;
+        this.selectedPetriPlaceId.set(snapshot.selectedPetriPlaceId);
+
+        return snapshot.mergeState;
+    }
+
+    clearSnapshots() {
+        this.puzzleSnapshot = null;
+        this.constructionSnapshot = null;
     }
 }
