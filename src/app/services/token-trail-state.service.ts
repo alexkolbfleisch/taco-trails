@@ -10,7 +10,17 @@ import {
 import { viewBoxValues } from '../components/display/display.constants';
 import { Subject } from 'rxjs';
 
-export type LpnGenerationDifficulty = 'easy' | 'medium' | 'hard';
+export enum LpnGenerationDifficulty {
+    Easy = 'easy',
+    Medium = 'medium',
+    Hard = 'hard',
+    Expert = 'expert',
+}
+
+export enum LpnDisplayMode {
+    Puzzle = 'puzzle',
+    Construction = 'construction',
+}
 
 export interface TokenTrailModeSnapshot {
     drawnElements: LabeledNetNode[];
@@ -45,8 +55,8 @@ export class TokenTrailStateService {
     readonly viewBox = signal<{ minX: number; minY: number; width: number; height: number }>(viewBoxValues);
     readonly selectedPetriPlaceId = signal<string | null>(null);
 
-    readonly displayMode = signal<'puzzle' | 'construction'>('puzzle');
-    readonly lpnGenerationDifficulty = signal<LpnGenerationDifficulty>('medium');
+    readonly displayMode = signal<LpnDisplayMode>(LpnDisplayMode.Puzzle);
+    readonly lpnGenerationDifficulty = signal<LpnGenerationDifficulty>(LpnGenerationDifficulty.Medium);
     readonly showingSolution = signal<boolean>(false);
     readonly solvedTokenTrails = signal<Map<string, Record<string, number>>>(new Map());
     public solutionCache: Map<string, Record<string, number>> | null = null;
@@ -107,14 +117,18 @@ export class TokenTrailStateService {
         this.connections.update(updater);
     }
 
-    clear(clearCache = true) {
-        this.drawnElements.set([]);
-        this.connections.set([]);
-        this.selectedPetriPlaceId.set(null);
+    resetCounters() {
         this.elementIdCounter = 0;
         this.connectionIdCounter = 0;
         this.conditionCounter = 0;
         this.releasedConditionNumbers.clear();
+    }
+
+    clear(clearCache = true) {
+        this.drawnElements.set([]);
+        this.connections.set([]);
+        this.selectedPetriPlaceId.set(null);
+        this.resetCounters();
         this.showingSolution.set(false);
         this.solvedTokenTrails.set(new Map());
         if (clearCache) {
@@ -138,7 +152,7 @@ export class TokenTrailStateService {
         return `${prefix}-${++this.connectionIdCounter}`;
     }
 
-    setDisplayMode(mode: 'puzzle' | 'construction') {
+    setDisplayMode(mode: LpnDisplayMode) {
         this.displayMode.set(mode);
     }
 
@@ -261,7 +275,7 @@ export class TokenTrailStateService {
     }
 
     saveSnapshot(
-        mode: 'puzzle' | 'construction',
+        mode: LpnDisplayMode,
         mergeState?: {
             mergedConditionAnchorById: Record<string, string>;
             lastPhysicalMergeSnapshot: unknown;
@@ -281,24 +295,24 @@ export class TokenTrailStateService {
             mergeState,
         };
 
-        if (mode === 'puzzle') {
+        if (mode === LpnDisplayMode.Puzzle) {
             this.puzzleSnapshot = snapshot;
         } else {
             this.constructionSnapshot = snapshot;
         }
     }
 
-    hasSnapshot(mode: 'puzzle' | 'construction'): boolean {
-        return (mode === 'puzzle' ? this.puzzleSnapshot : this.constructionSnapshot) !== null;
+    hasSnapshot(mode: LpnDisplayMode): boolean {
+        return (mode === LpnDisplayMode.Puzzle ? this.puzzleSnapshot : this.constructionSnapshot) !== null;
     }
 
-    restoreSnapshot(mode: 'puzzle' | 'construction'):
+    restoreSnapshot(mode: LpnDisplayMode):
         | {
               mergedConditionAnchorById: Record<string, string>;
               lastPhysicalMergeSnapshot: unknown;
           }
         | undefined {
-        const snapshot = mode === 'puzzle' ? this.puzzleSnapshot : this.constructionSnapshot;
+        const snapshot = mode === LpnDisplayMode.Puzzle ? this.puzzleSnapshot : this.constructionSnapshot;
         if (!snapshot) {
             return undefined;
         }

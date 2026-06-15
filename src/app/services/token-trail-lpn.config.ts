@@ -11,25 +11,32 @@ export interface LpnGenerationConfiguration {
 }
 
 export const DIFFICULTY_CONFIGURATIONS: Record<LpnGenerationDifficulty, LpnGenerationConfiguration> = {
-    easy: {
+    [LpnGenerationDifficulty.Easy]: {
         splittingProbability: 0.25,
         synthesisConfig: { noShortLoops: true, noArcWeights: true },
         traceLengthMultiplier: 0.5,
         maxTracesMultiplier: 0.2,
         maxEdgesMultiplier: 1.0,
     },
-    medium: {
+    [LpnGenerationDifficulty.Medium]: {
         splittingProbability: 0.6,
         synthesisConfig: { noShortLoops: true },
         traceLengthMultiplier: 0.8,
         maxTracesMultiplier: 0.3,
         maxEdgesMultiplier: 1.5,
     },
-    hard: {
-        splittingProbability: 0.5,
+    [LpnGenerationDifficulty.Hard]: {
+        splittingProbability: 0.1,
         synthesisConfig: {},
-        traceLengthMultiplier: 1.5,
+        traceLengthMultiplier: 1.2,
         maxTracesMultiplier: 0.5,
         maxEdgesMultiplier: 2.5,
+    },
+    [LpnGenerationDifficulty.Expert]: {
+        splittingProbability: 0.1,
+        synthesisConfig: {},
+        traceLengthMultiplier: 1.6,
+        maxTracesMultiplier: 0.7,
+        maxEdgesMultiplier: 3.0,
     },
 };

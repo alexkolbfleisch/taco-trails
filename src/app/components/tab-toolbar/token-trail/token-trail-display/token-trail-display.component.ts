@@ -5,7 +5,7 @@ import { SvgArcComponent } from '../../../display/svg-arc/svg-arc.component';
 import { SHAPE } from '../../../../classes/diagram/diagram-node';
 import { DisplayableNode } from '../../../../classes/displayable-graph.interface';
 import { inject } from '@angular/core';
-import { TokenTrailStateService } from '../../../../services/token-trail-state.service';
+import { TokenTrailStateService, LpnDisplayMode } from '../../../../services/token-trail-state.service';
 import { DragDropUtil } from '../../../../utils/drag-drop.util';
 import { ToasterNotificationService } from '../../../../services/toaster-notification.service';
 import { TokenTrailValidationService } from '../../../../services/token-trail-validation.service';
@@ -67,7 +67,7 @@ export class TokenTrailDisplayComponent extends DisplayComponent {
             }
         }
 
-        if (this._tokenTrailStateService.displayMode() === 'puzzle') {
+        if (this._tokenTrailStateService.displayMode() === LpnDisplayMode.Puzzle) {
             // Only show the warning if the user clicks a transition,
             // since clicking a place is a valid action (selection) in puzzle mode.
             if (node.shape !== SHAPE.CIRCLE) {

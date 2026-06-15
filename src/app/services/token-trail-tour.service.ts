@@ -1,7 +1,7 @@
 import { inject, Injectable, signal } from '@angular/core';
 import { ShepherdService } from 'angular-shepherd';
 import { PetriNetLoaderService } from './petri-net-loader.service';
-import { TokenTrailStateService } from './token-trail-state.service';
+import { TokenTrailStateService, LpnDisplayMode } from './token-trail-state.service';
 import { TranslateService } from '@ngx-translate/core';
 import { Diagram } from '../classes/diagram/diagram';
 import { DisplayService } from './display.service';
@@ -129,7 +129,7 @@ export class TokenTrailTourService {
                 text: this.translate.instant('TOKEN_TRAIL.TOUR.STEP3_TEXT'),
                 when: {
                     show: () => {
-                        this.stateService.setDisplayMode('puzzle');
+                        this.stateService.setDisplayMode(LpnDisplayMode.Puzzle);
                         this.tokenCountChangedInTour.set(false);
 
                         // Regenerate LPN if it was cleared during the tour steps
@@ -173,7 +173,7 @@ export class TokenTrailTourService {
                 text: this.translate.instant('TOKEN_TRAIL.TOUR.STEP_SYNTHESIZE_TEXT'),
                 beforeShowPromise: () => {
                     return new Promise<void>((resolve) => {
-                        this.stateService.setDisplayMode('puzzle');
+                        this.stateService.setDisplayMode(LpnDisplayMode.Puzzle);
                         // Regenerate LPN if it was cleared
                         const sourceNet = this.validationService.resolveSourceNetForValidation();
                         if (sourceNet && this.stateService.drawnElements().length === 0) {
@@ -212,7 +212,7 @@ export class TokenTrailTourService {
                 text: this.translate.instant('TOKEN_TRAIL.TOUR.STEP_PUZZLE_SOLUTION_TEXT'),
                 beforeShowPromise: () => {
                     return new Promise<void>((resolve) => {
-                        this.stateService.setDisplayMode('puzzle');
+                        this.stateService.setDisplayMode(LpnDisplayMode.Puzzle);
                         const sourceNet = this.validationService.resolveSourceNetForValidation();
                         if (sourceNet && this.stateService.drawnElements().length === 0) {
                             this.lpnService.createLPNWithSynthesis(sourceNet);
@@ -250,7 +250,7 @@ export class TokenTrailTourService {
                 text: this.translate.instant('TOKEN_TRAIL.TOUR.STEP_MODE_TOGGLE_TEXT'),
                 beforeShowPromise: () => {
                     return new Promise<void>((resolve) => {
-                        this.stateService.setDisplayMode('puzzle');
+                        this.stateService.setDisplayMode(LpnDisplayMode.Puzzle);
                         const sourceNet = this.validationService.resolveSourceNetForValidation();
                         if (sourceNet && this.stateService.drawnElements().length === 0) {
                             this.lpnService.createLPNWithSynthesis(sourceNet);
@@ -289,7 +289,7 @@ export class TokenTrailTourService {
                 beforeShowPromise: () => {
                     return new Promise<void>((resolve) => {
                         this.stateService.clear();
-                        this.stateService.setDisplayMode('construction');
+                        this.stateService.setDisplayMode(LpnDisplayMode.Construction);
                         this.elementDroppedInTour.set(false);
                         setTimeout(() => {
                             const step = this.shepherdService.tourObject?.getCurrentStep();
@@ -315,7 +315,7 @@ export class TokenTrailTourService {
                 beforeShowPromise: () => {
                     return new Promise<void>((resolve) => {
                         this.stateService.clear();
-                        this.stateService.setDisplayMode('construction');
+                        this.stateService.setDisplayMode(LpnDisplayMode.Construction);
                         (this.stateService as unknown as { conditionCounter: number }).conditionCounter = 2;
                         this.conditionMergedInTour.set(false);
 
@@ -358,7 +358,7 @@ export class TokenTrailTourService {
                 text: this.translate.instant('TOKEN_TRAIL.TOUR.STEP_UNMERGE_TEXT'),
                 beforeShowPromise: () => {
                     return new Promise<void>((resolve) => {
-                        this.stateService.setDisplayMode('construction');
+                        this.stateService.setDisplayMode(LpnDisplayMode.Construction);
                         this.conditionUnmergedInTour.set(false);
                         setTimeout(() => {
                             const step = this.shepherdService.tourObject?.getCurrentStep();
@@ -383,7 +383,7 @@ export class TokenTrailTourService {
                 text: this.translate.instant('TOKEN_TRAIL.TOUR.STEP_ACTIVE_GOALS_TEXT'),
                 beforeShowPromise: () => {
                     return new Promise<void>((resolve) => {
-                        this.stateService.setDisplayMode('construction');
+                        this.stateService.setDisplayMode(LpnDisplayMode.Construction);
                         setTimeout(() => {
                             resolve();
                         }, 50);
@@ -417,7 +417,7 @@ export class TokenTrailTourService {
                 text: this.translate.instant('TOKEN_TRAIL.TOUR.STEP_GOALS_DIFFICULTY_TEXT'),
                 beforeShowPromise: () => {
                     return new Promise<void>((resolve) => {
-                        this.stateService.setDisplayMode('construction');
+                        this.stateService.setDisplayMode(LpnDisplayMode.Construction);
                         setTimeout(() => {
                             resolve();
                         }, 50);
@@ -451,7 +451,7 @@ export class TokenTrailTourService {
                 text: this.translate.instant('TOKEN_TRAIL.TOUR.STEP_CONSTRUCTION_SOLUTION_TEXT'),
                 beforeShowPromise: () => {
                     return new Promise<void>((resolve) => {
-                        this.stateService.setDisplayMode('construction');
+                        this.stateService.setDisplayMode(LpnDisplayMode.Construction);
                         setTimeout(() => {
                             resolve();
                         }, 50);
@@ -549,7 +549,7 @@ export class TokenTrailTourService {
             this.isTourRunning.set(false);
             this.currentStepId.set(null);
             localStorage.setItem('token-trail-tour-completed', 'true');
-            this.stateService.setDisplayMode('puzzle'); // Ensure we return to puzzle mode
+            this.stateService.setDisplayMode(LpnDisplayMode.Puzzle); // Ensure we return to puzzle mode
 
             // Restore the user's backed up net if it exists
             if (this.backedUpNet) {

@@ -7,6 +7,7 @@ import { StateNode } from '../../../classes/reachability-graph.model';
 import { PLACE_RADIUS, TRANSITION_SIZE } from '../display.constants';
 import { ModeService } from '../../../services/mode.service';
 import { Tab } from '../../../classes/tabs';
+import { LpnDisplayMode } from '../../../services/token-trail-state.service';
 
 @Component({
     selector: 'g[appSvgEventNode]',
@@ -27,7 +28,7 @@ export class SvgEventNodeComponent {
 
     readonly diagramNode = input<DisplayableNode>();
 
-    readonly displayMode = input<'puzzle' | 'construction'>('puzzle');
+    readonly displayMode = input<LpnDisplayMode>(LpnDisplayMode.Puzzle);
     readonly selected = input<boolean>(false);
 
     clickNode = output<DisplayableNode>();
@@ -71,7 +72,7 @@ export class SvgEventNodeComponent {
         const n = this.diagramNode();
         let label = n?.displayLabel || '';
 
-        if (n instanceof Condition && this.displayMode() === 'puzzle') {
+        if (n instanceof Condition && this.displayMode() === LpnDisplayMode.Puzzle) {
             label = n.baseName || n.displayLabel || '';
         }
 
@@ -86,7 +87,7 @@ export class SvgEventNodeComponent {
      */
     readonly fullLabel = computed(() => {
         const n = this.diagramNode();
-        if (n instanceof Condition && this.displayMode() === 'puzzle') {
+        if (n instanceof Condition && this.displayMode() === LpnDisplayMode.Puzzle) {
             return n.baseName || n.displayLabel || '';
         }
         return n?.displayLabel || '';

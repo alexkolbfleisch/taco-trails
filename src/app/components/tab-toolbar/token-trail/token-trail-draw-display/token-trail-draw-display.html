@@ -38,7 +38,7 @@
                     <mat-icon class="status-icon">
                         {{ goal.completed ? 'check_circle' : 'radio_button_unchecked' }}
                     </mat-icon>
-                    <span class="goal-description">{{ goal.description }}</span>
+                    <span class="goal-description">{{ goal.descriptionKey | translate: goal.descriptionParams }}</span>
                 </div>
                 }
             </div>
