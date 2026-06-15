@@ -233,7 +233,7 @@ export class TokenTrailValidationService {
      * Validates a Labeled Petri Net (LPN) against an original Marked Petri Net
      * to determine if the user-provided token trails satisfy the token trail semantics.
      */
-    private validateTokenTrail(
+    public validateTokenTrail(
         net: PetriNet,
         elements: TokenTrailElement[],
         connections: TokenTrailConnection[],

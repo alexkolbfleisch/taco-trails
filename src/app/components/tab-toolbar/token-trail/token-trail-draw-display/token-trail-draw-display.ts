@@ -29,7 +29,11 @@ import { MatCardModule } from '@angular/material/card';
 import { MatDialog } from '@angular/material/dialog';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { GRAPH_FILENAMES, GRAPH_IDS, PLACE_RADIUS, TRANSITION_SIZE } from '../../../display/display.constants';
-import { LpnGenerationDifficulty, TokenTrailStateService } from '../../../../services/token-trail-state.service';
+import {
+    LpnGenerationDifficulty,
+    LpnDisplayMode,
+    TokenTrailStateService,
+} from '../../../../services/token-trail-state.service';
 import { SerializationService } from '../../../../services/serialization.service';
 import { Subscription, take } from 'rxjs';
 import {
@@ -167,7 +171,7 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
             (issue) => (issue.eventIds ?? []).includes(elementId) || (issue.conditionIds ?? []).includes(elementId),
         );
 
-        if (displayMode === 'puzzle' && selectedPlaceId) {
+        if (displayMode === LpnDisplayMode.Puzzle && selectedPlaceId) {
             issues = issues.filter((issue) => issue.placeId === selectedPlaceId);
         }
 
@@ -186,7 +190,7 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
 
         let issues = result.issues.filter((issue) => (issue.connectionIds ?? []).includes(connectionId));
 
-        if (displayMode === 'puzzle' && selectedPlaceId) {
+        if (displayMode === LpnDisplayMode.Puzzle && selectedPlaceId) {
             issues = issues.filter((issue) => issue.placeId === selectedPlaceId);
         }
 
@@ -267,12 +271,26 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
             icon: showingSolution ? 'lightbulb' : 'lightbulb_outline',
             tooltip: showingSolution ? 'TOKEN_TRAIL.BUTTON_HIDE_SOLUTION' : 'TOKEN_TRAIL.BUTTON_SHOW_SOLUTION',
             color: 'primary',
-            isActive: showingSolution || mode === 'construction' || !disabled,
+            isActive: showingSolution || mode === LpnDisplayMode.Construction || !disabled,
             action: () => this.toggleSolution(),
         });
 
+        const sourceNet = this.goalsService.sourceNet();
+        const hasConcurrency = sourceNet ? this.goalsService.hasConcurrencyInNet(sourceNet) : false;
+        const hasConflict = sourceNet ? this.goalsService.hasConflictInNet(sourceNet) : false;
+        const hasLoop = sourceNet ? this.goalsService.hasLoopInNet(sourceNet) : false;
+        const hasAdvancedFeatures = hasConcurrency || hasConflict || hasLoop;
+
+        const isPuzzleMediumUnlocked = this.goalsService.unlockedPuzzle().has(LpnGenerationDifficulty.Medium);
+        const isPuzzleHardUnlocked = this.goalsService.unlockedPuzzle().has(LpnGenerationDifficulty.Hard);
+        const isPuzzleExpertUnlocked = this.goalsService.unlockedPuzzle().has(LpnGenerationDifficulty.Expert);
+
+        const isConstMediumUnlocked = this.goalsService.unlockedConstruction().has(LpnGenerationDifficulty.Medium);
+        const isConstHardUnlocked = this.goalsService.unlockedConstruction().has(LpnGenerationDifficulty.Hard);
+        const isConstExpertUnlocked = this.goalsService.unlockedConstruction().has(LpnGenerationDifficulty.Expert);
+
         // 4. Synthesize Action (Puzzle mode only) or Goals Difficulty Action (Construction mode only)
-        if (mode === 'puzzle') {
+        if (mode === LpnDisplayMode.Puzzle) {
             actions.push({
                 icon: 'science',
                 tooltip: 'TOKEN_TRAIL.BUTTON_SYNTHESIZE_LPN',
@@ -285,19 +303,60 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
                     {
                         label: 'TOKEN_TRAIL.LPN_DIFFICULTY_EASY',
                         icon: 'sentiment_satisfied',
-                        action: () => this.createNewLPNWithDifficulty('easy'),
+                        action: () => this.createNewLPNWithDifficulty(LpnGenerationDifficulty.Easy),
                     },
                     {
                         label: 'TOKEN_TRAIL.LPN_DIFFICULTY_MEDIUM',
-                        icon: 'sentiment_neutral',
-                        action: () => this.createNewLPNWithDifficulty('medium'),
-                        disabled: !this.goalsService.unlockedPuzzle().has('medium'),
+                        icon: !isPuzzleMediumUnlocked
+                            ? 'sentiment_neutral'
+                            : !hasConcurrency
+                              ? 'block'
+                              : 'sentiment_neutral',
+                        action: () => {
+                            if (!hasConcurrency) {
+                                this.toaster.showWarning(
+                                    'TOKEN_TRAIL.GOALS.DIFFICULTY_DISABLED_TITLE',
+                                    'TOKEN_TRAIL.GOALS.DIFFICULTY_DISABLED_NO_CONCURRENCY',
+                                );
+                                return;
+                            }
+                            this.createNewLPNWithDifficulty(LpnGenerationDifficulty.Medium);
+                        },
+                        disabled: !isPuzzleMediumUnlocked,
                     },
                     {
                         label: 'TOKEN_TRAIL.LPN_DIFFICULTY_HARD',
-                        icon: 'sentiment_very_dissatisfied',
-                        action: () => this.createNewLPNWithDifficulty('hard'),
-                        disabled: !this.goalsService.unlockedPuzzle().has('hard'),
+                        icon: !isPuzzleHardUnlocked
+                            ? 'sentiment_very_dissatisfied'
+                            : !hasConflict
+                              ? 'block'
+                              : 'sentiment_very_dissatisfied',
+                        action: () => {
+                            if (!hasConflict) {
+                                this.toaster.showWarning(
+                                    'TOKEN_TRAIL.GOALS.DIFFICULTY_DISABLED_TITLE',
+                                    'TOKEN_TRAIL.GOALS.DIFFICULTY_DISABLED_NO_CONFLICT',
+                                );
+                                return;
+                            }
+                            this.createNewLPNWithDifficulty(LpnGenerationDifficulty.Hard);
+                        },
+                        disabled: !isPuzzleHardUnlocked,
+                    },
+                    {
+                        label: 'TOKEN_TRAIL.LPN_DIFFICULTY_EXPERT',
+                        icon: !isPuzzleExpertUnlocked ? 'psychology' : !hasAdvancedFeatures ? 'block' : 'psychology',
+                        action: () => {
+                            if (!hasAdvancedFeatures) {
+                                this.toaster.showWarning(
+                                    'TOKEN_TRAIL.GOALS.DIFFICULTY_DISABLED_TITLE',
+                                    'TOKEN_TRAIL.GOALS.DIFFICULTY_DISABLED_NO_ADVANCED_FEATURES',
+                                );
+                                return;
+                            }
+                            this.createNewLPNWithDifficulty(LpnGenerationDifficulty.Expert);
+                        },
+                        disabled: !isPuzzleExpertUnlocked,
                     },
                 ],
             });
@@ -314,19 +373,60 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
                     {
                         label: 'TOKEN_TRAIL.LPN_DIFFICULTY_EASY',
                         icon: 'sentiment_satisfied',
-                        action: () => this.goalsService.setDifficulty('easy'),
+                        action: () => this.goalsService.setDifficulty(LpnGenerationDifficulty.Easy),
                     },
                     {
                         label: 'TOKEN_TRAIL.LPN_DIFFICULTY_MEDIUM',
-                        icon: 'sentiment_neutral',
-                        action: () => this.goalsService.setDifficulty('medium'),
-                        disabled: !this.goalsService.unlockedConstruction().has('medium'),
+                        icon: !isConstMediumUnlocked
+                            ? 'sentiment_neutral'
+                            : !hasConcurrency
+                              ? 'block'
+                              : 'sentiment_neutral',
+                        action: () => {
+                            if (!hasConcurrency) {
+                                this.toaster.showWarning(
+                                    'TOKEN_TRAIL.GOALS.DIFFICULTY_DISABLED_TITLE',
+                                    'TOKEN_TRAIL.GOALS.DIFFICULTY_DISABLED_NO_CONCURRENCY',
+                                );
+                                return;
+                            }
+                            this.goalsService.setDifficulty(LpnGenerationDifficulty.Medium);
+                        },
+                        disabled: !isConstMediumUnlocked,
                     },
                     {
                         label: 'TOKEN_TRAIL.LPN_DIFFICULTY_HARD',
-                        icon: 'sentiment_very_dissatisfied',
-                        action: () => this.goalsService.setDifficulty('hard'),
-                        disabled: !this.goalsService.unlockedConstruction().has('hard'),
+                        icon: !isConstHardUnlocked
+                            ? 'sentiment_very_dissatisfied'
+                            : !hasConflict
+                              ? 'block'
+                              : 'sentiment_very_dissatisfied',
+                        action: () => {
+                            if (!hasConflict) {
+                                this.toaster.showWarning(
+                                    'TOKEN_TRAIL.GOALS.DIFFICULTY_DISABLED_TITLE',
+                                    'TOKEN_TRAIL.GOALS.DIFFICULTY_DISABLED_NO_CONFLICT',
+                                );
+                                return;
+                            }
+                            this.goalsService.setDifficulty(LpnGenerationDifficulty.Hard);
+                        },
+                        disabled: !isConstHardUnlocked,
+                    },
+                    {
+                        label: 'TOKEN_TRAIL.LPN_DIFFICULTY_EXPERT',
+                        icon: !isConstExpertUnlocked ? 'psychology' : !hasAdvancedFeatures ? 'block' : 'psychology',
+                        action: () => {
+                            if (!hasAdvancedFeatures) {
+                                this.toaster.showWarning(
+                                    'TOKEN_TRAIL.GOALS.DIFFICULTY_DISABLED_TITLE',
+                                    'TOKEN_TRAIL.GOALS.DIFFICULTY_DISABLED_NO_ADVANCED_FEATURES',
+                                );
+                                return;
+                            }
+                            this.goalsService.setDifficulty(LpnGenerationDifficulty.Expert);
+                        },
+                        disabled: !isConstExpertUnlocked,
                     },
                 ],
             });
@@ -365,7 +465,7 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
         });
 
         // 7. Delete Action (Construction mode only) - Placed last
-        if (mode === 'construction') {
+        if (mode === LpnDisplayMode.Construction) {
             actions.push({
                 icon: 'delete',
                 tooltip: 'TOKEN_TRAIL.BUTTON_CLEAR_DRAWING',
@@ -379,18 +479,18 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
     });
 
     private getModeToggleIcon(): string {
-        return this.stateService.displayMode() === 'puzzle' ? 'construction' : 'extension';
+        return this.stateService.displayMode() === LpnDisplayMode.Puzzle ? 'construction' : 'extension';
     }
 
     private getModeToggleTooltip(): string {
-        return this.stateService.displayMode() === 'puzzle'
+        return this.stateService.displayMode() === LpnDisplayMode.Puzzle
             ? 'TOKEN_TRAIL.MODE_CONSTRUCTION'
             : 'TOKEN_TRAIL.MODE_PUZZLE';
     }
 
     private toggleMode(): void {
         const currentMode = this.stateService.displayMode();
-        const nextMode = currentMode === 'puzzle' ? 'construction' : 'puzzle';
+        const nextMode = currentMode === LpnDisplayMode.Puzzle ? LpnDisplayMode.Construction : LpnDisplayMode.Puzzle;
 
         // 1. If showing solution, toggle it off first so we don't save the solution state as the snapshot
         if (this.stateService.showingSolution()) {
@@ -399,7 +499,7 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
 
         // 2. Save snapshot of the current mode
         const currentMergeState =
-            currentMode === 'construction' ? this.mergeService.getMergeStateSnapshot() : undefined;
+            currentMode === LpnDisplayMode.Construction ? this.mergeService.getMergeStateSnapshot() : undefined;
         this.stateService.saveSnapshot(currentMode, currentMergeState);
 
         const hasNextSnapshot = this.stateService.hasSnapshot(nextMode);
@@ -411,7 +511,7 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
         if (hasNextSnapshot) {
             const restoredMergeState = this.stateService.restoreSnapshot(nextMode);
             // Restore was successful!
-            if (nextMode === 'construction' && restoredMergeState) {
+            if (nextMode === LpnDisplayMode.Construction && restoredMergeState) {
                 this.mergeService.restoreMergeStateSnapshot(restoredMergeState);
             }
             // Fit view after a brief timeout to let UI update
@@ -422,14 +522,14 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
             // No snapshot exists for the next mode (first time entering it)
             this.clearDrawingStateOnly();
 
-            if (nextMode === 'puzzle') {
+            if (nextMode === LpnDisplayMode.Puzzle) {
                 this.createNewLPNWithSynthesis();
             }
         }
     }
 
     protected readonly toolbarInstructions = computed<DrawToolbarInstruction[]>(() => {
-        if (this.stateService.displayMode() === 'puzzle') {
+        if (this.stateService.displayMode() === LpnDisplayMode.Puzzle) {
             return [
                 { label: 'TOKEN_TRAIL.INSTRUCTION_CHANGE_TOKENS', text: 'TOKEN_TRAIL.INSTRUCTION_CHANGE_TOKENS_TEXT' },
                 {
@@ -463,7 +563,7 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
     private elementRef = inject(ElementRef);
 
     private mergeService = inject(TokenTrailMergeService);
-    private originalDisplayMode: 'puzzle' | 'construction' | null = null;
+    private originalDisplayMode: LpnDisplayMode | null = null;
     private backedUpDrawnElements: LabeledNetNode[] = [];
     private backedUpConnections: LabeledNetEdge[] = [];
 
@@ -521,7 +621,7 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
                         (issue.eventIds ?? []).includes(element.id) || (issue.conditionIds ?? []).includes(element.id),
                 );
 
-                if (displayMode === 'puzzle' && selectedPlaceId) {
+                if (displayMode === LpnDisplayMode.Puzzle && selectedPlaceId) {
                     issues = issues.filter((issue) => issue.placeId === selectedPlaceId);
                 }
                 hasIssues = issues.length > 0;
@@ -529,7 +629,7 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
 
             // isNodeInvalid logic
             let isInvalid = !isExam && !showingSolution && invalidNodeIds.has(element.id);
-            if (isInvalid && displayMode === 'puzzle' && selectedPlaceId) {
+            if (isInvalid && displayMode === LpnDisplayMode.Puzzle && selectedPlaceId) {
                 isInvalid = hasIssues;
             }
 
@@ -538,7 +638,7 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
             let shouldShowTooltip = false;
             if (label.length > 15) {
                 shouldShowTooltip = true;
-            } else if (displayMode === 'puzzle') {
+            } else if (displayMode === LpnDisplayMode.Puzzle) {
                 shouldShowTooltip = label.length > 5;
             }
 
@@ -584,14 +684,14 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
                 let issues = validationResult.issues.filter((issue) =>
                     (issue.connectionIds ?? []).includes(connection.id),
                 );
-                if (displayMode === 'puzzle' && selectedPlaceId) {
+                if (displayMode === LpnDisplayMode.Puzzle && selectedPlaceId) {
                     issues = issues.filter((issue) => issue.placeId === selectedPlaceId);
                 }
                 hasIssues = issues.length > 0;
             }
 
             let isInvalid = !isExam && !showingSolution && invalidConnectionIds.has(connection.id);
-            if (isInvalid && displayMode === 'puzzle' && selectedPlaceId) {
+            if (isInvalid && displayMode === LpnDisplayMode.Puzzle && selectedPlaceId) {
                 isInvalid = hasIssues;
             }
 
@@ -619,7 +719,7 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
         const showSolution = this.stateService.showingSolution();
         const solvedTrails = this.stateService.solvedTokenTrails();
 
-        if (displayMode !== 'puzzle' && !showSolution) {
+        if (displayMode !== LpnDisplayMode.Puzzle && !showSolution) {
             // In construction mode, tokens are never visible
             let hasChanges = false;
             for (const node of this.drawnElements()) {
@@ -730,7 +830,7 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
                     this.stateService.clearSnapshots();
                 }
 
-                if (this.stateService.displayMode() === 'puzzle') {
+                if (this.stateService.displayMode() === LpnDisplayMode.Puzzle) {
                     const hasDrawnElements = this.drawnElements().length > 0;
                     if (!hasDrawnElements || !isSameSignature) {
                         this.createNewLPNWithSynthesis();
@@ -773,7 +873,7 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
 
     private handleCustomDrop(event: CustomEvent) {
         if (this.stateService.showingSolution()) return;
-        if (this.stateService.displayMode() === 'puzzle') {
+        if (this.stateService.displayMode() === LpnDisplayMode.Puzzle) {
             this.toaster.showWarning('TOKEN_TRAIL.MODE_WARNING_TITLE', 'TOKEN_TRAIL.MODE_WARNING_PUZZLE_RESTRICTION');
             return;
         }
@@ -825,7 +925,7 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
 
     onDragOver(event: DragEvent) {
         const isFileDrag = event.dataTransfer?.types.includes('Files');
-        if (this.stateService.displayMode() === 'puzzle' && !isFileDrag) return;
+        if (this.stateService.displayMode() === LpnDisplayMode.Puzzle && !isFileDrag) return;
         event.preventDefault();
         if (event.dataTransfer) {
             event.dataTransfer.dropEffect = 'copy';
@@ -851,7 +951,7 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
                 return;
             }
 
-            if (this.stateService.displayMode() === 'puzzle') {
+            if (this.stateService.displayMode() === LpnDisplayMode.Puzzle) {
                 this.toaster.showWarning(
                     'TOKEN_TRAIL.MODE_WARNING_TITLE',
                     'TOKEN_TRAIL.MODE_WARNING_UPLOAD_RESTRICTION',
@@ -890,7 +990,7 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
 
         if (this.stateService.showingSolution()) return;
 
-        if (this.stateService.displayMode() === 'puzzle') {
+        if (this.stateService.displayMode() === LpnDisplayMode.Puzzle) {
             this.toaster.showWarning('TOKEN_TRAIL.MODE_WARNING_TITLE', 'TOKEN_TRAIL.MODE_WARNING_PUZZLE_RESTRICTION');
             return;
         }
@@ -1002,7 +1102,7 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
         if (event.button === 1) {
             event.stopImmediatePropagation();
             event.preventDefault();
-            if (this.stateService.displayMode() === 'puzzle') {
+            if (this.stateService.displayMode() === LpnDisplayMode.Puzzle) {
                 this.toaster.showWarning(
                     'TOKEN_TRAIL.MODE_WARNING_TITLE',
                     'TOKEN_TRAIL.MODE_WARNING_PUZZLE_RESTRICTION',
@@ -1018,7 +1118,7 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
             return;
         }
 
-        if (this.stateService.displayMode() === 'puzzle') {
+        if (this.stateService.displayMode() === LpnDisplayMode.Puzzle) {
             this.toaster.showWarning('TOKEN_TRAIL.MODE_WARNING_TITLE', 'TOKEN_TRAIL.MODE_WARNING_PUZZLE_RESTRICTION');
             return;
         }
@@ -1052,7 +1152,7 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
      */
     onElementRightClick(event: MouseEvent, element: LabeledNetNode) {
         if (this.stateService.showingSolution()) return;
-        if (this.stateService.displayMode() === 'puzzle') {
+        if (this.stateService.displayMode() === LpnDisplayMode.Puzzle) {
             this.toaster.showWarning('TOKEN_TRAIL.MODE_WARNING_TITLE', 'TOKEN_TRAIL.MODE_WARNING_PUZZLE_RESTRICTION');
             return;
         }
@@ -1115,7 +1215,7 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
      */
     onElementDoubleClick(event: MouseEvent, element: LabeledNetNode) {
         if (this.stateService.showingSolution()) return;
-        if (this.stateService.displayMode() === 'puzzle') return;
+        if (this.stateService.displayMode() === LpnDisplayMode.Puzzle) return;
         event.preventDefault();
         event.stopImmediatePropagation();
 
@@ -1150,7 +1250,7 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
      */
     onConnectionMouseDown(event: MouseEvent, connectionId: string) {
         if (this.stateService.showingSolution()) return;
-        if (this.stateService.displayMode() === 'puzzle') {
+        if (this.stateService.displayMode() === LpnDisplayMode.Puzzle) {
             if (event.button === 1) {
                 event.stopImmediatePropagation();
                 event.preventDefault();
@@ -1176,7 +1276,7 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
      */
     onConnectionWheel(event: WheelEvent, connectionId: string) {
         if (this.stateService.showingSolution()) return;
-        if (this.stateService.displayMode() === 'puzzle') return;
+        if (this.stateService.displayMode() === LpnDisplayMode.Puzzle) return;
 
         event.preventDefault();
         event.stopPropagation();
@@ -1246,7 +1346,7 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
             if (
                 this.draggedElement instanceof Condition &&
                 this.dragStartedMergedAnchorId &&
-                this.stateService.displayMode() !== 'puzzle'
+                this.stateService.displayMode() !== LpnDisplayMode.Puzzle
             ) {
                 const anchor = this.getElementById(this.dragStartedMergedAnchorId);
                 if (anchor instanceof Condition) {
@@ -1271,7 +1371,11 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
             event.stopImmediatePropagation();
         }
 
-        if (releasedElement instanceof Condition && this.hasDragged && this.stateService.displayMode() !== 'puzzle') {
+        if (
+            releasedElement instanceof Condition &&
+            this.hasDragged &&
+            this.stateService.displayMode() !== LpnDisplayMode.Puzzle
+        ) {
             this.mergeService.tryMergeConditionOnDrop(releasedElement);
         }
 
@@ -1285,7 +1389,7 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
 
     onElementWheel(event: WheelEvent, element: LabeledNetNode) {
         if (this.stateService.showingSolution()) return;
-        if (this.stateService.displayMode() !== 'puzzle' || !(element instanceof Condition)) {
+        if (this.stateService.displayMode() !== LpnDisplayMode.Puzzle || !(element instanceof Condition)) {
             return;
         }
 
@@ -1415,7 +1519,7 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
             issues = result.issues.filter((issue) => (issue.connectionIds ?? []).includes(id));
         }
 
-        if (this.stateService.displayMode() === 'puzzle') {
+        if (this.stateService.displayMode() === LpnDisplayMode.Puzzle) {
             const selectedPlaceId = this.stateService.selectedPetriPlaceId();
             if (selectedPlaceId) {
                 issues = issues.filter((issue) => issue.placeId === selectedPlaceId);
@@ -1502,14 +1606,14 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
     }
 
     private createNewLPNWithDifficulty(difficulty: LpnGenerationDifficulty) {
-        if (this.stateService.displayMode() === 'construction') return;
+        if (this.stateService.displayMode() === LpnDisplayMode.Construction) return;
         const sourceNet = this.validationService.resolveSourceNetForValidation();
         if (!sourceNet) return;
         this.lpnService.createLPNWithSynthesis(sourceNet, difficulty);
     }
 
     private createNewLPNWithSynthesis() {
-        if (this.stateService.displayMode() === 'construction') return;
+        if (this.stateService.displayMode() === LpnDisplayMode.Construction) return;
         const sourceNet = this.validationService.resolveSourceNetForValidation();
         if (!sourceNet) return;
         this.lpnService.createLPNWithSynthesis(sourceNet);
@@ -1524,7 +1628,7 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
                 return;
             }
 
-            if (this.stateService.displayMode() === 'construction') {
+            if (this.stateService.displayMode() === LpnDisplayMode.Construction) {
                 // Back up the current elements and connections
                 this.backedUpDrawnElements = this.stateService.cloneDrawnElements(this.stateService.drawnElements());
                 this.backedUpConnections = this.stateService.cloneConnections(this.stateService.connections());
@@ -1571,7 +1675,7 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
             // Puzzle mode solution logic:
             if (this.stateService.solutionCache) {
                 this.originalDisplayMode = this.stateService.displayMode();
-                this.stateService.setDisplayMode('puzzle');
+                this.stateService.setDisplayMode(LpnDisplayMode.Puzzle);
                 this.stateService.setSolvedTokenTrails(this.stateService.solutionCache);
                 this.stateService.setShowingSolution(true);
                 this.toaster.showSuccess('TOKEN_TRAIL.SOLUTION_FOUND_TITLE', 'TOKEN_TRAIL.SOLUTION_FOUND_BODY');
@@ -1579,7 +1683,7 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
             }
 
             this.originalDisplayMode = this.stateService.displayMode();
-            this.stateService.setDisplayMode('puzzle');
+            this.stateService.setDisplayMode(LpnDisplayMode.Puzzle);
 
             const ilpnSource = this.lpnService.convertSourceNetToIlpn(sourceNet);
             const ilpnSpec = this.lpnService.convertLpnToIlpn(this.drawnElements(), this.connections());
@@ -1644,7 +1748,7 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
         } else {
             this.stateService.setShowingSolution(false);
             this.stateService.setSolvedTokenTrails(new Map());
-            if (this.stateService.displayMode() === 'construction') {
+            if (this.stateService.displayMode() === LpnDisplayMode.Construction) {
                 // Restore the backed up elements and connections
                 this.stateService.clear(false);
                 for (const el of this.backedUpDrawnElements) {

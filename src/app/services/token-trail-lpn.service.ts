@@ -2,7 +2,7 @@ import { inject, Injectable } from '@angular/core';
 import { PlayService } from './play.service';
 import { PlayValidationService } from './play-validation.service';
 import { PetriNetRegionSynthesisService } from '../../../ilpn-components/src/lib/algorithms/pn/regions/petri-net-region-synthesis.service';
-import { LpnGenerationDifficulty, TokenTrailStateService } from './token-trail-state.service';
+import { LpnGenerationDifficulty, LpnDisplayMode, TokenTrailStateService } from './token-trail-state.service';
 import { SugiyamaService } from './sugiyama.service';
 import { FiringEntry } from '../classes/firing-entry';
 import { PetriNet as IlpnPetriNet } from '../../../ilpn-components/src/lib/models/pn/model/petri-net';
@@ -42,6 +42,8 @@ export class TokenTrailLpnService {
     private goalsService = inject(TokenTrailGoalsService);
     private validationService = inject(TokenTrailValidationService);
     private _lastSelectedEntriesHash = '';
+    private _synthesisTimeoutId: ReturnType<typeof setTimeout> | null = null;
+    private _synthesisActiveRunId = 0;
 
     /**
      * Synthesizes a new Labeled Petri Net (LPN) based on traces derived from the source Petri net
@@ -58,21 +60,30 @@ export class TokenTrailLpnService {
     ) {
         let difficulty = overrideDifficulty;
         if (!difficulty) {
-            difficulty = this.modeService.isExamMode(Tab.TOKEN_TRAIL) ? 'hard' : 'easy';
+            difficulty =
+                this.stateService.displayMode() === LpnDisplayMode.Puzzle
+                    ? this.stateService.lpnGenerationDifficulty()
+                    : this.goalsService.currentDifficulty();
         }
-        this.stateService.setLpnGenerationDifficulty(difficulty);
 
-        const config = DIFFICULTY_CONFIGURATIONS[difficulty];
+        const finalDifficulty = this.goalsService.generateGoals(sourceNet, difficulty);
+
+        this.stateService.setLpnGenerationDifficulty(finalDifficulty);
+        this.goalsService.currentDifficulty.set(finalDifficulty);
+
+        const config = DIFFICULTY_CONFIGURATIONS[finalDifficulty];
         const nodeCount = sourceNet.allNodes.length;
         const maxTraceLength = Math.max(3, Math.floor(nodeCount * config.traceLengthMultiplier));
         const maxTraces = Math.max(1, Math.floor(nodeCount * config.maxTracesMultiplier));
         const maxEdges = Math.max(5, Math.floor(nodeCount * config.maxEdgesMultiplier));
 
         this.playService.firingEntries.set([]);
-        this.playValidationService.findSequences(sourceNet, 1, maxTraceLength);
+        this.playValidationService.findSequences(sourceNet, 1, 300);
 
         const entries = this.playService.firingEntries();
-        const validEntries = entries.filter((entry) => entry.isValid && entry.labels.length > 0);
+        const validEntries = entries.filter(
+            (entry) => entry.isValid && entry.labels.length > 0 && entry.labels.length <= maxTraceLength,
+        );
 
         if (validEntries.length === 0) {
             if (onFailure) onFailure();
@@ -86,7 +97,28 @@ export class TokenTrailLpnService {
 
         const ilpnSource = this.convertSourceNetToIlpn(sourceNet);
 
-        this.attemptSynthesis(sourceNet, ilpnSource, validEntries, maxTraces, maxEdges, config, 1, onFailure);
+        const runId = ++this._synthesisActiveRunId;
+        if (this._synthesisTimeoutId) {
+            clearTimeout(this._synthesisTimeoutId);
+        }
+
+        this._synthesisTimeoutId = setTimeout(() => {
+            if (runId !== this._synthesisActiveRunId) return;
+            console.warn('LPN synthesis timed out after 15 seconds.');
+            this.loadingService.hide();
+            this._synthesisActiveRunId = 0;
+            this._synthesisTimeoutId = null;
+
+            if (onFailure) onFailure();
+            if (this.tabStateService.currentTab() === Tab.TOKEN_TRAIL) {
+                this.toaster.showWarning(
+                    'TOKEN_TRAIL.LPN_SYNTHESIS_ERROR_TITLE',
+                    'TOKEN_TRAIL.LPN_SYNTHESIS_ERROR_BODY',
+                );
+            }
+        }, 15000);
+
+        this.attemptSynthesis(sourceNet, ilpnSource, validEntries, maxTraces, maxEdges, config, 1, runId, onFailure);
     }
 
     private attemptSynthesis(
@@ -97,9 +129,11 @@ export class TokenTrailLpnService {
         maxEdges: number,
         config: LpnGenerationConfiguration,
         attempt: number,
+        runId: number,
         onFailure?: () => void,
     ) {
-        const selectedEntries = this._selectEntriesWithVariation(validEntries, maxTraces);
+        this.stateService.resetCounters();
+        const selectedEntries = this._selectEntriesWithVariation(sourceNet, validEntries, maxTraces);
         const inputNets: IlpnPetriNet[] = [];
 
         const splittingProbability = config.splittingProbability;
@@ -129,7 +163,11 @@ export class TokenTrailLpnService {
                     const occ = (currentOccurrence.get(label) || 0) + 1;
                     currentOccurrence.set(label, occ);
                     if (labelCounts.get(label)! > 1) {
-                        finalLabel = `${label}_instance${occ}`;
+                        const conflict = this.goalsService.selectedConflict;
+                        const isConflictTrans = conflict && (label === conflict[0] || label === conflict[1]);
+                        if (!isConflictTrans) {
+                            finalLabel = `${label}_instance${occ}`;
+                        }
                     }
                 }
 
@@ -151,9 +189,11 @@ export class TokenTrailLpnService {
             .pipe(take(1))
             .subscribe({
                 next: (result) => {
+                    if (runId !== this._synthesisActiveRunId) return;
+
                     // Generate local candidate LPN elements and connections
                     const candidate = this.buildCandidateLpn(result.result, maxEdges);
-                    if (this.stateService.displayMode() === 'construction') {
+                    if (this.stateService.displayMode() === LpnDisplayMode.Construction) {
                         const adjusted = this.adjustLpnToSatisfyGoals(candidate.elements, candidate.connections);
                         candidate.elements = adjusted.elements;
                         candidate.connections = adjusted.connections;
@@ -168,9 +208,28 @@ export class TokenTrailLpnService {
                         .pipe(take(1))
                         .subscribe({
                             next: (results) => {
+                                if (runId !== this._synthesisActiveRunId) return;
+
                                 const allValid = results.every((res) => res.valid);
                                 let allGoalsMet = true;
-                                if (allValid && this.stateService.displayMode() === 'construction') {
+                                let solvedTrailsMap: Map<string, Record<string, number>> | null = null;
+                                if (allValid) {
+                                    solvedTrailsMap = this.mapValidatorResultsToSolvedTrails(results);
+
+                                    // Always populate candidate trail markings for the validation check and display
+                                    for (const el of candidate.elements) {
+                                        if (el instanceof Condition) {
+                                            el.trailMarkings = {};
+                                            for (const [petriPlaceId, markings] of solvedTrailsMap.entries()) {
+                                                const tokens = markings[el.id] ?? 0;
+                                                if (tokens > 0) {
+                                                    el.trailMarkings[petriPlaceId] = tokens;
+                                                }
+                                            }
+                                            el.updateDynamicLabel();
+                                        }
+                                    }
+
                                     const input = this.buildValidationInputForCandidate(
                                         sourceNet,
                                         candidate.elements,
@@ -183,24 +242,13 @@ export class TokenTrailLpnService {
                                     }
                                 }
 
-                                if (allValid && allGoalsMet) {
-                                    const solvedTrailsMap = this.mapValidatorResultsToSolvedTrails(results);
-
-                                    // If we are in construction mode, compute trail markings and update labels for condition elements
-                                    if (this.stateService.displayMode() === 'construction') {
-                                        for (const el of candidate.elements) {
-                                            if (el instanceof Condition) {
-                                                el.trailMarkings = {};
-                                                for (const [petriPlaceId, markings] of solvedTrailsMap.entries()) {
-                                                    const tokens = markings[el.id] ?? 0;
-                                                    if (tokens > 0) {
-                                                        el.trailMarkings[petriPlaceId] = tokens;
-                                                    }
-                                                }
-                                                el.updateDynamicLabel();
-                                            }
-                                        }
+                                if (allValid && allGoalsMet && solvedTrailsMap) {
+                                    // Clear timeout
+                                    if (this._synthesisTimeoutId) {
+                                        clearTimeout(this._synthesisTimeoutId);
+                                        this._synthesisTimeoutId = null;
                                     }
+                                    this._synthesisActiveRunId = 0;
 
                                     // Valid and goals satisfied! Render it visually by updating the state service
                                     this.stateService.clear(false);
@@ -222,7 +270,7 @@ export class TokenTrailLpnService {
                                     // Cache the solution
                                     this.stateService.solutionCache = solvedTrailsMap;
                                     this.stateService.lastSynthesizedNetSignature = this.getNetSignature(sourceNet);
-                                    if (this.stateService.displayMode() === 'construction') {
+                                    if (this.stateService.displayMode() === LpnDisplayMode.Construction) {
                                         this.stateService.cachedConstructionSolutionElements =
                                             this.stateService.cloneDrawnElements(this.stateService.drawnElements());
                                         this.stateService.cachedConstructionSolutionConnections =
@@ -233,11 +281,24 @@ export class TokenTrailLpnService {
                                             'TOKEN_TRAIL.SOLUTION_FOUND_TITLE',
                                             'TOKEN_TRAIL.SOLUTION_FOUND_BODY',
                                         );
+                                    } else if (this.stateService.displayMode() === LpnDisplayMode.Puzzle) {
+                                        // In puzzle mode the user fills in trail markings themselves.
+                                        // Clear all trailMarkings so conditions show their base name (e.g. 'c1')
+                                        // and appear blank on the canvas — solution is stored in the cache only.
+                                        for (const el of this.stateService.drawnElements()) {
+                                            if (el instanceof Condition) {
+                                                el.trailMarkings = {};
+                                                el.updateDynamicLabel();
+                                            }
+                                        }
+                                        this.stateService.updateDrawnElements((e) => [...e]);
                                     }
                                     this.loadingService.hide();
                                 } else {
                                     // Invalid LPN check failed or goals not met, retry if under max retries limit
-                                    if (attempt < 15) {
+                                    const maxRetries =
+                                        this.stateService.displayMode() === LpnDisplayMode.Construction ? 50 : 15;
+                                    if (attempt < maxRetries) {
                                         console.warn(
                                             `Generated LPN not valid for all source places or goals not met. Retrying synthesis attempt ${attempt + 1}...`,
                                         );
@@ -249,10 +310,17 @@ export class TokenTrailLpnService {
                                             maxEdges,
                                             config,
                                             attempt + 1,
+                                            runId,
                                             onFailure,
                                         );
                                     } else {
+                                        if (this._synthesisTimeoutId) {
+                                            clearTimeout(this._synthesisTimeoutId);
+                                            this._synthesisTimeoutId = null;
+                                        }
+                                        this._synthesisActiveRunId = 0;
                                         this.loadingService.hide();
+
                                         if (onFailure) {
                                             onFailure();
                                         }
@@ -266,6 +334,12 @@ export class TokenTrailLpnService {
                                 }
                             },
                             error: (err) => {
+                                if (runId !== this._synthesisActiveRunId) return;
+                                if (this._synthesisTimeoutId) {
+                                    clearTimeout(this._synthesisTimeoutId);
+                                    this._synthesisTimeoutId = null;
+                                }
+                                this._synthesisActiveRunId = 0;
                                 console.error('LPN check validator solver error:', err);
                                 this.loadingService.hide();
                                 if (onFailure) {
@@ -281,6 +355,12 @@ export class TokenTrailLpnService {
                         });
                 },
                 error: () => {
+                    if (runId !== this._synthesisActiveRunId) return;
+                    if (this._synthesisTimeoutId) {
+                        clearTimeout(this._synthesisTimeoutId);
+                        this._synthesisTimeoutId = null;
+                    }
+                    this._synthesisActiveRunId = 0;
                     this.loadingService.hide();
                     if (onFailure) {
                         onFailure();
@@ -377,39 +457,6 @@ export class TokenTrailLpnService {
         return `${nodes}::${markings}::${edges}`;
     }
 
-    private getGoalRequirements(): { requiredLabels: Set<string>; parallelPairs: [string, string][] } {
-        const requiredLabels = new Set<string>();
-        const parallelPairs: [string, string][] = [];
-
-        if (this.stateService.displayMode() !== 'construction') {
-            return { requiredLabels, parallelPairs };
-        }
-
-        const goals = this.goalsService.internalGoals;
-        for (const goal of goals) {
-            if (goal.id === 'easy-label-presence' || goal.id === 'duplicate-event' || goal.id === 'triplicate-event') {
-                const match = goal.description.match(/label '([^']+)'/);
-                if (match) {
-                    requiredLabels.add(match[1]);
-                }
-            } else if (goal.id === 'flow-event') {
-                const match = goal.description.match(/event '([^']+)'/);
-                if (match) {
-                    requiredLabels.add(match[1]);
-                }
-            } else if (goal.id === 'parallel-events') {
-                const match = goal.description.match(/events labeled '([^']+)' and '([^']+)'/);
-                if (match) {
-                    requiredLabels.add(match[1]);
-                    requiredLabels.add(match[2]);
-                    parallelPairs.push([match[1], match[2]]);
-                }
-            }
-        }
-
-        return { requiredLabels, parallelPairs };
-    }
-
     /**
      * Selects a subset of unique firing entries, shuffling and using a hash check to ensure variation
      * in the synthesized traces compared to the last selection. Ensures goal-relevant traces are included.
@@ -418,52 +465,130 @@ export class TokenTrailLpnService {
      * @param maxTraces The maximum number of traces to select.
      * @returns A subset of firing entries.
      */
-    private _selectEntriesWithVariation(validEntries: FiringEntry[], maxTraces: number): FiringEntry[] {
-        const { requiredLabels, parallelPairs } = this.getGoalRequirements();
+    private _selectEntriesWithVariation(
+        sourceNet: Diagram,
+        validEntries: FiringEntry[],
+        maxTraces: number,
+    ): FiringEntry[] {
+        const difficulty = this.stateService.lpnGenerationDifficulty();
+
+        const containsDirectSequence = (labels: string[], a: string, b: string) => {
+            for (let i = 0; i < labels.length - 1; i++) {
+                if (labels[i] === a && labels[i + 1] === b) return true;
+            }
+            return false;
+        };
+
+        if (difficulty === LpnGenerationDifficulty.Easy) {
+            let candidates: FiringEntry[] = [];
+            const seq = this.goalsService.selectedSequence;
+            if (seq) {
+                const [A, B] = seq;
+                candidates = validEntries.filter((entry) => containsDirectSequence(entry.labels, A, B));
+                if (candidates.length === 0) {
+                    candidates = validEntries.filter((entry) => {
+                        const idxA = entry.labels.indexOf(A);
+                        const idxB = entry.labels.indexOf(B);
+                        return idxA !== -1 && idxB !== -1 && idxA < idxB;
+                    });
+                }
+            }
+            if (candidates.length === 0) {
+                candidates = validEntries;
+            }
+
+            let selected: FiringEntry;
+            let hash = '';
+            let retries = 0;
+            do {
+                selected = candidates[Math.floor(Math.random() * candidates.length)];
+                hash = selected.labels.join('-');
+                retries++;
+            } while (hash === this._lastSelectedEntriesHash && retries < 15 && candidates.length > 1);
+
+            this._lastSelectedEntriesHash = hash;
+            return [selected];
+        }
 
         const mustHave = new Set<FiringEntry>();
 
-        // 1. Handle parallel pairs first to ensure we get both interleavings
-        for (const [l1, l2] of parallelPairs) {
-            // Find a trace with l1 before l2
-            const traceL1BeforeL2 = validEntries.find((entry) => {
-                const idx1 = entry.labels.indexOf(l1);
-                const idx2 = entry.labels.indexOf(l2);
-                return idx1 !== -1 && idx2 !== -1 && idx1 < idx2;
-            });
-            if (traceL1BeforeL2) {
-                mustHave.add(traceL1BeforeL2);
+        if (difficulty === LpnGenerationDifficulty.Medium) {
+            const concurrent = this.goalsService.selectedConcurrency;
+            if (concurrent) {
+                const [A, B] = concurrent;
+                const traceAB = validEntries.find((entry) => {
+                    const idxA = entry.labels.indexOf(A);
+                    const idxB = entry.labels.indexOf(B);
+                    return idxA !== -1 && idxB !== -1 && idxA < idxB;
+                });
+                const traceBA = validEntries.find((entry) => {
+                    const idxA = entry.labels.indexOf(A);
+                    const idxB = entry.labels.indexOf(B);
+                    return idxA !== -1 && idxB !== -1 && idxB < idxA;
+                });
+                if (traceAB) mustHave.add(traceAB);
+                if (traceBA) mustHave.add(traceBA);
             }
-
-            // Find a trace with l2 before l1
-            const traceL2BeforeL1 = validEntries.find((entry) => {
-                const idx1 = entry.labels.indexOf(l1);
-                const idx2 = entry.labels.indexOf(l2);
-                return idx1 !== -1 && idx2 !== -1 && idx2 < idx1;
-            });
-            if (traceL2BeforeL1) {
-                mustHave.add(traceL2BeforeL1);
-            }
-        }
-
-        // 2. Handle other required labels
-        for (const label of requiredLabels) {
-            // Check if we already have a trace containing this label in mustHave
-            const alreadyHasLabel = Array.from(mustHave).some((entry) => entry.labels.includes(label));
-            if (!alreadyHasLabel) {
-                // Find any trace containing this label
-                const traceWithLabel = validEntries.find((entry) => entry.labels.includes(label));
-                if (traceWithLabel) {
-                    mustHave.add(traceWithLabel);
+            const loopA = this.goalsService.selectedLoopLabel;
+            if (loopA) {
+                let traceWithLoop = validEntries.find((entry) => entry.labels.filter((l) => l === loopA).length > 1);
+                if (!traceWithLoop) {
+                    traceWithLoop = validEntries.find((entry) => entry.labels.includes(loopA));
                 }
+                if (traceWithLoop) mustHave.add(traceWithLoop);
+            }
+        } else if (difficulty === LpnGenerationDifficulty.Hard) {
+            const conflict = this.goalsService.selectedConflict;
+            if (conflict) {
+                const [Y, Z] = conflict;
+                const { traceY, traceZ } = this._findAlignedConflictTraces(validEntries, Y, Z);
+                if (traceY) mustHave.add(traceY);
+                if (traceZ) mustHave.add(traceZ);
+            }
+            const splitX = this.goalsService.selectedSplitLabel;
+            if (splitX) {
+                const traceWithX = validEntries.find((entry) => entry.labels.includes(splitX));
+                if (traceWithX) mustHave.add(traceWithX);
+            }
+        } else if (difficulty === LpnGenerationDifficulty.Expert) {
+            // Concurrency
+            const concurrent = this.goalsService.selectedConcurrency;
+            if (concurrent) {
+                const [A, B] = concurrent;
+                const traceAB = validEntries.find((entry) => {
+                    const idxA = entry.labels.indexOf(A);
+                    const idxB = entry.labels.indexOf(B);
+                    return idxA !== -1 && idxB !== -1 && idxA < idxB;
+                });
+                const traceBA = validEntries.find((entry) => {
+                    const idxA = entry.labels.indexOf(A);
+                    const idxB = entry.labels.indexOf(B);
+                    return idxA !== -1 && idxB !== -1 && idxB < idxA;
+                });
+                if (traceAB) mustHave.add(traceAB);
+                if (traceBA) mustHave.add(traceBA);
+            }
+            // Conflict
+            const conflict = this.goalsService.selectedConflict;
+            if (conflict) {
+                const [Y, Z] = conflict;
+                const { traceY, traceZ } = this._findAlignedConflictTraces(validEntries, Y, Z);
+                if (traceY) mustHave.add(traceY);
+                if (traceZ) mustHave.add(traceZ);
+            }
+            // Loop
+            const loopA = this.goalsService.selectedLoopLabel;
+            if (loopA) {
+                let traceWithLoop = validEntries.find((entry) => entry.labels.filter((l) => l === loopA).length > 1);
+                if (!traceWithLoop) {
+                    traceWithLoop = validEntries.find((entry) => entry.labels.includes(loopA));
+                }
+                if (traceWithLoop) mustHave.add(traceWithLoop);
             }
         }
-
-        // Now we have our base mustHave list.
-        const baseSelection = Array.from(mustHave);
 
         // We want to add variation and fill up to maxTraces.
-        // We will randomly select from the remaining validEntries.
+        const baseSelection = Array.from(mustHave);
         const remainingEntries = validEntries.filter((entry) => !mustHave.has(entry));
 
         let selectedEntries: FiringEntry[];
@@ -472,7 +597,6 @@ export class TokenTrailLpnService {
 
         do {
             const shuffledRemaining = [...remainingEntries].sort(() => 0.5 - Math.random());
-            // Target size is between baseSelection.length and maxTraces
             const minSize = Math.max(baseSelection.length, 1);
             const maxSize = Math.max(minSize, maxTraces);
             const targetSize = minSize + Math.floor(Math.random() * (maxSize - minSize + 1));
@@ -492,6 +616,52 @@ export class TokenTrailLpnService {
 
         this._lastSelectedEntriesHash = hash;
         return selectedEntries;
+    }
+
+    private _findAlignedConflictTraces(
+        validEntries: FiringEntry[],
+        Y: string,
+        Z: string,
+    ): { traceY: FiringEntry | undefined; traceZ: FiringEntry | undefined } {
+        let bestY: FiringEntry | undefined;
+        let bestZ: FiringEntry | undefined;
+        let maxCommonPrefixLen = -1;
+
+        for (const entryY of validEntries) {
+            if (!entryY.labels.includes(Y) || entryY.labels.includes(Z)) continue;
+            const idxY = entryY.labels.indexOf(Y);
+            const prefixY = entryY.labels.slice(0, idxY);
+
+            for (const entryZ of validEntries) {
+                if (!entryZ.labels.includes(Z) || entryZ.labels.includes(Y)) continue;
+                const idxZ = entryZ.labels.indexOf(Z);
+                const prefixZ = entryZ.labels.slice(0, idxZ);
+
+                if (prefixY.length === prefixZ.length && prefixY.every((val, i) => val === prefixZ[i])) {
+                    return { traceY: entryY, traceZ: entryZ };
+                }
+
+                let commonLen = 0;
+                const minLen = Math.min(prefixY.length, prefixZ.length);
+                while (commonLen < minLen && prefixY[commonLen] === prefixZ[commonLen]) {
+                    commonLen++;
+                }
+
+                if (commonLen > maxCommonPrefixLen) {
+                    maxCommonPrefixLen = commonLen;
+                    bestY = entryY;
+                    bestZ = entryZ;
+                }
+            }
+        }
+
+        if (!bestY || !bestZ) {
+            const traceYNotZ = validEntries.find((entry) => entry.labels.includes(Y) && !entry.labels.includes(Z));
+            const traceZNotY = validEntries.find((entry) => entry.labels.includes(Z) && !entry.labels.includes(Y));
+            return { traceY: traceYNotZ, traceZ: traceZNotY };
+        }
+
+        return { traceY: bestY, traceZ: bestZ };
     }
 
     /**
@@ -693,198 +863,92 @@ export class TokenTrailLpnService {
         initialElements: LabeledNetNode[],
         initialConnections: LabeledNetEdge[],
     ): { elements: LabeledNetNode[]; connections: LabeledNetEdge[] } {
-        const goals = this.goalsService.internalGoals;
-        if (!goals || goals.length === 0) return { elements: initialElements, connections: initialConnections };
+        const splitLabel = this.goalsService.selectedSplitLabel;
+        if (!splitLabel) return { elements: initialElements, connections: initialConnections };
 
         const elements = [...initialElements];
         const connections = [...initialConnections];
 
-        // 1. Process duplicate/triplicate/presence goals first
-        for (const goal of goals) {
-            if (goal.id === 'duplicate-event' || goal.id === 'triplicate-event' || goal.id === 'easy-label-presence') {
-                const labelMatch = goal.description.match(/label '([^']+)'/);
-                if (!labelMatch) continue;
-                const label = labelMatch[1];
+        let matchingEvents = elements.filter(
+            (e): e is LabeledEvent => e instanceof LabeledEvent && e.label === splitLabel,
+        );
 
-                const targetCount = goal.id === 'triplicate-event' ? 3 : goal.id === 'duplicate-event' ? 2 : 1;
+        if (matchingEvents.length === 0) {
+            // Fallback: if the event is missing entirely, duplicate any existing event and change its label
+            const eventToDuplicate = elements.find((e): e is LabeledEvent => e instanceof LabeledEvent);
+            if (eventToDuplicate) {
+                const newId = this.stateService.generateElementId('drawn-trans');
+                const newEvent = this.stateService.buildEvent(newId, splitLabel, splitLabel);
+                newEvent.x = eventToDuplicate.x + 30;
+                newEvent.y = eventToDuplicate.y + 30;
+                elements.push(newEvent);
 
-                let matchingEvents = elements.filter(
-                    (e): e is LabeledEvent => e instanceof LabeledEvent && e.label === label,
-                );
+                const incoming = connections.filter((c) => c.target === eventToDuplicate.id);
+                const outgoing = connections.filter((c) => c.source === eventToDuplicate.id);
 
-                if (matchingEvents.length === 0) {
-                    // Fallback: if the event is missing entirely, duplicate any existing event and change its label
-                    const eventToDuplicate = elements.find((e): e is LabeledEvent => e instanceof LabeledEvent);
-                    if (eventToDuplicate) {
-                        const newId = this.stateService.generateElementId('drawn-trans');
-                        const newEvent = this.stateService.buildEvent(newId, label, label);
-                        newEvent.x = eventToDuplicate.x + 30;
-                        newEvent.y = eventToDuplicate.y + 30;
-                        elements.push(newEvent);
-
-                        const incoming = connections.filter((c) => c.target === eventToDuplicate.id);
-                        const outgoing = connections.filter((c) => c.source === eventToDuplicate.id);
-
-                        for (const conn of incoming) {
-                            const newConn = new LabeledNetEdge(
-                                this.stateService.generateConnectionId('conn'),
-                                conn.source,
-                                newId,
-                                conn.weight,
-                            );
-                            connections.push(newConn);
-                        }
-
-                        for (const conn of outgoing) {
-                            const newConn = new LabeledNetEdge(
-                                this.stateService.generateConnectionId('conn'),
-                                newId,
-                                conn.target,
-                                conn.weight,
-                            );
-                            connections.push(newConn);
-                        }
-
-                        matchingEvents = [newEvent];
-                    }
+                for (const conn of incoming) {
+                    connections.push(
+                        new LabeledNetEdge(
+                            this.stateService.generateConnectionId('conn'),
+                            conn.source,
+                            newId,
+                            conn.weight,
+                        ),
+                    );
                 }
 
-                const currentCount = matchingEvents.length;
-
-                if (currentCount > 0 && currentCount < targetCount) {
-                    const eventToDuplicate = matchingEvents[0];
-                    const numToAdd = targetCount - currentCount;
-
-                    for (let i = 0; i < numToAdd; i++) {
-                        const newId = this.stateService.generateElementId('drawn-trans');
-                        const newEvent = this.stateService.buildEvent(newId, label, label);
-                        newEvent.x = eventToDuplicate.x + 30 * (i + 1);
-                        newEvent.y = eventToDuplicate.y + 30 * (i + 1);
-                        elements.push(newEvent);
-
-                        const incoming = connections.filter((c) => c.target === eventToDuplicate.id);
-                        const outgoing = connections.filter((c) => c.source === eventToDuplicate.id);
-
-                        for (const conn of incoming) {
-                            const newConn = new LabeledNetEdge(
-                                this.stateService.generateConnectionId('conn'),
-                                conn.source,
-                                newId,
-                                conn.weight,
-                            );
-                            connections.push(newConn);
-                        }
-
-                        for (const conn of outgoing) {
-                            const newConn = new LabeledNetEdge(
-                                this.stateService.generateConnectionId('conn'),
-                                newId,
-                                conn.target,
-                                conn.weight,
-                            );
-                            connections.push(newConn);
-                        }
-                    }
+                for (const conn of outgoing) {
+                    connections.push(
+                        new LabeledNetEdge(
+                            this.stateService.generateConnectionId('conn'),
+                            newId,
+                            conn.target,
+                            conn.weight,
+                        ),
+                    );
                 }
+
+                matchingEvents = [newEvent];
             }
         }
 
-        // 2. Process min-events goal
-        const minEventsGoal = goals.find((g) => g.id === 'min-events');
-        if (minEventsGoal) {
-            const minEventsMatch = minEventsGoal.description.match(/at least (\d+) events/);
-            if (minEventsMatch) {
-                const minEvents = parseInt(minEventsMatch[1], 10);
-                const currentEvents = elements.filter((e): e is LabeledEvent => e instanceof LabeledEvent);
-                const currentCount = currentEvents.length;
+        const currentCount = matchingEvents.length;
+        const targetCount = 2; // Label splitting requires at least 2 duplicates
 
-                if (currentCount > 0 && currentCount < minEvents) {
-                    const numToAdd = minEvents - currentCount;
-                    for (let i = 0; i < numToAdd; i++) {
-                        const eventToDuplicate = currentEvents[i % currentEvents.length];
-                        const label = eventToDuplicate.label;
-                        const newId = this.stateService.generateElementId('drawn-trans');
-                        const newEvent = this.stateService.buildEvent(newId, label, label);
-                        newEvent.x = eventToDuplicate.x + 30 * (Math.floor(i / currentEvents.length) + 1);
-                        newEvent.y = eventToDuplicate.y + 30 * (Math.floor(i / currentEvents.length) + 1);
-                        elements.push(newEvent);
+        if (currentCount > 0 && currentCount < targetCount) {
+            const eventToDuplicate = matchingEvents[0];
+            const numToAdd = targetCount - currentCount;
 
-                        const incoming = connections.filter((c) => c.target === eventToDuplicate.id);
-                        const outgoing = connections.filter((c) => c.source === eventToDuplicate.id);
+            for (let i = 0; i < numToAdd; i++) {
+                const newId = this.stateService.generateElementId('drawn-trans');
+                const newEvent = this.stateService.buildEvent(newId, splitLabel, splitLabel);
+                newEvent.x = eventToDuplicate.x + 30 * (i + 1);
+                newEvent.y = eventToDuplicate.y + 30 * (i + 1);
+                elements.push(newEvent);
 
-                        for (const conn of incoming) {
-                            const newConn = new LabeledNetEdge(
-                                this.stateService.generateConnectionId('conn'),
-                                conn.source,
-                                newId,
-                                conn.weight,
-                            );
-                            connections.push(newConn);
-                        }
+                const incoming = connections.filter((c) => c.target === eventToDuplicate.id);
+                const outgoing = connections.filter((c) => c.source === eventToDuplicate.id);
 
-                        for (const conn of outgoing) {
-                            const newConn = new LabeledNetEdge(
-                                this.stateService.generateConnectionId('conn'),
-                                newId,
-                                conn.target,
-                                conn.weight,
-                            );
-                            connections.push(newConn);
-                        }
-                    }
+                for (const conn of incoming) {
+                    connections.push(
+                        new LabeledNetEdge(
+                            this.stateService.generateConnectionId('conn'),
+                            conn.source,
+                            newId,
+                            conn.weight,
+                        ),
+                    );
                 }
-            }
-        }
 
-        // 3. Process flow-event goal
-        const flowGoal = goals.find((g) => g.id === 'flow-event');
-        if (flowGoal) {
-            const labelMatch = flowGoal.description.match(/event '([^']+)'/);
-            if (labelMatch) {
-                const label = labelMatch[1];
-                const matchingEvents = elements.filter(
-                    (e): e is LabeledEvent => e instanceof LabeledEvent && e.label === label,
-                );
-
-                if (matchingEvents.length > 0) {
-                    const satisfied = matchingEvents.some((evt) => {
-                        const hasIncoming = connections.some((c) => c.target === evt.id);
-                        const hasOutgoing = connections.some((c) => c.source === evt.id);
-                        return hasIncoming && hasOutgoing;
-                    });
-
-                    if (!satisfied) {
-                        const evt = matchingEvents[0];
-                        const hasIncoming = connections.some((c) => c.target === evt.id);
-                        const hasOutgoing = connections.some((c) => c.source === evt.id);
-
-                        const conditions = elements.filter((e): e is Condition => e instanceof Condition);
-                        if (conditions.length > 0) {
-                            if (!hasIncoming) {
-                                const startPlace = conditions.find((c) => c.isStartPlace) || conditions[0];
-                                connections.push(
-                                    new LabeledNetEdge(
-                                        this.stateService.generateConnectionId('conn'),
-                                        startPlace.id,
-                                        evt.id,
-                                        1,
-                                    ),
-                                );
-                            }
-                            if (!hasOutgoing) {
-                                const endPlace =
-                                    conditions.find((c) => !c.isStartPlace) || conditions[conditions.length - 1];
-                                connections.push(
-                                    new LabeledNetEdge(
-                                        this.stateService.generateConnectionId('conn'),
-                                        evt.id,
-                                        endPlace.id,
-                                        1,
-                                    ),
-                                );
-                            }
-                        }
-                    }
+                for (const conn of outgoing) {
+                    connections.push(
+                        new LabeledNetEdge(
+                            this.stateService.generateConnectionId('conn'),
+                            newId,
+                            conn.target,
+                            conn.weight,
+                        ),
+                    );
                 }
             }
         }
