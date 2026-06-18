@@ -56,13 +56,9 @@ graph TD
 ### 2.1 The Retry Mechanism
 
 - Inside `attemptSynthesis()`, once the candidate LPN is rendered, we immediately invoke `TokenTrailValidatorService.validate(ilpnSource, ilpnSpec)`.
-- If the ILP solver returns `allValid === true`, we then perform mode-specific checks:
-    - **Construction Mode**: We evaluate the active behavioral goals (e.g. Causal Sequence, Conflict, Concurrency, etc.) on the candidate LPN. Note that the L in L(N) check is omitted from the goals list as it is checked implicitly.
-    - **Puzzle Mode**: We enforce difficulty-based condition (place) count limits and layout complexity constraints to ensure the generated LPN has the appropriate size and readable routing for the selected difficulty:
-        - **Easy**: Around 60% of original places (`<= Math.round(0.6 * P)`).
-        - **Medium**: 60% to 100% of original places (`>= Math.round(0.6 * P)` and `<= P`).
-        - **Hard**: Between 80% and 150% of original places (`>= Math.round(0.8 * P)` and `<= Math.round(1.5 * P)`). Additionally, to prevent high visual routing complexity, the total count of edge bendpoints (Sugiyama dummy nodes) must not exceed the number of real event nodes in the LPN.
-- If the candidate is semantically valid AND all active goals/limits are met, it is accepted.
+- If the ILP solver returns `allValid === true`, we verify that the candidate satisfies all active difficulty goals:
+    - We evaluate the active behavioral goals (e.g. Causal Sequence, Concurrency, Conflict, Loop, etc.) on the candidate LPN. Note that the overall token trail validity is checked implicitly by the ILP solver.
+- If the candidate is semantically valid AND all active goals are met, it is accepted.
 - If either check fails, we increment the attempt counter, log the warning, and trigger a new attempt with a different trace selection.
 - The retry loop is capped at a maximum of **50 attempts** in Construction Mode (and **15 attempts** in Puzzle Mode) to prevent infinite loops.
 - **Fail-Safe Cleanup**: If the maximum number of attempts is reached, or if an asynchronous error occurs, we call `this.stateService.clear()`. This completely wipes any invalid or partially constructed LPN from the canvas so the user is never presented with a faulty model.

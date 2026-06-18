@@ -81,12 +81,14 @@ To ensure that clicking the difficulty switch or selecting a level yields differ
     - _Fallback_: "Ensure there is a causal path from $Y$ to $Z$." (Sequence fallback).
     - _Evaluation_: Verify structurally that $Y$ and $Z$ share a preset Condition, and verify behaviorally that no reachable marking in the user's LPN enables $Y$ and $Z$ at the same time.
 
-### Expert Mode (Focus: Multi-Constraint Complexity)
+### Expert Mode (Focus: Random Multi-Constraint Complexity)
 
-- **Goal 1 (Expert Topology)**: The LPN must contain at least one node.
-- **Goal 2 (True Concurrency)**: Evaluates if $A$ and $B$ are concurrent in the LPN (if concurrency is possible in the source net).
-- **Goal 3 (Alternative Branching)**: Evaluates if $Y$ and $Z$ represent a choice/conflict and share a preset Condition (if conflict is possible in the source net).
-- **Goal 4 (Loop Invariant)**: Evaluates if loop label $A$ can be executed repeatedly (if loops are possible in the source net).
+- **Selection Logic**: Instead of showing a fixed topology goal plus all possible behavior goals, Expert Mode dynamically analyzes the source net capabilities (Concurrency, Conflicts, Loops), instantiates the corresponding goals, randomly shuffles them, and displays exactly **two** active goals.
+- **Goals Offered**:
+    - **True Concurrency**: Evaluates if $A$ and $B$ are concurrent in the LPN (if concurrency is possible in the source net).
+    - **Alternative Branching**: Evaluates if $Y$ and $Z$ represent a choice/conflict and share a preset Condition (if conflict is possible in the source net).
+    - **Loop Invariant**: Evaluates if loop label $A$ can be executed repeatedly (if loops are possible in the source net).
+    - **Causal Sequence (Fallback)**: If the source net doesn't support at least two of the primary properties, sequence path fallbacks are populated to guarantee exactly two goals are shown.
 
 ## 6. Lightweight State Space Explorer
 
@@ -128,14 +130,14 @@ To assist users when they are stuck in Construction Mode, a dynamic LPN solution
 
 ---
 
-## 9. Puzzle Mode LPN Synthesis & Complexity Optimization
+## 9. Puzzle Mode LPN Synthesis & Parameter Tuning
 
-To ensure generated LPNs in Puzzle Mode remain readable and appropriately difficult, we enforce size limits and visual layout complexity checks during synthesis:
+To ensure generated LPNs in Puzzle Mode remain readable and appropriately difficult, we adjust synthesis parameters and enforce goal checks during synthesis:
 
-- **Condition Size Limits**:
-    - **Easy**: $\le$ ~60% of original places (`Math.round(0.6 * P)`).
-    - **Medium**: 60% to 100% of original places.
-    - **Hard**: 80% to 150% of original places.
-- **Layout Complexity Check (Hard Mode)**:
-    - We run the Sugiyama layout dynamically on candidate LPNs during the retry loop.
-    - If a candidate's layout results in more dummy nodes (bend points in the arcs) than real event (transition) nodes, we reject the candidate and retry synthesis. This guarantees that the generated layout is not overly tangled or complex for the user to solve.
+- **Difficulty Configurations**:
+    - **Easy**: Uses shorter trace lengths and fewer traces to keep the net simple, with no short loops and no arc weights.
+    - **Medium**: Moderate trace lengths and count with no short loops.
+    - **Hard**: Longer trace lengths and a wider trace search space to synthesize conflicts.
+    - **Expert**: Maximum trace lengths and traces to encompass all concurrency, loops, and conflict combinations possible.
+- **Goals Verification**:
+    - We run the goals check dynamically on candidate LPNs during the retry loop. If a candidate LPN does not meet all active difficulty goals, we reject it and retry synthesis, guaranteeing that the puzzle is solvable and contains the expected behavioral patterns.

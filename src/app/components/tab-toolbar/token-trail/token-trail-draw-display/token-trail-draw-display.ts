@@ -8,6 +8,7 @@ import {
     OnDestroy,
     OnInit,
     signal,
+    TemplateRef,
     ViewChild,
 } from '@angular/core';
 
@@ -26,9 +27,9 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonToggleModule } from '@angular/material/button-toggle';
 import { MatCardModule } from '@angular/material/card';
-import { MatDialog } from '@angular/material/dialog';
+import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
-import { GRAPH_FILENAMES, GRAPH_IDS, PLACE_RADIUS, TRANSITION_SIZE } from '../../../display/display.constants';
+import { GRAPH_FILENAMES, GRAPH_IDS, PLACE_RADIUS } from '../../../display/display.constants';
 import {
     LpnGenerationDifficulty,
     LpnDisplayMode,
@@ -45,10 +46,6 @@ import { ImageExportService } from '../../../../services/image-export.service';
 import { TokenTrailMergeService } from './token-trail-merge.service';
 import { SvgEventNodeComponent } from '../../../display/svg-event-node/svg-event-node.component';
 import { TokenTrailLpnService } from '../../../../services/token-trail-lpn.service';
-import {
-    TokenTrailValidationDetailDialogComponent,
-    ValidationDetailDialogData,
-} from './token-trail-validation-detail-dialog/token-trail-validation-detail-dialog.component';
 import { ToasterNotificationService } from '../../../../services/toaster-notification.service';
 import { SourcePetriNetService } from '../../../../services/source-petri-net.service';
 import { LoadingService } from '../../../../services/loading.service';
@@ -90,6 +87,7 @@ import { TokenTrailGoalsService } from '../../../../services/token-trail-goals.s
         MatButtonToggleModule,
         MatProgressSpinnerModule,
         MatCardModule,
+        MatDialogModule,
         ValidationBubbleComponent,
     ],
     templateUrl: './token-trail-draw-display.html',
@@ -98,6 +96,10 @@ import { TokenTrailGoalsService } from '../../../../services/token-trail-goals.s
 })
 export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterViewInit {
     @ViewChild('drawingArea') drawingArea!: ElementRef<SVGGraphicsElement>;
+    @ViewChild('helpDialogTemplate') helpDialogTemplate!: TemplateRef<unknown>;
+    protected helpDialogTitle = '';
+    protected helpDialogText = '';
+    private translate = inject(TranslateService);
     protected stateService = inject(TokenTrailStateService);
     private lpnService = inject(TokenTrailLpnService);
     protected validationService = inject(TokenTrailValidationService);
@@ -571,7 +573,6 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
     private displayService = inject(DisplayService);
     private _imageExportService = inject(ImageExportService);
     private panningService = inject(PanningService);
-    private translateService = inject(TranslateService);
     private downloadSub?: Subscription;
     private sourceNetSub?: Subscription;
 
@@ -708,8 +709,6 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
 
     // Dimensions for condition/event nodes
     private readonly CONDITION_RADIUS = PLACE_RADIUS;
-    private readonly EVENT_HALF_W = TRANSITION_SIZE / 2;
-    private readonly EVENT_HALF_H = TRANSITION_SIZE / 2;
     private readonly UNMERGE_DRAG_DISTANCE = this.CONDITION_RADIUS * 2;
 
     private readonly _tokenPreviewEffect = effect(() => {
@@ -1506,38 +1505,6 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
         return !!this.connectionMetadataMap().get(connectionId)?.hasIssues;
     }
 
-    openValidationDetailDialog(id: string, type: 'element' | 'connection') {
-        const result = this.validationService.liveValidation();
-        if (!result) return;
-
-        let issues: ValidationIssue[] = [];
-        if (type === 'element') {
-            issues = result.issues.filter(
-                (issue) => (issue.eventIds ?? []).includes(id) || (issue.conditionIds ?? []).includes(id),
-            );
-        } else {
-            issues = result.issues.filter((issue) => (issue.connectionIds ?? []).includes(id));
-        }
-
-        if (this.stateService.displayMode() === LpnDisplayMode.Puzzle) {
-            const selectedPlaceId = this.stateService.selectedPetriPlaceId();
-            if (selectedPlaceId) {
-                issues = issues.filter((issue) => issue.placeId === selectedPlaceId);
-            }
-        }
-
-        const data: ValidationDetailDialogData = {
-            title: this.translateService.instant('TOASTER.HEADER.VALIDATION'),
-            issues,
-        };
-
-        this.dialog.open(TokenTrailValidationDetailDialogComponent, {
-            data,
-            width: '500px',
-            maxHeight: '80vh',
-        });
-    }
-
     private hasExactConnectionDirection(sourceId: string, targetId: string): boolean {
         return this.connections().some(
             (connection) => connection.source === sourceId && connection.target === targetId,
@@ -1790,5 +1757,30 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
 
     protected shouldShowTooltip(element: LabeledNetNode): boolean {
         return !!this.elementMetadataMap().get(element.id)?.shouldShowTooltip;
+    }
+
+    public showGoalHelp(goalId: string): void {
+        let titleKey = '';
+        let textKey = '';
+
+        if (goalId === 'sequence-net-topology') {
+            titleKey = 'TOKEN_TRAIL.GOALS.HELP_TITLE_SEQUENCE_NET_TOPOLOGY';
+            textKey = 'TOKEN_TRAIL.GOALS.HELP_TEXT_SEQUENCE_NET_TOPOLOGY';
+        } else if (goalId === 'partial-order-net-topology') {
+            titleKey = 'TOKEN_TRAIL.GOALS.HELP_TITLE_PARTIAL_ORDER_TOPOLOGY';
+            textKey = 'TOKEN_TRAIL.GOALS.HELP_TEXT_PARTIAL_ORDER_TOPOLOGY';
+        } else if (goalId === 'state-graph-net-topology') {
+            titleKey = 'TOKEN_TRAIL.GOALS.HELP_TITLE_STATE_GRAPH_TOPOLOGY';
+            textKey = 'TOKEN_TRAIL.GOALS.HELP_TEXT_STATE_GRAPH_TOPOLOGY';
+        }
+
+        if (!titleKey || !textKey) return;
+
+        this.helpDialogTitle = this.translate.instant(titleKey);
+        this.helpDialogText = this.translate.instant(textKey);
+
+        this.dialog.open(this.helpDialogTemplate, {
+            width: '400px',
+        });
     }
 }

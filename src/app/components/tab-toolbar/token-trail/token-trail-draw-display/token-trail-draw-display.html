@@ -39,6 +39,17 @@
                         {{ goal.completed ? 'check_circle' : 'radio_button_unchecked' }}
                     </mat-icon>
                     <span class="goal-description">{{ goal.descriptionKey | translate: goal.descriptionParams }}</span>
+                    @if (goal.id === 'sequence-net-topology' || goal.id === 'partial-order-net-topology' || goal.id ===
+                    'state-graph-net-topology') {
+                    <button
+                        mat-icon-button
+                        class="goal-help-btn"
+                        (click)="showGoalHelp(goal.id)"
+                        type="button"
+                        [matTooltip]="'TOKEN_TRAIL.HELP_TOOLTIP' | translate">
+                        <mat-icon>help_outline</mat-icon>
+                    </button>
+                    }
                 </div>
                 }
             </div>
@@ -267,4 +278,17 @@
         <mat-spinner diameter="60"></mat-spinner>
     </div>
     }
+
+    <ng-template #helpDialogTemplate>
+        <h2 mat-dialog-title class="help-dialog-title">
+            <mat-icon class="help-dialog-icon">help_outline</mat-icon>
+            <span>{{ helpDialogTitle }}</span>
+        </h2>
+        <mat-dialog-content class="help-dialog-content">
+            <p class="help-dialog-text" style="white-space: pre-line">{{ helpDialogText }}</p>
+        </mat-dialog-content>
+        <mat-dialog-actions align="end" class="help-dialog-actions">
+            <button mat-flat-button color="primary" [mat-dialog-close]="true">OK</button>
+        </mat-dialog-actions>
+    </ng-template>
 </div>

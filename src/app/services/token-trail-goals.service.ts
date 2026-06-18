@@ -30,6 +30,12 @@ export interface SourceNetCapabilities {
     postset: Record<string, Record<string, number>>;
 }
 
+export interface CandidateGoal {
+    type: 'concurrency' | 'conflict' | 'loop' | 'sequence';
+    value: [string, string] | string | null;
+    goal: InternalGoal;
+}
+
 @Injectable({
     providedIn: 'root',
 })
@@ -80,9 +86,7 @@ export class TokenTrailGoalsService {
                 return;
             }
 
-            this.lastSourceNetSignature = sig;
-            this.lastDifficulty = difficulty;
-            this.generateGoals(net, difficulty);
+            this.generateGoals(net, difficulty, true);
         });
 
         // Evaluate goals in real-time or when explicitly validated
@@ -119,7 +123,7 @@ export class TokenTrailGoalsService {
             this.activeGoals.set(evaluated);
 
             // Automatic unlocking in Learn Mode
-            if (!isExam) {
+            if (!isExam && !this.stateService.showingSolution()) {
                 const validation = this.validationService.liveValidation();
                 if (validation && validation.valid) {
                     const displayMode = this.stateService.displayMode();
@@ -139,6 +143,10 @@ export class TokenTrailGoalsService {
 
         // Handle validation results and show appropriate toaster notifications
         this.validationService.explicitValidation$.subscribe(({ valid }) => {
+            if (this.stateService.showingSolution()) {
+                return;
+            }
+
             const displayMode = this.stateService.displayMode();
 
             if (!valid) {
@@ -211,7 +219,7 @@ export class TokenTrailGoalsService {
         }
 
         if (this.currentDifficulty() === difficulty) {
-            this.generateGoals(this.sourceNet(), difficulty);
+            this.generateGoals(this.sourceNet(), difficulty, true);
         } else {
             this.currentDifficulty.set(difficulty);
         }
@@ -258,7 +266,24 @@ export class TokenTrailGoalsService {
      * Generates construction goals for the given difficulty using a strategy map.
      * Each difficulty entry is a factory function returning its specific InternalGoal list.
      */
-    public generateGoals(sourceNet: Diagram | null, difficulty: LpnGenerationDifficulty): LpnGenerationDifficulty {
+    public generateGoals(
+        sourceNet: Diagram | null,
+        difficulty: LpnGenerationDifficulty,
+        force = false,
+    ): LpnGenerationDifficulty {
+        const sig = sourceNet ? this.getNetSignature(sourceNet) : '';
+        if (
+            !force &&
+            sig === this.lastSourceNetSignature &&
+            difficulty === this.lastDifficulty &&
+            this.internalGoals.length > 0
+        ) {
+            return difficulty;
+        }
+
+        this.lastSourceNetSignature = sig;
+        this.lastDifficulty = difficulty;
+
         this.stateService.cachedConstructionSolutionElements = null;
         this.stateService.cachedConstructionSolutionConnections = null;
         this.selectedSequence = null;
@@ -395,9 +420,7 @@ export class TokenTrailGoalsService {
         }
 
         if (current !== o.id) return false;
-        if (visited.size !== elements.length) return false;
-
-        return true;
+        return visited.size === elements.length;
     }
 
     private checkSequencePathFallback(elements: TokenTrailElement[], connections: TokenTrailConnection[]): boolean {
@@ -507,11 +530,6 @@ export class TokenTrailGoalsService {
         if (!sharesPreset) return false;
         return !this.checkParallelConcurrency(elements, connections, y, z);
     }
-
-    private checkExpertTopology(elements: TokenTrailElement[], connections: TokenTrailConnection[]): boolean {
-        return elements.length > 0;
-    }
-
     private buildEasyGoals(
         sourceNet: Diagram,
         caps: SourceNetCapabilities,
@@ -634,63 +652,93 @@ export class TokenTrailGoalsService {
         placeIds: string[],
         transitionIds: string[],
     ): InternalGoal[] {
-        const goals: InternalGoal[] = [];
+        // Reset all expert selection variables first
+        this.selectedConcurrency = null;
+        this.selectedConflict = null;
+        this.selectedLoopLabel = null;
 
-        goals.push({
-            id: 'lpn-topology',
-            descriptionKey: 'TOKEN_TRAIL.GOALS.GOAL_EXPERT_TOPOLOGY',
-            check: (elements, connections) => this.checkExpertTopology(elements, connections),
-        });
+        const availableConcurrency = this.pickConcurrentPair(sourceNet, caps, placeIds);
+        const availableConflict = this.pickConflictPair(sourceNet, caps, placeIds);
+        const availableLoop = this.pickLoopLabel(sourceNet, caps);
 
-        const concurrentPair = this.pickConcurrentPair(sourceNet, caps, placeIds);
-        if (concurrentPair) {
-            this.selectedConcurrency = concurrentPair;
-            const [A, B] = concurrentPair;
-            goals.push({
-                id: 'true-concurrency',
-                descriptionKey: 'TOKEN_TRAIL.GOALS.GOAL_CONCURRENCY_CHECK',
-                descriptionParams: { a: A, b: B },
-                check: (elements, connections) => this.checkParallelConcurrency(elements, connections, A, B),
+        const candidates: CandidateGoal[] = [];
+
+        if (availableConcurrency) {
+            const [A, B] = availableConcurrency;
+            candidates.push({
+                type: 'concurrency',
+                value: availableConcurrency,
+                goal: {
+                    id: 'true-concurrency',
+                    descriptionKey: 'TOKEN_TRAIL.GOALS.GOAL_CONCURRENCY_CHECK',
+                    descriptionParams: { a: A, b: B },
+                    check: (elements, connections) => this.checkParallelConcurrency(elements, connections, A, B),
+                },
             });
         }
 
-        const conflictPair = this.pickConflictPair(sourceNet, caps, placeIds);
-        if (conflictPair) {
-            this.selectedConflict = conflictPair;
-            const [Y, Z] = conflictPair;
-            goals.push({
-                id: 'alternative-branching',
-                descriptionKey: 'TOKEN_TRAIL.GOALS.GOAL_ALTERNATIVE_CHOICE',
-                descriptionParams: { y: Y, z: Z },
-                check: (elements, connections) => this.checkAlternativeBranching(elements, connections, Y, Z),
+        if (availableConflict) {
+            const [Y, Z] = availableConflict;
+            candidates.push({
+                type: 'conflict',
+                value: availableConflict,
+                goal: {
+                    id: 'alternative-branching',
+                    descriptionKey: 'TOKEN_TRAIL.GOALS.GOAL_ALTERNATIVE_CHOICE',
+                    descriptionParams: { y: Y, z: Z },
+                    check: (elements, connections) => this.checkAlternativeBranching(elements, connections, Y, Z),
+                },
             });
         }
 
-        const loopLabel = this.pickLoopLabel(sourceNet, caps);
-        if (loopLabel) {
-            this.selectedLoopLabel = loopLabel;
-            goals.push({
-                id: 'loop-invariant',
-                descriptionKey: 'TOKEN_TRAIL.GOALS.GOAL_CONCURRENCY_FALLBACK',
-                descriptionParams: { a: loopLabel },
-                check: (elements, connections) => this.checkTInvariant(elements, connections, loopLabel),
+        if (availableLoop) {
+            candidates.push({
+                type: 'loop',
+                value: availableLoop,
+                goal: {
+                    id: 'loop-invariant',
+                    descriptionKey: 'TOKEN_TRAIL.GOALS.GOAL_CONCURRENCY_FALLBACK',
+                    descriptionParams: { a: availableLoop },
+                    check: (elements, connections) => this.checkTInvariant(elements, connections, availableLoop),
+                },
             });
         }
 
-        if (!concurrentPair && !conflictPair && !loopLabel) {
+        // Shuffle the primary candidates
+        candidates.sort(() => Math.random() - 0.5);
+
+        const selected = candidates.slice(0, 2);
+
+        // Fallback to causal sequence to guarantee we have exactly two goals if possible
+        if (selected.length < 2) {
             const fallbackSeqPair = this.pickSequencePair(sourceNet, caps, placeIds, transitionIds);
             if (fallbackSeqPair) {
                 const [Y, Z] = fallbackSeqPair;
-                goals.push({
-                    id: 'sequence-path',
-                    descriptionKey: 'TOKEN_TRAIL.GOALS.GOAL_ALTERNATIVE_FALLBACK',
-                    descriptionParams: { y: Y, z: Z },
-                    check: (elements, connections) => this.findPathBetweenLabels(elements, connections, Y, Z),
+                selected.push({
+                    type: 'sequence',
+                    value: fallbackSeqPair,
+                    goal: {
+                        id: 'sequence-path',
+                        descriptionKey: 'TOKEN_TRAIL.GOALS.GOAL_ALTERNATIVE_FALLBACK',
+                        descriptionParams: { y: Y, z: Z },
+                        check: (elements, connections) => this.findPathBetweenLabels(elements, connections, Y, Z),
+                    },
                 });
             }
         }
 
-        return goals;
+        // Apply selection to the service properties
+        for (const item of selected) {
+            if (item.type === 'concurrency') {
+                this.selectedConcurrency = item.value as [string, string];
+            } else if (item.type === 'conflict') {
+                this.selectedConflict = item.value as [string, string];
+            } else if (item.type === 'loop') {
+                this.selectedLoopLabel = item.value as string;
+            }
+        }
+
+        return selected.map((s) => s.goal);
     }
 
     /**
@@ -718,32 +766,6 @@ export class TokenTrailGoalsService {
         }
         if (pairs.length === 0) return null;
         return pairs[Math.floor(Math.random() * pairs.length)];
-    }
-
-    /**
-     * Picks a transition label that appears in a loop or branch context.
-     * Falls back to the highest-frequency transition.
-     */
-    private pickSplitLabel(sourceNet: Diagram, caps: SourceNetCapabilities): string | null {
-        const loopOrBranchOptions = sourceNet.transitions
-            .filter((t) => this.isTransitionInLoopOrBranch(sourceNet, t.id))
-            .map((t) => t.label);
-
-        if (loopOrBranchOptions.length > 0) {
-            return loopOrBranchOptions[Math.floor(Math.random() * loopOrBranchOptions.length)];
-        }
-
-        // Fallback: highest firing frequency across reachable markings
-        const freq: Record<string, number> = Object.fromEntries(sourceNet.transitions.map((t) => [t.id, 0]));
-        for (const M of caps.reachableMarkings) {
-            for (const t of sourceNet.transitions) {
-                const presetT = caps.preset[t.id] ?? {};
-                const enabled = sourceNet.places.every((p) => (M[p.id] ?? 0) >= (presetT[p.id] ?? 0));
-                if (enabled) freq[t.id]++;
-            }
-        }
-        const sorted = [...sourceNet.transitions].sort((a, b) => (freq[b.id] ?? 0) - (freq[a.id] ?? 0));
-        return sorted[0]?.label ?? sourceNet.transitions[0]?.label ?? null;
     }
 
     /**
@@ -890,33 +912,6 @@ export class TokenTrailGoalsService {
             }
         }
         return false;
-    }
-
-    /**
-     * BFS from all start conditions; returns true if every event node is reachable.
-     */
-    private checkPathFromStartToAllEvents(elements: TokenTrailElement[], connections: TokenTrailConnection[]): boolean {
-        const startPlaces = elements
-            .filter((e) => e.type === 'Condition' && e.isStartCondition === true)
-            .map((e) => e.id);
-        const allEventIds = elements.filter((e) => e.type === 'Event').map((e) => e.id);
-
-        if (startPlaces.length === 0 || allEventIds.length === 0) return false;
-
-        const adj = this.buildAdjacency(connections);
-        const visited = new Set<string>(startPlaces);
-        const queue = [...startPlaces];
-
-        while (queue.length > 0) {
-            const curr = queue.shift()!;
-            for (const next of adj[curr] ?? []) {
-                if (!visited.has(next)) {
-                    visited.add(next);
-                    queue.push(next);
-                }
-            }
-        }
-        return allEventIds.every((id) => visited.has(id));
     }
 
     /**
@@ -1152,31 +1147,6 @@ export class TokenTrailGoalsService {
         );
     }
 
-    private isTransitionInLoopOrBranch(sourceNet: Diagram, tId: string): boolean {
-        // Branch check: any input place has more than one outgoing arc
-        const inputPlaces = sourceNet.arcs.filter((a) => a.target === tId).map((a) => a.source);
-        const isInBranch = inputPlaces.some((pId) => sourceNet.arcs.filter((a) => a.source === pId).length > 1);
-        if (isInBranch) return true;
-
-        // Loop check: BFS from successors of tId to see if tId is reachable again
-        const adj = this.buildNetAdjacency(sourceNet);
-        const visited = new Set<string>();
-        const queue: string[] = [...(adj[tId] ?? [])];
-        for (const n of queue) visited.add(n);
-
-        while (queue.length > 0) {
-            const curr = queue.shift()!;
-            if (curr === tId) return true;
-            for (const next of adj[curr] ?? []) {
-                if (!visited.has(next)) {
-                    visited.add(next);
-                    queue.push(next);
-                }
-            }
-        }
-        return false;
-    }
-
     private checkParallelConcurrency(
         elements: TokenTrailElement[],
         connections: TokenTrailConnection[],
@@ -1246,15 +1216,6 @@ export class TokenTrailGoalsService {
         const adj: Record<string, string[]> = {};
         for (const conn of connections) {
             (adj[conn.from] ??= []).push(conn.to);
-        }
-        return adj;
-    }
-
-    /** Builds a forward adjacency map from the source Petri net arcs. */
-    private buildNetAdjacency(sourceNet: Diagram): Record<string, string[]> {
-        const adj: Record<string, string[]> = {};
-        for (const arc of sourceNet.arcs) {
-            (adj[arc.source] ??= []).push(arc.target);
         }
         return adj;
     }

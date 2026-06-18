@@ -56,7 +56,7 @@ export class TokenTrailStateService {
     readonly selectedPetriPlaceId = signal<string | null>(null);
 
     readonly displayMode = signal<LpnDisplayMode>(LpnDisplayMode.Puzzle);
-    readonly lpnGenerationDifficulty = signal<LpnGenerationDifficulty>(LpnGenerationDifficulty.Medium);
+    readonly lpnGenerationDifficulty = signal<LpnGenerationDifficulty>(LpnGenerationDifficulty.Easy);
     readonly showingSolution = signal<boolean>(false);
     readonly solvedTokenTrails = signal<Map<string, Record<string, number>>>(new Map());
     public solutionCache: Map<string, Record<string, number>> | null = null;
