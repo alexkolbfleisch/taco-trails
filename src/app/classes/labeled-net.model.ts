@@ -64,14 +64,23 @@ export class LabeledNetEdge implements DisplayableEdge {
     }
 }
 
-export class SugiyamaEdge extends LabeledNetEdge {
+export class SugiyamaEdge implements DisplayableEdge {
+    id: string;
+    source: string;
+    target: string;
+    weight: number;
     isReversed = false;
     virtualSource: string;
     virtualTarget: string;
-    originalEdge?: LabeledNetEdge;
+    originalEdge?: DisplayableEdge;
+    displayLabel = '';
+    bendPoints: { x: number; y: number }[] = [];
 
-    constructor(edge: LabeledNetEdge) {
-        super(edge.id, edge.source, edge.target, edge.weight);
+    constructor(edge: DisplayableEdge) {
+        this.id = edge.id;
+        this.source = edge.source;
+        this.target = edge.target;
+        this.weight = (edge as { weight?: number }).weight || 1;
         this.virtualSource = edge.source;
         this.virtualTarget = edge.target;
         this.originalEdge = edge;
@@ -79,14 +88,14 @@ export class SugiyamaEdge extends LabeledNetEdge {
 }
 
 export class LayeredNode {
-    labeledNetNode?: LabeledNetNode;
+    labeledNetNode?: DisplayableNode;
     id: string;
     layer: number;
     isDummy: boolean;
     x = 0;
     y = 0;
 
-    constructor(id: string, layer: number, labeledNetNode?: LabeledNetNode, isDummy = false) {
+    constructor(id: string, layer: number, labeledNetNode?: DisplayableNode, isDummy = false) {
         this.id = id;
         this.layer = layer;
         this.labeledNetNode = labeledNetNode;

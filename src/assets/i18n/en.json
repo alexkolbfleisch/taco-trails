@@ -2,6 +2,8 @@
     "SWITCH_LANGUAGE": "Switch language to German",
     "CLEAR_NET": "Clear Petri Net",
     "LAYOUT_SPRING_EMBEDDER": "Spring Embedder Layout",
+    "LAYOUT_SUGIYAMA": "Sugiyama Layout",
+    "LAYOUT_SELECT": "Select Layout Algorithm",
     "TAB_DRAW": "Draw",
     "TAB_PLAY": "Play",
     "TAB_REACHABILITY": "Reachability Graph",

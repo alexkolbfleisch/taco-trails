@@ -2,6 +2,8 @@
     "SWITCH_LANGUAGE": "Sprachwechsel auf Englisch",
     "CLEAR_NET": "Petri-Netz löschen",
     "LAYOUT_SPRING_EMBEDDER": "Spring Embedder Layout",
+    "LAYOUT_SUGIYAMA": "Sugiyama Layout",
+    "LAYOUT_SELECT": "Layout-Algorithmus auswählen",
     "TAB_DRAW": "Zeichnen",
     "TAB_PLAY": "Schalten",
     "TAB_REACHABILITY": "Erreichbarkeitsgraph",
