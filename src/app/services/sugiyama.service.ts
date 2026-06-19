@@ -1,5 +1,6 @@
 import { Injectable } from '@angular/core';
-import { LabeledNetEdge, LabeledNetNode, LayeredNode, SugiyamaEdge } from '../classes/labeled-net.model';
+import { LayeredNode, SugiyamaEdge } from '../classes/labeled-net.model';
+import { DisplayableEdge, DisplayableNode } from '../classes/displayable-graph.interface';
 
 /**
  * Service for calculating layout positions using the Sugiyama algorithm.
@@ -13,7 +14,7 @@ export class SugiyamaService {
      * @param nodes The nodes to space out and coordinate.
      * @param edges The edges connecting those nodes.
      */
-    calculateLayout(nodes: LabeledNetNode[], edges: LabeledNetEdge[]) {
+    calculateLayout(nodes: DisplayableNode[], edges: DisplayableEdge[]) {
         // 1. Cycle Breaking
         const dagEdges = this.cycleBreaking(edges, nodes);
 
@@ -39,7 +40,7 @@ export class SugiyamaService {
      * @param nodes The nodes of the graph.
      * @returns A list of edges forming a DAG.
      */
-    private cycleBreaking(edges: LabeledNetEdge[], nodes: LabeledNetNode[]) {
+    private cycleBreaking(edges: DisplayableEdge[], nodes: DisplayableNode[]) {
         const allEdges = edges.map((e) => new SugiyamaEdge(e));
         const dagEdges: SugiyamaEdge[] = [];
 
@@ -90,7 +91,7 @@ export class SugiyamaService {
      * @param allEdges All edges in the graph.
      * @returns A list of source nodes.
      */
-    private findGraphSources(nodes: LabeledNetNode[], allEdges: SugiyamaEdge[]): LabeledNetNode[] {
+    private findGraphSources(nodes: DisplayableNode[], allEdges: SugiyamaEdge[]): DisplayableNode[] {
         const inDegree = new Map<string, number>();
         nodes.forEach((n) => inDegree.set(n.id, 0));
         allEdges.forEach((e) => inDegree.set(e.target, (inDegree.get(e.target) || 0) + 1));
@@ -103,7 +104,7 @@ export class SugiyamaService {
      * @param dagEdges The acyclic edges.
      * @returns A map representing the layers of nodes.
      */
-    private assignLayers(nodes: LabeledNetNode[], dagEdges: SugiyamaEdge[]): Map<number, LayeredNode[]> {
+    private assignLayers(nodes: DisplayableNode[], dagEdges: SugiyamaEdge[]): Map<number, LayeredNode[]> {
         const layers = new Map<string, number>();
 
         nodes.forEach((n) => layers.set(n.id, 0));
@@ -327,8 +328,8 @@ export class SugiyamaService {
      * @param extendedDagEdges Intermediate connectivity processing details utilized for rendering line adjustments.
      */
     private applyLayout(
-        nodes: LabeledNetNode[],
-        edges: LabeledNetEdge[],
+        nodes: DisplayableNode[],
+        edges: DisplayableEdge[],
         layeredGraph: Map<number, LayeredNode[]>,
         extendedDagEdges: SugiyamaEdge[],
     ) {
@@ -341,7 +342,7 @@ export class SugiyamaService {
      * @param nodes Output layout destinations nodes representations structure array references.
      * @param layeredGraph Analyzed layered properties bounds objects definitions constraints structure tree details source limits structures parameters setup.
      */
-    private applyNodeCoordinates(nodes: LabeledNetNode[], layeredGraph: Map<number, LayeredNode[]>) {
+    private applyNodeCoordinates(nodes: DisplayableNode[], layeredGraph: Map<number, LayeredNode[]>) {
         for (const layer of layeredGraph.values()) {
             for (const node of layer) {
                 if (!node.isDummy && node.labeledNetNode) {
@@ -362,7 +363,7 @@ export class SugiyamaService {
      * @param extendedDagEdges Logical intermediate configuration mappings setup representing logical line route segments restrictions settings.
      */
     private applyBendpoints(
-        edges: LabeledNetEdge[],
+        edges: DisplayableEdge[],
         layeredGraph: Map<number, LayeredNode[]>,
         extendedDagEdges: SugiyamaEdge[],
     ) {
@@ -382,7 +383,7 @@ export class SugiyamaService {
      * @param paths Multiple sequential sub components connecting logically structures boundaries elements references setups implementations.
      * @param layeredGraph Analyzed layered properties representations definitions constraints limits dependencies configuration restrictions mappings.
      */
-    private traceDummyPath(edge: LabeledNetEdge, paths: SugiyamaEdge[], layeredGraph: Map<number, LayeredNode[]>) {
+    private traceDummyPath(edge: DisplayableEdge, paths: SugiyamaEdge[], layeredGraph: Map<number, LayeredNode[]>) {
         const dummies = paths
             .map((p) => p.virtualTarget)
             .map((id) => this.findNodeInLayers(layeredGraph, id))

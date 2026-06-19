@@ -1,8 +1,19 @@
 <button
     mat-icon-button
     color="primary"
-    [matTooltip]="'LAYOUT_SPRING_EMBEDDER' | translate"
-    (click)="calculateLayout()"
+    [matTooltip]="'LAYOUT_SELECT' | translate"
+    [matMenuTriggerFor]="layoutMenu"
     [disabled]="isDisabled()">
     <mat-icon>mediation</mat-icon>
 </button>
+
+<mat-menu #layoutMenu="matMenu">
+    <button mat-menu-item (click)="calculateSpringEmbedderLayout()">
+        <mat-icon>bubble_chart</mat-icon>
+        <span>{{ 'LAYOUT_SPRING_EMBEDDER' | translate }}</span>
+    </button>
+    <button mat-menu-item (click)="calculateSugiyamaLayout()">
+        <mat-icon>schema</mat-icon>
+        <span>{{ 'LAYOUT_SUGIYAMA' | translate }}</span>
+    </button>
+</mat-menu>
