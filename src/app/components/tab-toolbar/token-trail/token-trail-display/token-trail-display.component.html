@@ -33,5 +33,37 @@
             style="cursor: grab"
             [showInnerLabel]="true"
             [transitionLabelPlacement]="'inside'" />
+
+        @if (canShowValidationInfo(node)) {
+            <foreignObject class="node-info-fo" [attr.x]="node.x + 8" [attr.y]="node.y - 36" width="28" height="28">
+                <button
+                    mat-icon-button
+                    class="node-info-button"
+                    [class.active]="openBubblePlaceId() === node.id"
+                    (click)="togglePlaceBubble(node.id); $event.stopPropagation()"
+                    [matTooltip]="'TOKEN_TRAIL.SHOW_HINT' | translate"
+                    type="button"
+                    aria-label="Show validation info">
+                    <mat-icon>{{ openBubblePlaceId() === node.id ? 'cancel' : 'info' }}</mat-icon>
+                </button>
+            </foreignObject>
+        }
+    }
+
+    <!-- Validation bubbles overlay for Petri Net places in Exam Mode -->
+    @for (node of diagram()?.getNodes(); track node.id) {
+        @if (node.shape === 'circle' && openBubblePlaceId() === node.id) {
+            @let issues = getPlaceIssues(node.id);
+            @if (issues.length > 0) {
+                <foreignObject
+                    class="node-bubble-fo"
+                    [attr.x]="node.x - 128"
+                    [attr.y]="node.y - 300 - 44"
+                    width="300"
+                    height="300">
+                    <app-validation-bubble [issues]="issues" (closeBubble)="openBubblePlaceId.set(null)" />
+                </foreignObject>
+            }
+        }
     }
 </svg>

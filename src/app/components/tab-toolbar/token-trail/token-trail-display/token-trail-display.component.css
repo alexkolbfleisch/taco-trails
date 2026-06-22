@@ -56,3 +56,35 @@ svg text {
     -ms-user-select: none;
     pointer-events: none;
 }
+
+.node-bubble-fo {
+    overflow: visible !important;
+}
+
+.node-info-fo {
+    overflow: visible;
+    pointer-events: all;
+}
+
+.node-info-button {
+    width: 28px;
+    height: 28px;
+    min-width: 28px;
+    padding: 0;
+    color: #ef6c00;
+    background: rgba(255, 255, 255, 0.92);
+    border: 1px solid rgba(239, 108, 0, 0.35);
+    border-radius: 50%;
+}
+
+.node-info-button.active {
+    background-color: #f1f5f9 !important;
+    color: #64748b !important;
+}
+
+.node-info-button .mat-icon {
+    font-size: 18px;
+    width: 18px;
+    height: 18px;
+    line-height: 18px;
+}

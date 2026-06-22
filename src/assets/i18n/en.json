@@ -395,6 +395,7 @@
             "HELP_TEXT_STATE_GRAPH_TOPOLOGY": "A State Graph Net allows conflicts (alternative paths or branching choices) and loops, but does not allow concurrent execution (no parallel transitions). Only one transition can fire at a time."
         },
         "VALIDATION": {
+            "PLACE_BUBBLE_TITLE": "Issues for place {{name}}:",
             "RULE_ACTIVATION": {
                 "EVENT_WITHOUT_INCOMING_CONDITION": "Event {{event}} has no incoming connection from a condition.",
                 "INVALID_CONNECTION_TYPE": "Invalid connection type between {{source}} and {{target}}.",

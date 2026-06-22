@@ -14,5 +14,6 @@ import { ValidationIssue } from '../../../../../classes/token-trail.model';
 export class ValidationBubbleComponent {
     issues = input.required<ValidationIssue[]>();
     isConnection = input<boolean>(false);
+    placeName = input<string | null>(null);
     closeBubble = output<void>();
 }
