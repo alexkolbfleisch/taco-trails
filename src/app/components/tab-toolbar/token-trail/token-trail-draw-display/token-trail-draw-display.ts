@@ -57,6 +57,8 @@ import { ParserService } from '../../../../services/parser.service';
 import { ValidationBubbleComponent } from './validation-bubble/validation-bubble.component';
 import { TokenTrailTourService } from '../../../../services/token-trail-tour.service';
 import { TokenTrailGoalsService } from '../../../../services/token-trail-goals.service';
+import { applyParallelOffsetsToArcs } from '../../../../services/arc-parallel-offset.util';
+import { Coords } from '../../../../classes/json-petri-net';
 
 /**
  * TokenTrailDrawDisplayComponent is the main drawing canvas for Token Trail validation in the Token Trail tab.
@@ -202,17 +204,45 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
     readonly isDragOver = signal<boolean>(false);
     // Derived lines with coordinates for rendering
     readonly connectionLines = computed(() => {
-        return this.connections()
+        const conns = this.connections();
+        const elements = this.drawnElements();
+
+        const nodeMap = new Map<string, LabeledNetNode>();
+        for (const el of elements) {
+            nodeMap.set(el.id, el);
+        }
+
+        // Clone connections because applyParallelOffsetsToArcs mutates them in place
+        const clonedConns = conns.map((c) => ({
+            id: c.id,
+            source: c.source,
+            target: c.target,
+            weight: c.weight,
+            bendPoints: c.bendPoints ? [...c.bendPoints] : [],
+            displayLabel: c.displayLabel || '',
+            startOffset: undefined as Coords | undefined,
+            endOffset: undefined as Coords | undefined,
+        }));
+
+        applyParallelOffsetsToArcs(clonedConns, nodeMap);
+
+        return clonedConns
             .map((c) => {
-                const a = this.getElementById(c.source);
-                const b = this.getElementById(c.target);
+                const a = nodeMap.get(c.source);
+                const b = nodeMap.get(c.target);
                 if (!a || !b) return null;
 
-                // Compute trimmed endpoints so the line starts/ends at shape boundaries
-                const { x1, y1, x2, y2 } = this.drawingDisplayService.computeTrimmedLine(
-                    { x: a.x, y: a.y, isPlace: a instanceof Condition },
-                    { x: b.x, y: b.y, isPlace: b instanceof Condition },
-                );
+                // Compute trimmed endpoints so the line starts/ends at shape boundaries.
+                // If there are startOffset/endOffset, we use those as source/target centers.
+                const sourceCoords = c.startOffset
+                    ? { x: c.startOffset.x, y: c.startOffset.y, isPlace: a instanceof Condition }
+                    : { x: a.x, y: a.y, isPlace: a instanceof Condition };
+
+                const targetCoords = c.endOffset
+                    ? { x: c.endOffset.x, y: c.endOffset.y, isPlace: b instanceof Condition }
+                    : { x: b.x, y: b.y, isPlace: b instanceof Condition };
+
+                const { x1, y1, x2, y2 } = this.drawingDisplayService.computeTrimmedLine(sourceCoords, targetCoords);
 
                 let pathData = `M ${x1} ${y1}`;
                 if (c.bendPoints && c.bendPoints.length > 0) {
