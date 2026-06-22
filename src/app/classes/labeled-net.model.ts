@@ -6,6 +6,9 @@ export class Condition extends DiagramPlace {
     // Initial name assigned to the Condition before it holds any trails (e.g. 'c1')
     baseName?: string;
 
+    // Represents which condition this condition has been merged into
+    parentId: string | null = null;
+
     // Maps original Petri net place IDs to the number of tokens in this condition for that trail.
     trailMarkings: Record<string, number> = {};
 

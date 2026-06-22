@@ -253,6 +253,7 @@ export class TokenTrailStateService {
                     baseName: node.baseName,
                 });
                 clone.trailMarkings = { ...node.trailMarkings };
+                clone.parentId = node.parentId;
                 clone.x = node.x;
                 clone.y = node.y;
                 return clone;

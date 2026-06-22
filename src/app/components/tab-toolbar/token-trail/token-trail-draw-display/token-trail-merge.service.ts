@@ -1,5 +1,4 @@
 import { effect, inject, Injectable, OnDestroy, signal } from '@angular/core';
-
 import { Condition, LabeledNetEdge, LabeledNetNode } from '../../../../classes/labeled-net.model';
 import { PLACE_RADIUS } from '../../../display/display.constants';
 import { TokenTrailStateService } from '../../../../services/token-trail-state.service';
@@ -13,7 +12,6 @@ interface LastPhysicalMergeSnapshot {
     anchorConditionId: string;
     drawnElements: LabeledNetNode[];
     connections: LabeledNetEdge[];
-    mergedConditionAnchorById: Record<string, string>;
     removedConditionLabels: string[];
 }
 
@@ -30,7 +28,6 @@ interface LastPhysicalMergeSnapshot {
  */
 @Injectable()
 export class TokenTrailMergeService implements OnDestroy {
-    private readonly mergedConditionAnchorById = signal<Record<string, string>>({});
     private readonly lastPhysicalMergeSnapshot = signal<LastPhysicalMergeSnapshot | null>(null);
     readonly mergeAnimationAnchorId = signal<string | null>(null);
     private readonly conditionRadius = PLACE_RADIUS;
@@ -58,7 +55,14 @@ export class TokenTrailMergeService implements OnDestroy {
      * Called on component cleanup or drawing reset.
      */
     clearMergeState(): void {
-        this.mergedConditionAnchorById.set({});
+        this.stateService.updateDrawnElements((elements) =>
+            elements.map((node) => {
+                if (node instanceof Condition) {
+                    node.parentId = null;
+                }
+                return node;
+            }),
+        );
         this.lastPhysicalMergeSnapshot.set(null);
         this.mergeAnimationAnchorId.set(null);
         if (this.mergeAnimationTimeout) {
@@ -160,7 +164,6 @@ export class TokenTrailMergeService implements OnDestroy {
             anchorConditionId,
             drawnElements: this.cloneDrawnElements(this.stateService.drawnElements()),
             connections: this.cloneConnections(this.stateService.connections()),
-            mergedConditionAnchorById: { ...this.mergedConditionAnchorById() },
             removedConditionLabels: [],
         });
 
@@ -187,6 +190,7 @@ export class TokenTrailMergeService implements OnDestroy {
                             baseName: newMergedBaseName,
                         });
                         updated.trailMarkings = combinedTrailMarkings;
+                        updated.parentId = null;
                         updated.updateDynamicLabel();
                         updated.x = node.x;
                         updated.y = node.y;
@@ -225,22 +229,6 @@ export class TokenTrailMergeService implements OnDestroy {
                 }
             }
             return Array.from(uniqueByDirection.values());
-        });
-
-        this.mergedConditionAnchorById.update((currentMap) => {
-            const nextMap = { ...currentMap };
-            for (const removedId of removedConditionIds) {
-                delete nextMap[removedId];
-            }
-            delete nextMap[anchorConditionId];
-
-            for (const [conditionId, mappedAnchorId] of Object.entries(nextMap)) {
-                if (removedConditionIdSet.has(mappedAnchorId)) {
-                    delete nextMap[conditionId];
-                }
-            }
-
-            return nextMap;
         });
 
         this.playMergeAnimation(anchorConditionId);
@@ -290,6 +278,7 @@ export class TokenTrailMergeService implements OnDestroy {
                 },
             );
             firstClone.trailMarkings = { [parsedLabels[0]]: 1 };
+            firstClone.parentId = null;
             firstClone.updateDynamicLabel();
             firstClone.x = anchorNode.x;
             firstClone.y = anchorNode.y;
@@ -311,6 +300,7 @@ export class TokenTrailMergeService implements OnDestroy {
                     baseName: conditionId,
                 });
                 clone.trailMarkings = { [label]: 1 };
+                clone.parentId = null;
                 clone.updateDynamicLabel();
                 clone.x = newX;
                 clone.y = newY;
@@ -431,16 +421,21 @@ export class TokenTrailMergeService implements OnDestroy {
         }
 
         const sourceGroupMembers = this.getConditionGroupMembers(sourceAnchorId);
-        this.mergedConditionAnchorById.update((currentMap) => {
-            const nextMap = { ...currentMap };
-            for (const memberId of sourceGroupMembers) {
-                if (memberId !== targetAnchorId) {
-                    nextMap[memberId] = targetAnchorId;
+        this.stateService.updateDrawnElements((elements) =>
+            elements.map((node) => {
+                if (node instanceof Condition) {
+                    if (sourceGroupMembers.includes(node.id)) {
+                        if (node.id !== targetAnchorId) {
+                            node.parentId = targetAnchorId;
+                        }
+                    }
+                    if (node.id === targetAnchorId) {
+                        node.parentId = null;
+                    }
                 }
-            }
-            delete nextMap[targetAnchorId];
-            return nextMap;
-        });
+                return node;
+            }),
+        );
 
         this.animateMergedConditionsTowardsAnchor(targetAnchorId);
         this.playMergeAnimation(targetAnchorId);
@@ -451,55 +446,55 @@ export class TokenTrailMergeService implements OnDestroy {
         if (this.stateService.displayMode() === 'puzzle') {
             return;
         }
-        this.mergedConditionAnchorById.update((currentMap) => {
-            const nextMap = { ...currentMap };
-            if (nextMap[conditionId]) {
-                delete nextMap[conditionId];
-                return nextMap;
-            }
 
-            const mergedChildren = Object.entries(nextMap)
-                .filter(([, anchorId]) => anchorId === conditionId)
-                .map(([id]) => id);
+        const node = this.getElementById(conditionId);
+        if (node instanceof Condition && node.parentId) {
+            this.stateService.updateDrawnElements((elements) =>
+                elements.map((el) => {
+                    if (el.id === conditionId && el instanceof Condition) {
+                        el.parentId = null;
+                    }
+                    return el;
+                }),
+            );
+            this.tourService.notifyConditionUnmerged();
+            return;
+        }
 
-            if (mergedChildren.length > 0) {
-                const [newAnchorId, ...otherChildren] = mergedChildren;
-                delete nextMap[newAnchorId];
-                for (const childId of otherChildren) {
-                    nextMap[childId] = newAnchorId;
-                }
-            }
+        const directChildren = this.stateService
+            .drawnElements()
+            .filter((el): el is Condition => el instanceof Condition && el.parentId === conditionId);
 
-            return nextMap;
-        });
+        if (directChildren.length > 0) {
+            const newAnchorId = directChildren[0].id;
+            this.stateService.updateDrawnElements((elements) =>
+                elements.map((el) => {
+                    if (el instanceof Condition) {
+                        if (el.id === newAnchorId) {
+                            el.parentId = null;
+                        } else if (el.parentId === conditionId) {
+                            el.parentId = newAnchorId;
+                        }
+                    }
+                    return el;
+                }),
+            );
+        }
         this.tourService.notifyConditionUnmerged();
     }
 
     private removeConditionFromMergeGraph(conditionId: string): void {
-        this.mergedConditionAnchorById.update((currentMap) => {
-            const nextMap = { ...currentMap };
+        const targetNode = this.getElementById(conditionId);
+        const parentId = targetNode instanceof Condition ? targetNode.parentId : null;
 
-            if (nextMap[conditionId]) {
-                delete nextMap[conditionId];
-                return nextMap;
-            }
-
-            const mergedChildren = Object.entries(nextMap)
-                .filter(([, anchorId]) => anchorId === conditionId)
-                .map(([id]) => id);
-
-            if (mergedChildren.length === 0) {
-                return nextMap;
-            }
-
-            const [newAnchorId, ...otherChildren] = mergedChildren;
-            delete nextMap[newAnchorId];
-            for (const childId of otherChildren) {
-                nextMap[childId] = newAnchorId;
-            }
-
-            return nextMap;
-        });
+        this.stateService.updateDrawnElements((elements) =>
+            elements.map((node) => {
+                if (node instanceof Condition && node.parentId === conditionId) {
+                    node.parentId = parentId;
+                }
+                return node;
+            }),
+        );
     }
 
     private animateMergedConditionsTowardsAnchor(anchorConditionId: string): void {
@@ -608,16 +603,20 @@ export class TokenTrailMergeService implements OnDestroy {
     }
 
     private resolveConditionAnchorId(conditionId: string): string {
-        const anchorMap = this.mergedConditionAnchorById();
-        let anchorId = conditionId;
+        let currentId = conditionId;
         const visited = new Set<string>();
 
-        while (anchorMap[anchorId] && !visited.has(anchorId)) {
-            visited.add(anchorId);
-            anchorId = anchorMap[anchorId];
+        while (currentId && !visited.has(currentId)) {
+            visited.add(currentId);
+            const node = this.getElementById(currentId);
+            if (node instanceof Condition && node.parentId) {
+                currentId = node.parentId;
+            } else {
+                break;
+            }
         }
 
-        return anchorId;
+        return currentId;
     }
 
     private commitLastPhysicalMergeSnapshot(): void {
@@ -646,6 +645,7 @@ export class TokenTrailMergeService implements OnDestroy {
                     },
                 );
                 clone.trailMarkings = { ...node.trailMarkings };
+                clone.parentId = node.parentId;
                 clone.x = node.x;
                 clone.y = node.y;
                 return clone;
@@ -672,7 +672,7 @@ export class TokenTrailMergeService implements OnDestroy {
         lastPhysicalMergeSnapshot: unknown;
     } {
         return {
-            mergedConditionAnchorById: { ...this.mergedConditionAnchorById() },
+            mergedConditionAnchorById: {},
             lastPhysicalMergeSnapshot: this.lastPhysicalMergeSnapshot(),
         };
     }
@@ -681,7 +681,6 @@ export class TokenTrailMergeService implements OnDestroy {
         mergedConditionAnchorById: Record<string, string>;
         lastPhysicalMergeSnapshot: unknown;
     }) {
-        this.mergedConditionAnchorById.set(snapshot.mergedConditionAnchorById);
         this.lastPhysicalMergeSnapshot.set(snapshot.lastPhysicalMergeSnapshot as LastPhysicalMergeSnapshot | null);
     }
 }
