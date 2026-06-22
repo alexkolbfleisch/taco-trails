@@ -394,6 +394,7 @@
             "HELP_TEXT_STATE_GRAPH_TOPOLOGY": "Ein State Graph Net erlaubt Konflikte (alternative Pfade/Verzweigungen) und Schleifen, erlaubt jedoch keine Nebenläufigkeit (keine parallelen Transitionen). Es verhält sich wie ein Zustandsautomat, in dem immer nur ein Ereignis gleichzeitig aktiv sein kann."
         },
         "VALIDATION": {
+            "PLACE_BUBBLE_TITLE": "Probleme für Stelle {{name}}:",
             "RULE_ACTIVATION": {
                 "EVENT_WITHOUT_INCOMING_CONDITION": "Event {{event}} hat keine eingehende Verbindung von einer Condition.",
                 "INVALID_CONNECTION_TYPE": "Ungültiger Verbindungstyp zwischen {{source}} und {{target}}.",

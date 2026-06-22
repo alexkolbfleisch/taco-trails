@@ -19,7 +19,7 @@ import { ToasterNotificationService } from './toaster-notification.service';
 import { TokenTrailValidatorService } from '../../../ilpn-components/src/lib/algorithms/pn/validation/token-trails/token-trail-validator.service';
 import { TokenTrailValidationResult } from '../../../ilpn-components/src/lib/algorithms/pn/validation/classes/validation-result';
 import { TabStateService } from './tab-state.service';
-import { take } from 'rxjs';
+import { catchError, Observable, of, take } from 'rxjs';
 import { TokenTrailGoalsService } from './token-trail-goals.service';
 import { TokenTrailValidationService } from './token-trail-validation.service';
 import { PetriNet, TokenTrailElement, TokenTrailConnection } from '../classes/token-trail.model';
@@ -134,55 +134,7 @@ export class TokenTrailLpnService {
     ) {
         this.stateService.resetCounters();
         const selectedEntries = this._selectEntriesWithVariation(sourceNet, validEntries, maxTraces);
-        const inputNets: IlpnPetriNet[] = [];
-
-        const splittingProbability = config.splittingProbability;
-
-        for (const entry of selectedEntries) {
-            const net = new IlpnPetriNet();
-            let lastPlace = new IlpnPlace();
-            lastPlace.marking = 1;
-            net.addPlace(lastPlace);
-
-            const labelCounts = new Map<string, number>();
-            let hasDuplicates = false;
-            for (const label of entry.labels) {
-                const count = (labelCounts.get(label) || 0) + 1;
-                labelCounts.set(label, count);
-                if (count > 1) {
-                    hasDuplicates = true;
-                }
-            }
-
-            const applySplitting = hasDuplicates && Math.random() < splittingProbability;
-            const currentOccurrence = new Map<string, number>();
-
-            for (const label of entry.labels) {
-                let finalLabel = label;
-                if (applySplitting) {
-                    const occ = (currentOccurrence.get(label) || 0) + 1;
-                    currentOccurrence.set(label, occ);
-                    if (labelCounts.get(label)! > 1) {
-                        const conflict = this.goalsService.selectedConflict;
-                        const isConflictTrans = conflict && (label === conflict[0] || label === conflict[1]);
-                        if (!isConflictTrans) {
-                            finalLabel = `${label}_instance${occ}`;
-                        }
-                    }
-                }
-
-                const t = new IlpnTransition(finalLabel);
-                net.addTransition(t);
-                net.addArc(lastPlace, t);
-
-                const nextPlace = new IlpnPlace();
-                net.addPlace(nextPlace);
-                net.addArc(t, nextPlace);
-
-                lastPlace = nextPlace;
-            }
-            inputNets.push(net);
-        }
+        const inputNets = this.buildInputNets(selectedEntries, config.splittingProbability);
 
         this.regionSynthesisService
             .synthesise(inputNets, config.synthesisConfig)
@@ -191,188 +143,297 @@ export class TokenTrailLpnService {
                 next: (result) => {
                     if (runId !== this._synthesisActiveRunId) return;
 
-                    // Generate local candidate LPN elements and connections
-                    const candidate = this.buildCandidateLpn(result.result, maxEdges);
-                    if (this.stateService.displayMode() === LpnDisplayMode.Construction) {
-                        const adjusted = this.adjustLpnToSatisfyGoals(candidate.elements, candidate.connections);
-                        candidate.elements = adjusted.elements;
-                        candidate.connections = adjusted.connections;
-                    }
-
-                    // Convert LPN to ilpn components representation for verification
+                    const candidate = this.buildAndPrepareCandidate(result.result, maxEdges);
                     const ilpnSpec = this.convertLpnToIlpn(candidate.elements, candidate.connections);
 
-                    // Perform direct check using validator service
-                    this.validatorService
-                        .validate(ilpnSource, ilpnSpec)
+                    this.validateSafe(ilpnSource, ilpnSpec)
                         .pipe(take(1))
                         .subscribe({
                             next: (results) => {
                                 if (runId !== this._synthesisActiveRunId) return;
 
-                                const allValid = results.every((res) => res.valid);
-                                let allGoalsMet = true;
-                                let solvedTrailsMap: Map<string, Record<string, number>> | null = null;
-                                if (allValid) {
-                                    solvedTrailsMap = this.mapValidatorResultsToSolvedTrails(results);
+                                const allValid =
+                                    results.length === ilpnSource.getPlaces().length &&
+                                    results.every((res) => res.valid);
 
-                                    // Always populate candidate trail markings for the validation check and display
-                                    for (const el of candidate.elements) {
-                                        if (el instanceof Condition) {
-                                            el.trailMarkings = {};
-                                            for (const [petriPlaceId, markings] of solvedTrailsMap.entries()) {
-                                                const tokens = markings[el.id] ?? 0;
-                                                if (tokens > 0) {
-                                                    el.trailMarkings[petriPlaceId] = tokens;
-                                                }
-                                            }
-                                            el.updateDynamicLabel();
-                                        }
-                                    }
-
-                                    const input = this.buildValidationInputForCandidate(
+                                if (!allValid) {
+                                    this.handleSynthesisFailure(
                                         sourceNet,
-                                        candidate.elements,
-                                        candidate.connections,
+                                        ilpnSource,
+                                        validEntries,
+                                        maxTraces,
+                                        maxEdges,
+                                        config,
+                                        attempt,
+                                        runId,
+                                        onFailure,
                                     );
-                                    if (input) {
-                                        allGoalsMet = this.goalsService.internalGoals.every((goal) =>
-                                            goal.check(input.elements, input.connections, input.petri),
-                                        );
-                                    }
+                                    return;
                                 }
 
-                                if (allValid && allGoalsMet && solvedTrailsMap) {
-                                    // Clear timeout
-                                    if (this._synthesisTimeoutId) {
-                                        clearTimeout(this._synthesisTimeoutId);
-                                        this._synthesisTimeoutId = null;
-                                    }
-                                    this._synthesisActiveRunId = 0;
+                                const solvedTrailsMap = this.mapValidatorResultsToSolvedTrails(results);
+                                this.populateCandidateTrailMarkings(candidate, solvedTrailsMap);
 
-                                    // Valid and goals satisfied! Render it visually by updating the state service
-                                    this.stateService.clear(false);
-                                    for (const el of candidate.elements) {
-                                        this.stateService.addDrawnElement(el);
-                                    }
-                                    for (const conn of candidate.connections) {
-                                        this.stateService.addConnection(conn);
-                                    }
-
-                                    this.sugiyamaService.calculateLayout(
-                                        this.stateService.drawnElements(),
-                                        this.stateService.connections(),
+                                const input = this.buildValidationInputForCandidate(
+                                    sourceNet,
+                                    candidate.elements,
+                                    candidate.connections,
+                                );
+                                const allGoalsMet =
+                                    !input ||
+                                    this.goalsService.internalGoals.every((goal) =>
+                                        goal.check(input.elements, input.connections, input.petri),
                                     );
-                                    this.stateService.updateDrawnElements((e) => [...e]);
-                                    this.stateService.updateConnections((c) => [...c]);
-                                    this.stateService.requestFitView();
 
-                                    // Cache the solution
-                                    this.stateService.solutionCache = solvedTrailsMap;
-                                    this.stateService.lastSynthesizedNetSignature = this.getNetSignature(sourceNet);
-                                    if (this.stateService.displayMode() === LpnDisplayMode.Construction) {
-                                        this.stateService.cachedConstructionSolutionElements =
-                                            this.stateService.cloneDrawnElements(this.stateService.drawnElements());
-                                        this.stateService.cachedConstructionSolutionConnections =
-                                            this.stateService.cloneConnections(this.stateService.connections());
-                                        this.stateService.setSolvedTokenTrails(solvedTrailsMap);
-                                        this.stateService.setShowingSolution(true);
-                                        this.toaster.showSuccess(
-                                            'TOKEN_TRAIL.SOLUTION_FOUND_TITLE',
-                                            'TOKEN_TRAIL.SOLUTION_FOUND_BODY',
-                                        );
-                                    } else if (this.stateService.displayMode() === LpnDisplayMode.Puzzle) {
-                                        // In puzzle mode the user fills in trail markings themselves.
-                                        // Clear all trailMarkings so conditions show their base name (e.g. 'c1')
-                                        // and appear blank on the canvas — solution is stored in the cache only.
-                                        for (const el of this.stateService.drawnElements()) {
-                                            if (el instanceof Condition) {
-                                                el.trailMarkings = {};
-                                                el.updateDynamicLabel();
-                                            }
-                                        }
-                                        this.stateService.updateDrawnElements((e) => [...e]);
-                                    }
-                                    this.loadingService.hide();
-                                } else {
-                                    // Invalid LPN check failed or goals not met, retry if under max retries limit
-                                    const maxRetries =
-                                        this.stateService.displayMode() === LpnDisplayMode.Construction ? 50 : 15;
-                                    if (attempt < maxRetries) {
-                                        console.warn(
-                                            `Generated LPN not valid for all source places or goals not met. Retrying synthesis attempt ${attempt + 1}...`,
-                                        );
-                                        this.attemptSynthesis(
-                                            sourceNet,
-                                            ilpnSource,
-                                            validEntries,
-                                            maxTraces,
-                                            maxEdges,
-                                            config,
-                                            attempt + 1,
-                                            runId,
-                                            onFailure,
-                                        );
-                                    } else {
-                                        if (this._synthesisTimeoutId) {
-                                            clearTimeout(this._synthesisTimeoutId);
-                                            this._synthesisTimeoutId = null;
-                                        }
-                                        this._synthesisActiveRunId = 0;
-                                        this.loadingService.hide();
-
-                                        if (onFailure) {
-                                            onFailure();
-                                        }
-                                        if (this.tabStateService.currentTab() === Tab.TOKEN_TRAIL) {
-                                            this.toaster.showWarning(
-                                                'TOKEN_TRAIL.LPN_SYNTHESIS_ERROR_TITLE',
-                                                'TOKEN_TRAIL.LPN_SYNTHESIS_ERROR_BODY',
-                                            );
-                                        }
-                                    }
+                                if (!allGoalsMet) {
+                                    this.handleSynthesisFailure(
+                                        sourceNet,
+                                        ilpnSource,
+                                        validEntries,
+                                        maxTraces,
+                                        maxEdges,
+                                        config,
+                                        attempt,
+                                        runId,
+                                        onFailure,
+                                    );
+                                    return;
                                 }
+
+                                this.applySuccessfulLpn(candidate, solvedTrailsMap, sourceNet);
                             },
                             error: (err) => {
                                 if (runId !== this._synthesisActiveRunId) return;
-                                if (this._synthesisTimeoutId) {
-                                    clearTimeout(this._synthesisTimeoutId);
-                                    this._synthesisTimeoutId = null;
-                                }
-                                this._synthesisActiveRunId = 0;
-                                console.error('LPN check validator solver error:', err);
-                                this.loadingService.hide();
-                                if (onFailure) {
-                                    onFailure();
-                                }
-                                if (this.tabStateService.currentTab() === Tab.TOKEN_TRAIL) {
-                                    this.toaster.showError(
-                                        'TOKEN_TRAIL.LPN_SYNTHESIS_ERROR_TITLE',
-                                        'TOKEN_TRAIL.LPN_SYNTHESIS_ERROR_BODY',
-                                    );
-                                }
+                                this.handleSynthesisError(err, onFailure);
                             },
                         });
                 },
-                error: () => {
+                error: (err) => {
                     if (runId !== this._synthesisActiveRunId) return;
-                    if (this._synthesisTimeoutId) {
-                        clearTimeout(this._synthesisTimeoutId);
-                        this._synthesisTimeoutId = null;
-                    }
-                    this._synthesisActiveRunId = 0;
-                    this.loadingService.hide();
-                    if (onFailure) {
-                        onFailure();
-                    }
-                    if (this.tabStateService.currentTab() === Tab.TOKEN_TRAIL) {
-                        this.toaster.showError(
-                            'TOKEN_TRAIL.LPN_SYNTHESIS_ERROR_TITLE',
-                            'TOKEN_TRAIL.LPN_SYNTHESIS_ERROR_BODY',
-                        );
-                    }
+                    this.handleSynthesisError(err, onFailure);
                 },
             });
+    }
+
+    private validateSafe(ilpnSource: IlpnPetriNet, ilpnSpec: IlpnPetriNet): Observable<TokenTrailValidationResult[]> {
+        try {
+            return this.validatorService.validate(ilpnSource, ilpnSpec).pipe(
+                catchError((err) => {
+                    console.error('Validation error caught in validateSafe:', err);
+                    return of([]);
+                }),
+            );
+        } catch (err) {
+            console.error('Validation synchronous exception caught in validateSafe:', err);
+            return of([]);
+        }
+    }
+
+    private buildInputNets(selectedEntries: FiringEntry[], splittingProbability: number): IlpnPetriNet[] {
+        const inputNets: IlpnPetriNet[] = [];
+        for (const entry of selectedEntries) {
+            inputNets.push(this.buildInputNetFromEntry(entry, splittingProbability));
+        }
+        return inputNets;
+    }
+
+    private buildInputNetFromEntry(entry: FiringEntry, splittingProbability: number): IlpnPetriNet {
+        const net = new IlpnPetriNet();
+        let lastPlace = new IlpnPlace();
+        lastPlace.marking = 1;
+        net.addPlace(lastPlace);
+
+        const labelCounts = new Map<string, number>();
+        let hasDuplicates = false;
+        for (const label of entry.labels) {
+            const count = (labelCounts.get(label) || 0) + 1;
+            labelCounts.set(label, count);
+            if (count > 1) {
+                hasDuplicates = true;
+            }
+        }
+
+        const applySplitting = hasDuplicates && Math.random() < splittingProbability;
+        const currentOccurrence = new Map<string, number>();
+
+        for (const label of entry.labels) {
+            let finalLabel = label;
+            if (applySplitting) {
+                const occ = (currentOccurrence.get(label) || 0) + 1;
+                currentOccurrence.set(label, occ);
+                if (labelCounts.get(label)! > 1) {
+                    const conflict = this.goalsService.selectedConflict;
+                    const isConflictTrans = conflict && (label === conflict[0] || label === conflict[1]);
+                    if (!isConflictTrans) {
+                        finalLabel = `${label}_instance${occ}`;
+                    }
+                }
+            }
+
+            const t = new IlpnTransition(finalLabel);
+            net.addTransition(t);
+            net.addArc(lastPlace, t);
+
+            const nextPlace = new IlpnPlace();
+            net.addPlace(nextPlace);
+            net.addArc(t, nextPlace);
+
+            lastPlace = nextPlace;
+        }
+
+        return net;
+    }
+
+    private buildAndPrepareCandidate(
+        result: IlpnPetriNet,
+        maxEdges: number,
+    ): { elements: LabeledNetNode[]; connections: LabeledNetEdge[] } {
+        const candidate = this.buildCandidateLpn(result, maxEdges);
+        if (this.stateService.displayMode() === LpnDisplayMode.Construction) {
+            const adjusted = this.adjustLpnToSatisfyGoals(candidate.elements, candidate.connections);
+            candidate.elements = adjusted.elements;
+            candidate.connections = adjusted.connections;
+        }
+        return candidate;
+    }
+
+    private populateCandidateTrailMarkings(
+        candidate: { elements: LabeledNetNode[]; connections: LabeledNetEdge[] },
+        solvedTrailsMap: Map<string, Record<string, number>>,
+    ) {
+        // Always populate candidate trail markings for the validation check and display
+        for (const el of candidate.elements) {
+            if (el instanceof Condition) {
+                el.trailMarkings = {};
+                for (const [petriPlaceId, markings] of solvedTrailsMap.entries()) {
+                    const tokens = markings[el.id] ?? 0;
+                    if (tokens > 0) {
+                        el.trailMarkings[petriPlaceId] = tokens;
+                    }
+                }
+                el.updateDynamicLabel();
+            }
+        }
+    }
+
+    private applySuccessfulLpn(
+        candidate: { elements: LabeledNetNode[]; connections: LabeledNetEdge[] },
+        solvedTrailsMap: Map<string, Record<string, number>>,
+        sourceNet: Diagram,
+    ) {
+        // Clear timeout
+        if (this._synthesisTimeoutId) {
+            clearTimeout(this._synthesisTimeoutId);
+            this._synthesisTimeoutId = null;
+        }
+        this._synthesisActiveRunId = 0;
+
+        // Valid and goals satisfied! Render it visually by updating the state service
+        this.stateService.clear(false);
+        for (const el of candidate.elements) {
+            this.stateService.addDrawnElement(el);
+        }
+        for (const conn of candidate.connections) {
+            this.stateService.addConnection(conn);
+        }
+
+        this.sugiyamaService.calculateLayout(this.stateService.drawnElements(), this.stateService.connections());
+        this.stateService.updateDrawnElements((e) => [...e]);
+        this.stateService.updateConnections((c) => [...c]);
+        this.stateService.requestFitView();
+
+        // Cache the solution
+        this.stateService.solutionCache = solvedTrailsMap;
+        this.stateService.lastSynthesizedNetSignature = this.getNetSignature(sourceNet);
+        if (this.stateService.displayMode() === LpnDisplayMode.Construction) {
+            this.stateService.cachedConstructionSolutionElements = this.stateService.cloneDrawnElements(
+                this.stateService.drawnElements(),
+            );
+            this.stateService.cachedConstructionSolutionConnections = this.stateService.cloneConnections(
+                this.stateService.connections(),
+            );
+            this.stateService.setSolvedTokenTrails(solvedTrailsMap);
+            this.stateService.setShowingSolution(true);
+            this.toaster.showSuccess('TOKEN_TRAIL.SOLUTION_FOUND_TITLE', 'TOKEN_TRAIL.SOLUTION_FOUND_BODY');
+        } else if (this.stateService.displayMode() === LpnDisplayMode.Puzzle) {
+            // In puzzle mode the user fills in trail markings themselves.
+            // Clear all trailMarkings so conditions show their base name (e.g. 'c1')
+            // and appear blank on the canvas — solution is stored in the cache only.
+            for (const el of this.stateService.drawnElements()) {
+                if (el instanceof Condition) {
+                    el.trailMarkings = {};
+                    el.updateDynamicLabel();
+                }
+            }
+            this.stateService.updateDrawnElements((e) => [...e]);
+        }
+        this.loadingService.hide();
+    }
+
+    private handleSynthesisFailure(
+        sourceNet: Diagram,
+        ilpnSource: IlpnPetriNet,
+        validEntries: FiringEntry[],
+        maxTraces: number,
+        maxEdges: number,
+        config: LpnGenerationConfiguration,
+        attempt: number,
+        runId: number,
+        onFailure?: () => void,
+    ) {
+        // Invalid LPN check failed or goals not met, retry if under max retries limit
+        const maxRetries = this.stateService.displayMode() === LpnDisplayMode.Construction ? 50 : 15;
+        if (attempt < maxRetries) {
+            console.warn(
+                `Generated LPN not valid for all source places or goals not met. Retrying synthesis attempt ${attempt + 1}...`,
+            );
+            this.attemptSynthesis(
+                sourceNet,
+                ilpnSource,
+                validEntries,
+                maxTraces,
+                maxEdges,
+                config,
+                attempt + 1,
+                runId,
+                onFailure,
+            );
+        } else {
+            if (this._synthesisTimeoutId) {
+                clearTimeout(this._synthesisTimeoutId);
+                this._synthesisTimeoutId = null;
+            }
+            this._synthesisActiveRunId = 0;
+            this.loadingService.hide();
+
+            if (onFailure) {
+                onFailure();
+            }
+            if (this.tabStateService.currentTab() === Tab.TOKEN_TRAIL) {
+                this.toaster.showWarning(
+                    'TOKEN_TRAIL.LPN_SYNTHESIS_ERROR_TITLE',
+                    'TOKEN_TRAIL.LPN_SYNTHESIS_ERROR_BODY',
+                );
+            }
+        }
+    }
+
+    private handleSynthesisError(err: unknown, onFailure?: () => void) {
+        if (this._synthesisTimeoutId) {
+            clearTimeout(this._synthesisTimeoutId);
+            this._synthesisTimeoutId = null;
+        }
+        this._synthesisActiveRunId = 0;
+        if (err) {
+            console.error('LPN check validator solver error:', err);
+        }
+        this.loadingService.hide();
+        if (onFailure) {
+            onFailure();
+        }
+        if (this.tabStateService.currentTab() === Tab.TOKEN_TRAIL) {
+            this.toaster.showError('TOKEN_TRAIL.LPN_SYNTHESIS_ERROR_TITLE', 'TOKEN_TRAIL.LPN_SYNTHESIS_ERROR_BODY');
+        }
     }
 
     public convertSourceNetToIlpn(sourceNet: Diagram): IlpnPetriNet {
