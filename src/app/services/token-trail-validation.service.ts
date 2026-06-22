@@ -317,16 +317,30 @@ export class TokenTrailValidationService {
         }
 
         if (calculatedInitialMarking !== initialMarking) {
+            const conditionIds = conditions.filter((e) => (e.trailMarkings?.[placeId] || 0) > 0).map((e) => e.id);
+            if (initialMarking > 0 && calculatedInitialMarking < initialMarking) {
+                for (const condition of conditions) {
+                    if (condition.isStartCondition && !conditionIds.includes(condition.id)) {
+                        conditionIds.push(condition.id);
+                    }
+                }
+            }
+
+            const messageKey =
+                calculatedInitialMarking === 0 && initialMarking > 0
+                    ? 'TOKEN_TRAIL.VALIDATION.RULE_INITIALIZATION.MISSING_START_CONDITION_FOR_MARKED_PLACE'
+                    : 'TOKEN_TRAIL.VALIDATION.RULE_INITIALIZATION.INITIAL_MARKING_MISMATCH';
+
             issues.push({
                 rule: 'INITIALIZATION',
-                messageKey: 'TOKEN_TRAIL.VALIDATION.RULE_INITIALIZATION.INITIAL_MARKING_MISMATCH',
+                messageKey,
                 placeId,
                 messageParams: {
                     place: `<strong>${net.placeLabels?.[placeId] || placeId}</strong>`,
                     expected: `<strong>${initialMarking}</strong>`,
                     actual: `<strong>${calculatedInitialMarking}</strong>`,
                 },
-                conditionIds: conditions.filter((e) => (e.trailMarkings?.[placeId] || 0) > 0).map((e) => e.id),
+                conditionIds,
             });
             return false;
         }
