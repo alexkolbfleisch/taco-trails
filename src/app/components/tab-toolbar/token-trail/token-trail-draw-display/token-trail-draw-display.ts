@@ -57,8 +57,7 @@ import { ParserService } from '../../../../services/parser.service';
 import { ValidationBubbleComponent } from './validation-bubble/validation-bubble.component';
 import { TokenTrailTourService } from '../../../../services/token-trail-tour.service';
 import { TokenTrailGoalsService } from '../../../../services/token-trail-goals.service';
-import { applyParallelOffsetsToArcs } from '../../../../services/arc-parallel-offset.util';
-import { Coords } from '../../../../classes/json-petri-net';
+import { computeBendPointsForArc } from '../../../../services/arc-parallel-offset.util';
 
 /**
  * TokenTrailDrawDisplayComponent is the main drawing canvas for Token Trail validation in the Token Trail tab.
@@ -212,41 +211,59 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
             nodeMap.set(el.id, el);
         }
 
-        // Clone connections because applyParallelOffsetsToArcs mutates them in place
-        const clonedConns = conns.map((c) => ({
-            id: c.id,
-            source: c.source,
-            target: c.target,
-            weight: c.weight,
-            bendPoints: c.bendPoints ? [...c.bendPoints] : [],
-            displayLabel: c.displayLabel || '',
-            startOffset: undefined as Coords | undefined,
-            endOffset: undefined as Coords | undefined,
-        }));
-
-        applyParallelOffsetsToArcs(clonedConns, nodeMap);
-
-        return clonedConns
+        return conns
             .map((c) => {
                 const a = nodeMap.get(c.source);
                 const b = nodeMap.get(c.target);
                 if (!a || !b) return null;
 
+                // Compute bend points for the arc to separate parallel edges,
+                // matching the approach used in SvgStateArcComponent.
+                let bendPoints = c.bendPoints && c.bendPoints.length > 0 ? c.bendPoints : [];
+                if (bendPoints.length === 0) {
+                    if (c.source === c.target) {
+                        bendPoints = [
+                            { x: a.x - 20, y: a.y - 50 },
+                            { x: a.x + 20, y: a.y - 50 },
+                        ];
+                    } else {
+                        bendPoints = computeBendPointsForArc(c, conns, elements);
+                    }
+                }
+
                 // Compute trimmed endpoints so the line starts/ends at shape boundaries.
-                // If there are startOffset/endOffset, we use those as source/target centers.
-                const sourceCoords = c.startOffset
-                    ? { x: c.startOffset.x, y: c.startOffset.y, isPlace: a instanceof Condition }
-                    : { x: a.x, y: a.y, isPlace: a instanceof Condition };
+                let x1: number, y1: number, x2: number, y2: number;
+                if (bendPoints.length > 0) {
+                    const firstTarget = bendPoints[0];
+                    const lastSource = bendPoints[bendPoints.length - 1];
 
-                const targetCoords = c.endOffset
-                    ? { x: c.endOffset.x, y: c.endOffset.y, isPlace: b instanceof Condition }
-                    : { x: b.x, y: b.y, isPlace: b instanceof Condition };
+                    const startTrim = this.drawingDisplayService.computeTrimmedLine(
+                        { x: a.x, y: a.y, isPlace: a instanceof Condition },
+                        { x: firstTarget.x, y: firstTarget.y, isPlace: false },
+                    );
+                    x1 = startTrim.x1;
+                    y1 = startTrim.y1;
 
-                const { x1, y1, x2, y2 } = this.drawingDisplayService.computeTrimmedLine(sourceCoords, targetCoords);
+                    const endTrim = this.drawingDisplayService.computeTrimmedLine(
+                        { x: lastSource.x, y: lastSource.y, isPlace: false },
+                        { x: b.x, y: b.y, isPlace: b instanceof Condition },
+                    );
+                    x2 = endTrim.x2;
+                    y2 = endTrim.y2;
+                } else {
+                    const trim = this.drawingDisplayService.computeTrimmedLine(
+                        { x: a.x, y: a.y, isPlace: a instanceof Condition },
+                        { x: b.x, y: b.y, isPlace: b instanceof Condition },
+                    );
+                    x1 = trim.x1;
+                    y1 = trim.y1;
+                    x2 = trim.x2;
+                    y2 = trim.y2;
+                }
 
                 let pathData = `M ${x1} ${y1}`;
-                if (c.bendPoints && c.bendPoints.length > 0) {
-                    for (const point of c.bendPoints) {
+                if (bendPoints.length > 0) {
+                    for (const point of bendPoints) {
                         pathData += ` L ${point.x} ${point.y}`;
                     }
                 }
