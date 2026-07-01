@@ -19,7 +19,7 @@ import { ToasterNotificationService } from './toaster-notification.service';
 import { TokenTrailValidatorService } from '../../../ilpn-components/src/lib/algorithms/pn/validation/token-trails/token-trail-validator.service';
 import { TokenTrailValidationResult } from '../../../ilpn-components/src/lib/algorithms/pn/validation/classes/validation-result';
 import { TabStateService } from './tab-state.service';
-import { catchError, Observable, of, take } from 'rxjs';
+import { catchError, Observable, of, take, map, switchMap } from 'rxjs';
 import { TokenTrailGoalsService } from './token-trail-goals.service';
 import { TokenTrailValidationService } from './token-trail-validation.service';
 import { PetriNet, TokenTrailElement, TokenTrailConnection } from '../classes/token-trail.model';
@@ -200,7 +200,53 @@ export class TokenTrailLpnService {
                                     return;
                                 }
 
-                                this.applySuccessfulLpn(candidate, solvedTrailsMap, sourceNet);
+                                // Minimization step for Expert mode
+                                const isExpert =
+                                    this.stateService.lpnGenerationDifficulty() === LpnGenerationDifficulty.Expert;
+                                const minimizeObs = isExpert
+                                    ? this._minimizeCandidateRx(ilpnSource, candidate, sourceNet)
+                                    : of(candidate);
+
+                                minimizeObs
+                                    .pipe(
+                                        take(1),
+                                        switchMap((minimizedCandidate) => {
+                                            const minimizedIlpnSpec = this.convertLpnToIlpn(
+                                                minimizedCandidate.elements,
+                                                minimizedCandidate.connections,
+                                            );
+                                            return this.validateSafe(ilpnSource, minimizedIlpnSpec).pipe(
+                                                map((finalResults) => ({ minimizedCandidate, finalResults })),
+                                            );
+                                        }),
+                                    )
+                                    .subscribe({
+                                        next: ({ minimizedCandidate, finalResults }) => {
+                                            if (runId !== this._synthesisActiveRunId) return;
+
+                                            const solvedTrailsMap =
+                                                this.mapValidatorResultsToSolvedTrails(finalResults);
+                                            this.populateCandidateTrailMarkings(minimizedCandidate, solvedTrailsMap);
+
+                                            this.loadingService.hide();
+                                            this.applySuccessfulLpn(minimizedCandidate, solvedTrailsMap, sourceNet);
+                                        },
+                                        error: (err) => {
+                                            if (runId !== this._synthesisActiveRunId) return;
+                                            console.error('Error during LPN minimization:', err);
+                                            this.handleSynthesisFailure(
+                                                sourceNet,
+                                                ilpnSource,
+                                                validEntries,
+                                                maxTraces,
+                                                maxEdges,
+                                                config,
+                                                attempt,
+                                                runId,
+                                                onFailure,
+                                            );
+                                        },
+                                    });
                             },
                             error: (err) => {
                                 if (runId !== this._synthesisActiveRunId) return;
@@ -918,6 +964,77 @@ export class TokenTrailLpnService {
             elements,
             connections,
         };
+    }
+
+    private _minimizeCandidateRx(
+        ilpnSource: IlpnPetriNet,
+        candidate: { elements: LabeledNetNode[]; connections: LabeledNetEdge[] },
+        sourceNet: Diagram,
+    ): Observable<{ elements: LabeledNetNode[]; connections: LabeledNetEdge[] }> {
+        const conditions = candidate.elements.filter((el) => el instanceof Condition) as Condition[];
+
+        const attemptPruning = (
+            current: { elements: LabeledNetNode[]; connections: LabeledNetEdge[] },
+            index: number,
+        ): Observable<{ elements: LabeledNetNode[]; connections: LabeledNetEdge[] }> => {
+            if (index >= conditions.length) {
+                return of(current);
+            }
+
+            const targetCond = conditions[index];
+            const currentConds = current.elements.filter((el) => el instanceof Condition);
+            if (currentConds.length <= 1) {
+                return attemptPruning(current, index + 1);
+            }
+
+            // Exclude the target condition and prune any events that become disconnected
+            const connectionsAfterCondPrune = current.connections.filter(
+                (conn) => conn.source !== targetCond.id && conn.target !== targetCond.id,
+            );
+            const activeEventIds = new Set<string>();
+            connectionsAfterCondPrune.forEach((c) => {
+                activeEventIds.add(c.source);
+                activeEventIds.add(c.target);
+            });
+            const prunedElements = current.elements.filter((el) => {
+                if (el instanceof Condition) {
+                    return el.id !== targetCond.id;
+                } else {
+                    return activeEventIds.has(el.id);
+                }
+            });
+            const prunedConnections = connectionsAfterCondPrune;
+
+            const ilpnSpec = this.convertLpnToIlpn(prunedElements, prunedConnections);
+
+            return this.validateSafe(ilpnSource, ilpnSpec).pipe(
+                switchMap((results) => {
+                    const allValid =
+                        results.length === ilpnSource.getPlaces().length && results.every((res) => res.valid);
+
+                    let allGoalsMet = false;
+                    if (allValid) {
+                        const checkInput = this.buildValidationInputForCandidate(
+                            sourceNet,
+                            prunedElements,
+                            prunedConnections,
+                        );
+                        allGoalsMet = this.goalsService.internalGoals.every((goal) =>
+                            goal.check(checkInput.elements, checkInput.connections, checkInput.petri),
+                        );
+                    }
+
+                    if (allValid && allGoalsMet) {
+                        const nextCandidate = { elements: prunedElements, connections: prunedConnections };
+                        return attemptPruning(nextCandidate, index + 1);
+                    } else {
+                        return attemptPruning(current, index + 1);
+                    }
+                }),
+            );
+        };
+
+        return attemptPruning(candidate, 0);
     }
 
     private adjustLpnToSatisfyGoals(
