@@ -58,7 +58,8 @@ graph TD
 - Inside `attemptSynthesis()`, once the candidate LPN is rendered, we immediately invoke `TokenTrailValidatorService.validate(ilpnSource, ilpnSpec)`.
 - If the ILP solver returns `allValid === true`, we verify that the candidate satisfies all active difficulty goals:
     - We evaluate the active behavioral goals (e.g. Causal Sequence, Concurrency, Conflict, Loop, etc.) on the candidate LPN. Note that the overall token trail validity is checked implicitly by the ILP solver.
-- If the candidate is semantically valid AND all active goals are met, it is accepted.
+- If the candidate is semantically valid AND all active goals are met, we check if **Expert Mode** is active:
+    - **LPN Candidate Minimization**: In Expert Mode, the initial candidate LPN synthesized by the region miner might contain redundant places/conditions. To produce the most minimal net, we perform a greedy pruning pass. We attempt to remove each Condition (and its associated arcs/disconnected events) one by one and re-validate. If the net remains valid and all goals are still met, we permanently prune the condition.
 - If either check fails, we increment the attempt counter, log the warning, and trigger a new attempt with a different trace selection.
 - The retry loop is capped at a maximum of **50 attempts** in Construction Mode (and **15 attempts** in Puzzle Mode) to prevent infinite loops.
 - **Fail-Safe Cleanup**: If the maximum number of attempts is reached, or if an asynchronous error occurs, we call `this.stateService.clear()`. This completely wipes any invalid or partially constructed LPN from the canvas so the user is never presented with a faulty model.
