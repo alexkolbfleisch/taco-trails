@@ -102,4 +102,21 @@ export class Diagram implements DisplayableGraph {
     getTransitionLabels(): string[] {
         return this._transitions.map((t) => t.label || t.id) || [];
     }
+
+    public static getSignature(net: Diagram | null): string {
+        if (!net) return '';
+        const nodes = net.allNodes
+            .map((n) => `${n.id}:${n.label ?? n.displayLabel ?? n.id}`)
+            .sort()
+            .join('|');
+        const markings = Object.entries(net.startMarking ?? {})
+            .map(([placeId, tokenCount]) => `${placeId}:${tokenCount}`)
+            .sort()
+            .join('|');
+        const edges = net.arcs
+            .map((a) => `${a.source}->${a.target}:${a.weight || 1}`)
+            .sort()
+            .join('|');
+        return `${nodes}::${markings}::${edges}`;
+    }
 }

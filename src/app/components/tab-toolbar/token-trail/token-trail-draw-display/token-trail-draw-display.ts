@@ -48,6 +48,7 @@ import { SvgEventNodeComponent } from '../../../display/svg-event-node/svg-event
 import { TokenTrailLpnService } from '../../../../services/token-trail-lpn.service';
 import { ToasterNotificationService } from '../../../../services/toaster-notification.service';
 import { SourcePetriNetService } from '../../../../services/source-petri-net.service';
+import { Diagram } from '../../../../classes/diagram/diagram';
 import { LoadingService } from '../../../../services/loading.service';
 import { ModeService } from '../../../../services/mode.service';
 import { Tab } from '../../../../classes/tabs';
@@ -869,7 +870,7 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
 
         this.sourceNetSub = this.sourcePetriNetService.sourceNet$.subscribe((net) => {
             if (net) {
-                const currentSig = this.lpnService.getNetSignature(net);
+                const currentSig = Diagram.getSignature(net);
                 const isSameSignature = currentSig === this.stateService.lastSynthesizedNetSignature;
 
                 if (!isSameSignature) {

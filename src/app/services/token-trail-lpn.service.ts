@@ -5,9 +5,9 @@ import { PetriNetRegionSynthesisService } from '../../../ilpn-components/src/lib
 import { LpnGenerationDifficulty, LpnDisplayMode, TokenTrailStateService } from './token-trail-state.service';
 import { SugiyamaService } from './sugiyama.service';
 import { FiringEntry } from '../classes/firing-entry';
+import { SerializationService } from './serialization.service';
 import { PetriNet as IlpnPetriNet } from '../../../ilpn-components/src/lib/models/pn/model/petri-net';
-import { Place as IlpnPlace } from '../../../ilpn-components/src/lib/models/pn/model/place';
-import { Transition as IlpnTransition } from '../../../ilpn-components/src/lib/models/pn/model/transition';
+import { JsonPetriNetParserService } from '../../../ilpn-components/src/lib/models/pn/io/parser/json-petri-net-parser.service';
 import { Diagram } from '../classes/diagram/diagram';
 import { Condition, Event as LabeledEvent, LabeledNetEdge, LabeledNetNode } from '../classes/labeled-net.model';
 import { PanningService } from './panning.service';
@@ -41,6 +41,8 @@ export class TokenTrailLpnService {
     private tabStateService = inject(TabStateService);
     private goalsService = inject(TokenTrailGoalsService);
     private validationService = inject(TokenTrailValidationService);
+    private jsonParser = inject(JsonPetriNetParserService);
+    private serializationService = inject(SerializationService);
     private _lastSelectedEntriesHash = '';
     private _synthesisTimeoutId: ReturnType<typeof setTimeout> | null = null;
     private _synthesisActiveRunId = 0;
@@ -133,7 +135,7 @@ export class TokenTrailLpnService {
         onFailure?: () => void,
     ) {
         this.stateService.resetCounters();
-        const selectedEntries = this._selectEntriesWithVariation(sourceNet, validEntries, maxTraces);
+        const selectedEntries = this._selectEntriesWithVariation(validEntries, maxTraces);
         const inputNets = this.buildInputNets(selectedEntries, config.splittingProbability);
 
         this.regionSynthesisService
@@ -238,11 +240,6 @@ export class TokenTrailLpnService {
     }
 
     private buildInputNetFromEntry(entry: FiringEntry, splittingProbability: number): IlpnPetriNet {
-        const net = new IlpnPetriNet();
-        let lastPlace = new IlpnPlace();
-        lastPlace.marking = 1;
-        net.addPlace(lastPlace);
-
         const labelCounts = new Map<string, number>();
         let hasDuplicates = false;
         for (const label of entry.labels) {
@@ -256,45 +253,48 @@ export class TokenTrailLpnService {
         const applySplitting = hasDuplicates && Math.random() < splittingProbability;
         const currentOccurrence = new Map<string, number>();
 
-        for (const label of entry.labels) {
-            let finalLabel = label;
-            if (applySplitting) {
-                const occ = (currentOccurrence.get(label) || 0) + 1;
-                currentOccurrence.set(label, occ);
-                if (labelCounts.get(label)! > 1) {
-                    const conflict = this.goalsService.selectedConflict;
-                    const isConflictTrans = conflict && (label === conflict[0] || label === conflict[1]);
-                    if (!isConflictTrans) {
-                        finalLabel = `${label}_instance${occ}`;
+        const places = Array.from({ length: entry.labels.length + 1 }, (_, i) => `p${i}`);
+        const transitions = Array.from({ length: entry.labels.length }, (_, i) => `t${i}`);
+        const arcs = Object.fromEntries(
+            transitions.flatMap((t, i) => [
+                [`p${i},${t}`, 1],
+                [`${t},p${i + 1}`, 1],
+            ]),
+        );
+        const labels = Object.fromEntries(
+            entry.labels.map((label, i) => {
+                let finalLabel = label;
+                if (applySplitting) {
+                    const occ = (currentOccurrence.get(label) || 0) + 1;
+                    currentOccurrence.set(label, occ);
+                    if (labelCounts.get(label)! > 1) {
+                        const conflict = this.goalsService.selectedConflict;
+                        const isConflictTrans = conflict && (label === conflict[0] || label === conflict[1]);
+                        if (!isConflictTrans) {
+                            finalLabel = `${label}_instance${occ}`;
+                        }
                     }
                 }
-            }
+                return [`t${i}`, finalLabel];
+            }),
+        );
 
-            const t = new IlpnTransition(finalLabel);
-            net.addTransition(t);
-            net.addArc(lastPlace, t);
-
-            const nextPlace = new IlpnPlace();
-            net.addPlace(nextPlace);
-            net.addArc(t, nextPlace);
-
-            lastPlace = nextPlace;
-        }
-
-        return net;
+        return this.jsonParser.parse(
+            JSON.stringify({
+                places,
+                transitions,
+                arcs,
+                marking: { p0: 1 },
+                labels,
+            }),
+        )!;
     }
 
     private buildAndPrepareCandidate(
         result: IlpnPetriNet,
         maxEdges: number,
     ): { elements: LabeledNetNode[]; connections: LabeledNetEdge[] } {
-        const candidate = this.buildCandidateLpn(result, maxEdges);
-        if (this.stateService.displayMode() === LpnDisplayMode.Construction) {
-            const adjusted = this.adjustLpnToSatisfyGoals(candidate.elements, candidate.connections);
-            candidate.elements = adjusted.elements;
-            candidate.connections = adjusted.connections;
-        }
-        return candidate;
+        return this.buildCandidateLpn(result, maxEdges);
     }
 
     private populateCandidateTrailMarkings(
@@ -344,7 +344,7 @@ export class TokenTrailLpnService {
 
         // Cache the solution
         this.stateService.solutionCache = solvedTrailsMap;
-        this.stateService.lastSynthesizedNetSignature = this.getNetSignature(sourceNet);
+        this.stateService.lastSynthesizedNetSignature = Diagram.getSignature(sourceNet);
         if (this.stateService.displayMode() === LpnDisplayMode.Construction) {
             this.stateService.cachedConstructionSolutionElements = this.stateService.cloneDrawnElements(
                 this.stateService.drawnElements(),
@@ -437,51 +437,11 @@ export class TokenTrailLpnService {
     }
 
     public convertSourceNetToIlpn(sourceNet: Diagram): IlpnPetriNet {
-        const ilpn = new IlpnPetriNet();
-        for (const p of sourceNet.places) {
-            ilpn.addPlace(new IlpnPlace(p.tokenCount(), p.id));
-        }
-        for (const t of sourceNet.transitions) {
-            ilpn.addTransition(new IlpnTransition(t.label, t.id));
-        }
-        for (const edge of sourceNet.arcs) {
-            const sourceNode = ilpn.getPlace(edge.source) || ilpn.getTransition(edge.source);
-            const destNode = ilpn.getPlace(edge.target) || ilpn.getTransition(edge.target);
-            if (sourceNode && destNode) {
-                if (sourceNode instanceof IlpnPlace) {
-                    ilpn.addArc(sourceNode, destNode as IlpnTransition, edge.weight || 1);
-                } else {
-                    ilpn.addArc(sourceNode, destNode as IlpnPlace, edge.weight || 1);
-                }
-            }
-        }
-        return ilpn;
+        return this.jsonParser.parse(this.serializationService.serializeJson(sourceNet))!;
     }
 
     public convertLpnToIlpn(drawnElements: LabeledNetNode[], connections: LabeledNetEdge[]): IlpnPetriNet {
-        const ilpn = new IlpnPetriNet();
-        for (const el of drawnElements) {
-            if (el instanceof Condition) {
-                ilpn.addPlace(new IlpnPlace(el.isStartPlace ? 1 : 0, el.id));
-            }
-        }
-        for (const el of drawnElements) {
-            if (el instanceof LabeledEvent) {
-                ilpn.addTransition(new IlpnTransition(el.label, el.id));
-            }
-        }
-        for (const conn of connections) {
-            const sourceNode = ilpn.getPlace(conn.source) || ilpn.getTransition(conn.source);
-            const destNode = ilpn.getPlace(conn.target) || ilpn.getTransition(conn.target);
-            if (sourceNode && destNode) {
-                if (sourceNode instanceof IlpnPlace) {
-                    ilpn.addArc(sourceNode, destNode as IlpnTransition, conn.weight || 1);
-                } else {
-                    ilpn.addArc(sourceNode, destNode as IlpnPlace, conn.weight || 1);
-                }
-            }
-        }
-        return ilpn;
+        return this.jsonParser.parse(this.serializationService.serializeLpn(drawnElements, connections, 'json'))!;
     }
 
     public mapValidatorResultsToSolvedTrails(
@@ -502,22 +462,6 @@ export class TokenTrailLpnService {
         return solvedTrailsMap;
     }
 
-    public getNetSignature(net: Diagram): string {
-        const nodes = net.allNodes
-            .map((n) => `${n.id}:${n.label ?? ''}`)
-            .sort()
-            .join('|');
-        const markings = Object.entries(net.startMarking || {})
-            .map(([placeId, tokenCount]) => `${placeId}:${tokenCount}`)
-            .sort()
-            .join('|');
-        const edges = net.arcs
-            .map((a) => `${a.source}->${a.target}:${a.weight || 1}`)
-            .sort()
-            .join('|');
-        return `${nodes}::${markings}::${edges}`;
-    }
-
     /**
      * Selects a subset of unique firing entries, shuffling and using a hash check to ensure variation
      * in the synthesized traces compared to the last selection. Ensures goal-relevant traces are included.
@@ -526,37 +470,25 @@ export class TokenTrailLpnService {
      * @param maxTraces The maximum number of traces to select.
      * @returns A subset of firing entries.
      */
-    private _selectEntriesWithVariation(
-        sourceNet: Diagram,
-        validEntries: FiringEntry[],
-        maxTraces: number,
-    ): FiringEntry[] {
-        const difficulty = this.stateService.lpnGenerationDifficulty();
-
-        const containsDirectSequence = (labels: string[], a: string, b: string) => {
-            for (let i = 0; i < labels.length - 1; i++) {
-                if (labels[i] === a && labels[i + 1] === b) return true;
-            }
-            return false;
-        };
+    private _selectEntriesWithVariation(validEntries: FiringEntry[], maxTraces: number): FiringEntry[] {
+        const difficulty =
+            this.stateService.displayMode() === LpnDisplayMode.Puzzle
+                ? this.stateService.lpnGenerationDifficulty()
+                : this.goalsService.currentDifficulty();
 
         if (difficulty === LpnGenerationDifficulty.Easy) {
-            let candidates: FiringEntry[] = [];
             const seq = this.goalsService.selectedSequence;
-            if (seq) {
-                const [A, B] = seq;
-                candidates = validEntries.filter((entry) => containsDirectSequence(entry.labels, A, B));
-                if (candidates.length === 0) {
-                    candidates = validEntries.filter((entry) => {
-                        const idxA = entry.labels.indexOf(A);
-                        const idxB = entry.labels.indexOf(B);
-                        return idxA !== -1 && idxB !== -1 && idxA < idxB;
-                    });
-                }
+            let candidates = seq
+                ? validEntries.filter((e) => e.labels.some((l, i) => l === seq[0] && e.labels[i + 1] === seq[1]))
+                : [];
+            if (candidates.length === 0 && seq) {
+                candidates = validEntries.filter((e) => {
+                    const idxA = e.labels.indexOf(seq[0]);
+                    const idxB = e.labels.indexOf(seq[1]);
+                    return idxA !== -1 && idxB !== -1 && idxA < idxB;
+                });
             }
-            if (candidates.length === 0) {
-                candidates = validEntries;
-            }
+            if (candidates.length === 0) candidates = validEntries;
 
             let selected: FiringEntry;
             let hash = '';
@@ -573,85 +505,63 @@ export class TokenTrailLpnService {
 
         const mustHave = new Set<FiringEntry>();
 
-        if (difficulty === LpnGenerationDifficulty.Medium) {
-            const concurrent = this.goalsService.selectedConcurrency;
-            if (concurrent) {
-                const [A, B] = concurrent;
-                const traceAB = validEntries.find((entry) => {
-                    const idxA = entry.labels.indexOf(A);
-                    const idxB = entry.labels.indexOf(B);
+        // 1. Causal Sequence
+        const seq = this.goalsService.selectedSequence;
+        if (seq) {
+            const [A, B] = seq;
+            const traceAB =
+                validEntries.find((e) => {
+                    const idxA = e.labels.indexOf(A);
+                    const idxB = e.labels.indexOf(B);
+                    return idxA !== -1 && idxB !== -1 && idxB === idxA + 1;
+                }) ??
+                validEntries.find((e) => {
+                    const idxA = e.labels.indexOf(A);
+                    const idxB = e.labels.indexOf(B);
                     return idxA !== -1 && idxB !== -1 && idxA < idxB;
                 });
-                const traceBA = validEntries.find((entry) => {
-                    const idxA = entry.labels.indexOf(A);
-                    const idxB = entry.labels.indexOf(B);
-                    return idxA !== -1 && idxB !== -1 && idxB < idxA;
-                });
-                if (traceAB) mustHave.add(traceAB);
-                if (traceBA) mustHave.add(traceBA);
-            }
-            const loopA = this.goalsService.selectedLoopLabel;
-            if (loopA) {
-                let traceWithLoop = validEntries.find((entry) => entry.labels.filter((l) => l === loopA).length > 1);
-                if (!traceWithLoop) {
-                    traceWithLoop = validEntries.find((entry) => entry.labels.includes(loopA));
-                }
-                if (traceWithLoop) mustHave.add(traceWithLoop);
-            }
-        } else if (difficulty === LpnGenerationDifficulty.Hard) {
-            const conflict = this.goalsService.selectedConflict;
-            if (conflict) {
-                const [Y, Z] = conflict;
-                const { traceY, traceZ } = this._findAlignedConflictTraces(validEntries, Y, Z);
-                if (traceY) mustHave.add(traceY);
-                if (traceZ) mustHave.add(traceZ);
-            }
-            const splitX = this.goalsService.selectedSplitLabel;
-            if (splitX) {
-                const traceWithX = validEntries.find((entry) => entry.labels.includes(splitX));
-                if (traceWithX) mustHave.add(traceWithX);
-            }
-        } else if (difficulty === LpnGenerationDifficulty.Expert) {
-            // Concurrency
-            const concurrent = this.goalsService.selectedConcurrency;
-            if (concurrent) {
-                const [A, B] = concurrent;
-                const traceAB = validEntries.find((entry) => {
-                    const idxA = entry.labels.indexOf(A);
-                    const idxB = entry.labels.indexOf(B);
-                    return idxA !== -1 && idxB !== -1 && idxA < idxB;
-                });
-                const traceBA = validEntries.find((entry) => {
-                    const idxA = entry.labels.indexOf(A);
-                    const idxB = entry.labels.indexOf(B);
-                    return idxA !== -1 && idxB !== -1 && idxB < idxA;
-                });
-                if (traceAB) mustHave.add(traceAB);
-                if (traceBA) mustHave.add(traceBA);
-            }
-            // Conflict
-            const conflict = this.goalsService.selectedConflict;
-            if (conflict) {
-                const [Y, Z] = conflict;
-                const { traceY, traceZ } = this._findAlignedConflictTraces(validEntries, Y, Z);
-                if (traceY) mustHave.add(traceY);
-                if (traceZ) mustHave.add(traceZ);
-            }
-            // Loop
-            const loopA = this.goalsService.selectedLoopLabel;
-            if (loopA) {
-                let traceWithLoop = validEntries.find((entry) => entry.labels.filter((l) => l === loopA).length > 1);
-                if (!traceWithLoop) {
-                    traceWithLoop = validEntries.find((entry) => entry.labels.includes(loopA));
-                }
-                if (traceWithLoop) mustHave.add(traceWithLoop);
-            }
+            if (traceAB) mustHave.add(traceAB);
         }
 
-        // We want to add variation and fill up to maxTraces.
+        // 2. Concurrency
+        const concurrent = this.goalsService.selectedConcurrency;
+        if (concurrent) {
+            const [A, B] = concurrent;
+            const traceAB = validEntries.find((e) => {
+                const idxA = e.labels.indexOf(A);
+                const idxB = e.labels.indexOf(B);
+                return idxA !== -1 && idxB !== -1 && idxA < idxB;
+            });
+            const traceBA = validEntries.find((e) => {
+                const idxA = e.labels.indexOf(A);
+                const idxB = e.labels.indexOf(B);
+                return idxA !== -1 && idxB !== -1 && idxB < idxA;
+            });
+            if (traceAB) mustHave.add(traceAB);
+            if (traceBA) mustHave.add(traceBA);
+        }
+
+        // 3. Loop
+        const loopA = this.goalsService.selectedLoopLabel;
+        if (loopA) {
+            const traceWithLoop =
+                validEntries.find((e) => e.labels.filter((l) => l === loopA).length > 1) ??
+                validEntries.find((e) => e.labels.includes(loopA));
+            if (traceWithLoop) mustHave.add(traceWithLoop);
+        }
+
+        // 4. Conflict
+        const conflict = this.goalsService.selectedConflict;
+        if (conflict) {
+            const [Y, Z] = conflict;
+            const { traceY, traceZ } = this._findAlignedConflictTraces(validEntries, Y, Z);
+            if (traceY) mustHave.add(traceY);
+            if (traceZ) mustHave.add(traceZ);
+        }
+
+        // Fill up to maxTraces with variation
         const baseSelection = Array.from(mustHave);
         const remainingEntries = validEntries.filter((entry) => !mustHave.has(entry));
-
         let selectedEntries: FiringEntry[];
         let hash: string;
         let retries = 0;
@@ -661,17 +571,13 @@ export class TokenTrailLpnService {
             const minSize = Math.max(baseSelection.length, 1);
             const maxSize = Math.max(minSize, maxTraces);
             const targetSize = minSize + Math.floor(Math.random() * (maxSize - minSize + 1));
-
-            const additionalNeeded = targetSize - baseSelection.length;
-            const additional = shuffledRemaining.slice(0, additionalNeeded);
+            const additional = shuffledRemaining.slice(0, targetSize - baseSelection.length);
 
             selectedEntries = [...baseSelection, ...additional];
-
             hash = selectedEntries
                 .map((e) => e.labels.join('-'))
                 .sort()
                 .join('|');
-
             retries++;
         } while (hash === this._lastSelectedEntriesHash && retries < 15 && validEntries.length > 1);
 
@@ -920,172 +826,64 @@ export class TokenTrailLpnService {
         };
     }
 
-    private adjustLpnToSatisfyGoals(
-        initialElements: LabeledNetNode[],
-        initialConnections: LabeledNetEdge[],
-    ): { elements: LabeledNetNode[]; connections: LabeledNetEdge[] } {
-        const splitLabel = this.goalsService.selectedSplitLabel;
-        if (!splitLabel) return { elements: initialElements, connections: initialConnections };
-
-        const elements = [...initialElements];
-        const connections = [...initialConnections];
-
-        let matchingEvents = elements.filter(
-            (e): e is LabeledEvent => e instanceof LabeledEvent && e.label === splitLabel,
-        );
-
-        if (matchingEvents.length === 0) {
-            // Fallback: if the event is missing entirely, duplicate any existing event and change its label
-            const eventToDuplicate = elements.find((e): e is LabeledEvent => e instanceof LabeledEvent);
-            if (eventToDuplicate) {
-                const newId = this.stateService.generateElementId('drawn-trans');
-                const newEvent = this.stateService.buildEvent(newId, splitLabel, splitLabel);
-                newEvent.x = eventToDuplicate.x + 30;
-                newEvent.y = eventToDuplicate.y + 30;
-                elements.push(newEvent);
-
-                const incoming = connections.filter((c) => c.target === eventToDuplicate.id);
-                const outgoing = connections.filter((c) => c.source === eventToDuplicate.id);
-
-                for (const conn of incoming) {
-                    connections.push(
-                        new LabeledNetEdge(
-                            this.stateService.generateConnectionId('conn'),
-                            conn.source,
-                            newId,
-                            conn.weight,
-                        ),
-                    );
-                }
-
-                for (const conn of outgoing) {
-                    connections.push(
-                        new LabeledNetEdge(
-                            this.stateService.generateConnectionId('conn'),
-                            newId,
-                            conn.target,
-                            conn.weight,
-                        ),
-                    );
-                }
-
-                matchingEvents = [newEvent];
-            }
-        }
-
-        const currentCount = matchingEvents.length;
-        const targetCount = 2; // Label splitting requires at least 2 duplicates
-
-        if (currentCount > 0 && currentCount < targetCount) {
-            const eventToDuplicate = matchingEvents[0];
-            const numToAdd = targetCount - currentCount;
-
-            for (let i = 0; i < numToAdd; i++) {
-                const newId = this.stateService.generateElementId('drawn-trans');
-                const newEvent = this.stateService.buildEvent(newId, splitLabel, splitLabel);
-                newEvent.x = eventToDuplicate.x + 30 * (i + 1);
-                newEvent.y = eventToDuplicate.y + 30 * (i + 1);
-                elements.push(newEvent);
-
-                const incoming = connections.filter((c) => c.target === eventToDuplicate.id);
-                const outgoing = connections.filter((c) => c.source === eventToDuplicate.id);
-
-                for (const conn of incoming) {
-                    connections.push(
-                        new LabeledNetEdge(
-                            this.stateService.generateConnectionId('conn'),
-                            conn.source,
-                            newId,
-                            conn.weight,
-                        ),
-                    );
-                }
-
-                for (const conn of outgoing) {
-                    connections.push(
-                        new LabeledNetEdge(
-                            this.stateService.generateConnectionId('conn'),
-                            newId,
-                            conn.target,
-                            conn.weight,
-                        ),
-                    );
-                }
-            }
-        }
-
-        return { elements, connections };
-    }
-
     /**
      * Loads a parsed Petri Net / LPN structure from a Diagram object into the state service.
      * Restores LPN Condition trail markings, baseNames, event coordinates, and edge bendPoints.
      */
     public loadLpnFromDiagram(diagram: Diagram) {
+        // ponytail: simplify LPN loading logic
         this.stateService.clear();
-
         const hasStartPlaces = diagram.places.some((place) => place.isStartPlace);
 
         // 1. Map places to LPN Conditions
-        for (const p of diagram.places) {
+        diagram.places.forEach((p) => {
             const rawLabel = p.label ?? p.displayLabel ?? p.id;
-
-            // Extract baseName: if it is e.g. c1 or c2, use it. Otherwise use a new one.
-            let baseName = rawLabel;
-            if (!/^c\d+$/.test(rawLabel)) {
-                if (/^c\d+$/.test(p.id)) {
-                    baseName = p.id;
-                } else {
-                    baseName = this.stateService.generateConditionName();
-                }
-            }
+            const baseName = /^c\d+$/.test(rawLabel)
+                ? rawLabel
+                : /^c\d+$/.test(p.id)
+                  ? p.id
+                  : this.stateService.generateConditionName();
 
             const isStart = hasStartPlaces ? p.isStartPlace : p.isStartPlace || p.tokenCount() > 0;
-
-            // Build condition
             const condition = this.stateService.buildCondition(p.id, rawLabel, p.tokenCount(), {
                 isStartPlace: isStart,
                 hideTokens: !isStart,
-                baseName: baseName,
+                baseName,
             });
-
             condition.x = p.x;
             condition.y = p.y;
 
-            // Parse label to recover trail markings
             const trailMarkings: Record<string, number> = {};
-            const parts = rawLabel.split(' + ').map((part) => part.trim());
-            for (const part of parts) {
-                const match = part.match(/^(\d+)\*(.+)$|^(.+)$/);
+            rawLabel.split(' + ').forEach((part) => {
+                const match = part.trim().match(/^(\d+)\*(.+)$|^(.+)$/);
                 if (match) {
-                    const multiplier = match[1] ? parseInt(match[1], 10) : 1;
                     const singleLabel = match[2] || match[3];
                     if (singleLabel !== baseName) {
+                        const multiplier = match[1] ? parseInt(match[1], 10) : 1;
                         trailMarkings[singleLabel] = (trailMarkings[singleLabel] ?? 0) + multiplier;
                     }
                 }
-            }
+            });
             condition.trailMarkings = trailMarkings;
             condition.updateDynamicLabel();
-
             this.stateService.addDrawnElement(condition);
-        }
+        });
 
         // 2. Map transitions to LPN Events
-        for (const t of diagram.transitions) {
+        diagram.transitions.forEach((t) => {
             const label = t.label ?? t.displayLabel ?? t.id;
             const eventNode = this.stateService.buildEvent(t.id, label, label);
             eventNode.x = t.x;
             eventNode.y = t.y;
             this.stateService.addDrawnElement(eventNode);
-        }
+        });
 
         // 3. Map arcs to LPN Connections
-        for (const arc of diagram.arcs) {
+        diagram.arcs.forEach((arc) => {
             const edge = new LabeledNetEdge(arc.id, arc.source, arc.target, arc.weight);
-            edge.bendPoints = arc.bendPoints ? arc.bendPoints.map((bp) => ({ x: bp.x, y: bp.y })) : [];
+            edge.bendPoints = arc.bendPoints?.map(({ x, y }) => ({ x, y })) ?? [];
             this.stateService.addConnection(edge);
-        }
+        });
 
         this.stateService.updateDrawnElements((e) => [...e]);
         this.stateService.updateConnections((c) => [...c]);
