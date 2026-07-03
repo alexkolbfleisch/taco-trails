@@ -1124,25 +1124,18 @@ export class TokenTrailGoalsService {
 
         let yReachable = false;
         let zReachable = false;
-        let bothEnabledInSomeMarking = false;
 
         for (const M of caps.reachableMarkings) {
-            const yEnabled = placeIds.every((pId) => (M[pId] ?? 0) >= (presetY[pId] ?? 0));
-            const zEnabled = placeIds.every((pId) => (M[pId] ?? 0) >= (presetZ[pId] ?? 0));
+            if (!yReachable && placeIds.every((pId) => (M[pId] ?? 0) >= (presetY[pId] ?? 0))) yReachable = true;
+            if (!zReachable && placeIds.every((pId) => (M[pId] ?? 0) >= (presetZ[pId] ?? 0))) zReachable = true;
 
-            if (yEnabled) yReachable = true;
-            if (zEnabled) zReachable = true;
-
-            if (yEnabled && zEnabled) {
-                bothEnabledInSomeMarking = true;
-                // If both are concurrently enabled in any marking → not a conflict
-                if (placeIds.every((pId) => (M[pId] ?? 0) >= (presetY[pId] ?? 0) + (presetZ[pId] ?? 0))) {
-                    return false;
-                }
+            // If both are concurrently enabled in any marking → not a conflict
+            if (placeIds.every((pId) => (M[pId] ?? 0) >= (presetY[pId] ?? 0) + (presetZ[pId] ?? 0))) {
+                return false;
             }
         }
 
-        return yReachable && zReachable && bothEnabledInSomeMarking;
+        return yReachable && zReachable;
     }
 
     private hasConcurrency(caps: SourceNetCapabilities, placeIds: string[], aId: string, bId: string): boolean {
