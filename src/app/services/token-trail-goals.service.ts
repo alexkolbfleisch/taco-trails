@@ -6,36 +6,15 @@ import { TokenTrailValidationService } from './token-trail-validation.service';
 import { ToasterNotificationService } from './toaster-notification.service';
 import { ModeService } from './mode.service';
 import { Tab } from '../classes/tabs';
-import { PetriNet, TokenTrailElement, TokenTrailConnection } from '../classes/token-trail.model';
+import {
+    TokenTrailElement,
+    TokenTrailConnection,
+    LpnGoal,
+    InternalGoal,
+    SourceNetCapabilities,
+    CandidateGoal,
+} from '../classes/token-trail.model';
 import { Diagram } from '../classes/diagram/diagram';
-
-export interface LpnGoal {
-    id: string;
-    /** i18n key for the goal description (used with the translate pipe). */
-    descriptionKey: string;
-    /** Optional interpolation params for the translate pipe (e.g. { a: 'T1', b: 'T2' }). */
-    descriptionParams?: Record<string, string>;
-    completed: boolean;
-}
-
-export interface InternalGoal {
-    id: string;
-    descriptionKey: string;
-    descriptionParams?: Record<string, string>;
-    check: (elements: TokenTrailElement[], connections: TokenTrailConnection[], sourceNet: PetriNet) => boolean;
-}
-
-export interface SourceNetCapabilities {
-    reachableMarkings: Record<string, number>[];
-    preset: Record<string, Record<string, number>>;
-    postset: Record<string, Record<string, number>>;
-}
-
-export interface CandidateGoal {
-    type: 'concurrency' | 'conflict' | 'loop' | 'sequence';
-    value: [string, string] | string | null;
-    goal: InternalGoal;
-}
 
 @Injectable({
     providedIn: 'root',
