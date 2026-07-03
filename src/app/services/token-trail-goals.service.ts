@@ -6,6 +6,9 @@ import { TokenTrailValidationService } from './token-trail-validation.service';
 import { ToasterNotificationService } from './toaster-notification.service';
 import { ModeService } from './mode.service';
 import { Tab } from '../classes/tabs';
+import { PlayService } from './play.service';
+import { PlayValidationService } from './play-validation.service';
+import { FiringEntry } from '../classes/firing-entry';
 import {
     TokenTrailElement,
     TokenTrailConnection,
@@ -15,6 +18,9 @@ import {
     CandidateGoal,
 } from '../classes/token-trail.model';
 import { Diagram } from '../classes/diagram/diagram';
+import { DiagramPlace } from '../classes/diagram/diagram-place';
+import { DiagramTransition } from '../classes/diagram/diagram-transition';
+import { DiagramArc } from '../classes/diagram/diagram-arc';
 
 @Injectable({
     providedIn: 'root',
@@ -25,7 +31,8 @@ export class TokenTrailGoalsService {
     private validationService = inject(TokenTrailValidationService);
     private toaster = inject(ToasterNotificationService);
     private modeService = inject(ModeService);
-
+    private playService = inject(PlayService);
+    private playValidationService = inject(PlayValidationService);
     // Goal Progression / Difficulty State
     readonly currentDifficulty = signal<LpnGenerationDifficulty>(LpnGenerationDifficulty.Easy);
     readonly unlockedPuzzle = signal<Set<LpnGenerationDifficulty>>(new Set([LpnGenerationDifficulty.Easy]));
@@ -77,14 +84,14 @@ export class TokenTrailGoalsService {
             const triggerKey = this.validationService.validationTriggerKey();
             const lastTriggerKey = this.validationService.lastExplicitValidationTriggerKey();
 
-            // In exam mode, only re-evaluate goals if the validation has been explicitly triggered
-            if (isExam && triggerKey !== lastTriggerKey) {
-                return;
-            }
-
             const input = this.validationService.buildValidationInput();
             if (!input) {
                 this.activeGoals.set([]);
+                return;
+            }
+
+            // In exam mode, only re-evaluate goals if the validation has been explicitly triggered
+            if (isExam && triggerKey !== lastTriggerKey) {
                 return;
             }
 
@@ -271,6 +278,10 @@ export class TokenTrailGoalsService {
             this.activeGoals.set([]);
             return difficulty;
         }
+
+        // Pre-populate firing sequences so trace-based loop dependency checks have access to valid traces
+        this.playService.firingEntries.set([]);
+        this.playValidationService.findSequences(sourceNet, 1, 300);
 
         const caps = this.exploreSourceNet(sourceNet);
         const placeIds = sourceNet.places.map((p) => p.id);
@@ -616,13 +627,33 @@ export class TokenTrailGoalsService {
         this.selectedConflict = null;
         this.selectedLoopLabel = null;
 
-        const availableConcurrency = this.pickConcurrentPair(sourceNet, caps, placeIds);
-        const availableConflict = this.pickConflictPair(sourceNet, caps, placeIds);
         const availableLoop = this.pickLoopLabel(sourceNet, caps);
+        const availableConflict = this.pickConflictPair(sourceNet, caps, placeIds);
+
+        // ponytail: Determine which types are available and select up to 2 first
+        const availableTypes: string[] = [];
+        if (availableLoop) availableTypes.push('loop');
+        if (availableConflict) availableTypes.push('conflict');
+        availableTypes.push('concurrency');
+
+        availableTypes.sort(() => Math.random() - 0.5);
+        const selectedTypes = availableTypes.slice(0, 2);
+
+        // Only enforce loop constraints if the loop goal is actually going to be active
+        if (selectedTypes.includes('loop')) {
+            this.selectedLoopLabel = availableLoop;
+        } else {
+            this.selectedLoopLabel = null;
+        }
+
+        let availableConcurrency: [string, string] | null = null;
+        if (selectedTypes.includes('concurrency')) {
+            availableConcurrency = this.pickConcurrentPair(sourceNet, caps, placeIds);
+        }
 
         const candidates: CandidateGoal[] = [];
 
-        if (availableConcurrency) {
+        if (availableConcurrency && selectedTypes.includes('concurrency')) {
             const [A, B] = availableConcurrency;
             candidates.push({
                 type: 'concurrency',
@@ -636,7 +667,7 @@ export class TokenTrailGoalsService {
             });
         }
 
-        if (availableConflict) {
+        if (availableConflict && selectedTypes.includes('conflict')) {
             const [Y, Z] = availableConflict;
             candidates.push({
                 type: 'conflict',
@@ -650,7 +681,7 @@ export class TokenTrailGoalsService {
             });
         }
 
-        if (availableLoop) {
+        if (availableLoop && selectedTypes.includes('loop')) {
             candidates.push({
                 type: 'loop',
                 value: availableLoop,
@@ -663,10 +694,7 @@ export class TokenTrailGoalsService {
             });
         }
 
-        // Shuffle the primary candidates
-        candidates.sort(() => Math.random() - 0.5);
-
-        const selected = candidates.slice(0, 2);
+        const selected = [...candidates];
 
         // Fallback to causal sequence to guarantee we have exactly two goals if possible
         if (selected.length < 2) {
@@ -687,6 +715,9 @@ export class TokenTrailGoalsService {
         }
 
         // Apply selection to the service properties
+        this.selectedConcurrency = null;
+        this.selectedConflict = null;
+        this.selectedLoopLabel = null;
         for (const item of selected) {
             if (item.type === 'concurrency') {
                 this.selectedConcurrency = item.value as [string, string];
@@ -751,11 +782,62 @@ export class TokenTrailGoalsService {
     /**
      * Picks a random concurrently-enabled transition pair from the source net.
      */
+    /**
+     * Detects if a label is structurally part of the loop cycle or strictly sequenced by it.
+     */
+    public isLabelLockedInLoop(validEntries: FiringEntry[], candidateLabel: string, activeLoopLabel: string): boolean {
+        // Find a trace where the loop label fires multiple times
+        const multiLoopTrace = validEntries.find((e) => e.labels.filter((l) => l === activeLoopLabel).length > 1);
+
+        if (multiLoopTrace) {
+            const firstIdx = multiLoopTrace.labels.indexOf(activeLoopLabel);
+            const lastIdx = multiLoopTrace.labels.lastIndexOf(activeLoopLabel);
+
+            // If the candidate label is executed BETWEEN the loop iterations,
+            // it is structurally trapped inside the loop cycle!
+            const subSequence = multiLoopTrace.labels.slice(firstIdx, lastIdx + 1);
+            if (subSequence.includes(candidateLabel)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Validates if the concurrency pair conflicts with the active loop constraint.
+     */
+    public isGoalCombinationValid(
+        validEntries: FiringEntry[],
+        concurrentLabelA: string,
+        concurrentLabelB: string,
+        activeLoopLabel: string | null,
+    ): boolean {
+        if (!activeLoopLabel) return true;
+
+        // 1. Direct block: The loop label itself cannot be part of the concurrency goal
+        if (concurrentLabelA === activeLoopLabel || concurrentLabelB === activeLoopLabel) {
+            return false;
+        }
+
+        // 2. Structural block: Any transition trapped inside the loop cycle (like t4)
+        // cannot be paired as concurrent with anything else.
+        if (
+            this.isLabelLockedInLoop(validEntries, concurrentLabelA, activeLoopLabel) ||
+            this.isLabelLockedInLoop(validEntries, concurrentLabelB, activeLoopLabel)
+        ) {
+            return false;
+        }
+
+        return true;
+    }
+
     private pickConcurrentPair(
         sourceNet: Diagram,
         caps: SourceNetCapabilities,
         placeIds: string[],
     ): [string, string] | null {
+        const loopLabel = this.selectedLoopLabel;
+        const validEntries = this.playService.firingEntries().filter((e) => e.isValid);
         const pairs: [string, string][] = [];
         for (const t1 of sourceNet.transitions) {
             for (const t2 of sourceNet.transitions) {
@@ -763,7 +845,8 @@ export class TokenTrailGoalsService {
                 if (
                     this.hasConcurrency(caps, placeIds, t1.id, t2.id) &&
                     this.canLabelPrecede(caps, placeIds, sourceNet, t1.label, t2.label) &&
-                    this.canLabelPrecede(caps, placeIds, sourceNet, t2.label, t1.label)
+                    this.canLabelPrecede(caps, placeIds, sourceNet, t2.label, t1.label) &&
+                    this.isGoalCombinationValid(validEntries, t1.label, t2.label, loopLabel)
                 ) {
                     pairs.push([t1.label, t2.label]);
                 }
@@ -1119,59 +1202,34 @@ export class TokenTrailGoalsService {
         label1: string,
         label2: string,
     ): boolean {
-        const lpnPlaces = elements.filter((e) => e.type === 'Condition').map((e) => e.id);
-        const lpnTransitions = elements.filter((e) => e.type === 'Event');
-        const lpnLabels = Object.fromEntries(lpnTransitions.map((e) => [e.id, e.label]));
+        // ponytail: Map LPN elements and connections to Diagram, DiagramPlace, DiagramTransition, and DiagramArc
+        const places = elements
+            .filter((e) => e.type === 'Condition')
+            .map((c) => new DiagramPlace(c.id, c.isStartCondition ? 1 : (c.marking ?? 0), c.label));
 
-        const lpnArcs: Record<string, number> = Object.fromEntries(
-            connections.map((c) => [`${c.from},${c.to}`, c.weight]),
-        );
+        const transitions = elements
+            .filter((e) => e.type === 'Event')
+            .map((ev) => new DiagramTransition(ev.id, ev.label ?? ev.id));
 
-        const lpnMarking: Record<string, number> = Object.fromEntries(
-            elements.filter((e) => e.type === 'Condition' && (e.marking ?? 0) > 0).map((e) => [e.id, e.marking!]),
-        );
+        const arcs = connections.map((c) => new DiagramArc(c.id || `${c.from}-${c.to}`, c.from, c.to, c.weight));
 
-        const getMarkingKey = (m: Record<string, number>) => lpnPlaces.map((p) => m[p] ?? 0).join(',');
-        const visited = new Set<string>([getMarkingKey(lpnMarking)]);
-        const queue: Record<string, number>[] = [lpnMarking];
-        const transIds = lpnTransitions.map((e) => e.id);
-        const maxStates = 500;
+        const lpnDiagram = new Diagram(places, transitions, arcs);
 
-        while (queue.length > 0 && visited.size <= maxStates) {
-            const current = queue.shift()!;
+        // ponytail: reuse exploreSourceNet directly to calculate reachability graph and sets
+        const caps = this.exploreSourceNet(lpnDiagram);
+        const placeIds = lpnDiagram.places.map((p) => p.id);
 
-            // Check if any pair (t1, t2) with the target labels is concurrently enabled
-            for (const t1 of transIds) {
-                for (const t2 of transIds) {
-                    if (t1 === t2) continue;
-                    const l1 = lpnLabels[t1];
-                    const l2 = lpnLabels[t2];
-                    if ((l1 === label1 && l2 === label2) || (l1 === label2 && l2 === label1)) {
-                        const concurrentlyEnabled = lpnPlaces.every(
-                            (p) => (current[p] ?? 0) >= (lpnArcs[`${p},${t1}`] ?? 0) + (lpnArcs[`${p},${t2}`] ?? 0),
-                        );
-                        if (concurrentlyEnabled) return true;
+        for (const t1 of lpnDiagram.transitions) {
+            for (const t2 of lpnDiagram.transitions) {
+                if (t1.id === t2.id) continue;
+                if ((t1.label === label1 && t2.label === label2) || (t1.label === label2 && t2.label === label1)) {
+                    if (this.hasConcurrency(caps, placeIds, t1.id, t2.id)) {
+                        return true;
                     }
                 }
             }
-
-            // Fire each single transition to advance the state space
-            for (const t of transIds) {
-                const enabled = lpnPlaces.every((p) => (current[p] ?? 0) >= (lpnArcs[`${p},${t}`] ?? 0));
-                if (!enabled) continue;
-
-                const next: Record<string, number> = { ...current };
-                for (const p of lpnPlaces) {
-                    next[p] = (next[p] ?? 0) - (lpnArcs[`${p},${t}`] ?? 0) + (lpnArcs[`${t},${p}`] ?? 0);
-                }
-
-                const key = getMarkingKey(next);
-                if (!visited.has(key)) {
-                    visited.add(key);
-                    queue.push(next);
-                }
-            }
         }
+
         return false;
     }
 

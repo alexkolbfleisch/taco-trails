@@ -148,7 +148,7 @@
             [class.invalid-node]="isNodeInvalid(element.id)"
             [class.merge-animating]="isMergeAnimating(element)"
             [attr.data-element-id]="element.id"
-            [matTooltip]="element.displayLabel || element.label || ''"
+            [matTooltip]="elementMetadataMap().get(element.id)?.tooltipText || ''"
             [matTooltipDisabled]="!shouldShowTooltip(element)">
             <g
                 appSvgEventNode

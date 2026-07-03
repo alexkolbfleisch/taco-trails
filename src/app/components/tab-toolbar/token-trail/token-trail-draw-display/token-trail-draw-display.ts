@@ -683,12 +683,16 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
             }
 
             // shouldShowTooltip logic
-            const label = element.displayLabel || element.label || '';
+            let tooltipText = element.displayLabel || element.label || '';
+            if (element instanceof Condition && displayMode === LpnDisplayMode.Puzzle) {
+                tooltipText = element.baseName || element.displayLabel || '';
+            }
+            const labelLength = tooltipText.length;
             let shouldShowTooltip = false;
-            if (label.length > 15) {
+            if (labelLength > 15) {
                 shouldShowTooltip = true;
             } else if (displayMode === LpnDisplayMode.Puzzle) {
-                shouldShowTooltip = label.length > 5;
+                shouldShowTooltip = labelLength > 5;
             }
 
             map.set(element.id, {
@@ -698,7 +702,7 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
                 shouldShowTooltip,
                 groupSize,
                 hasIssues,
-                tooltipText: label,
+                tooltipText,
             });
         }
 
