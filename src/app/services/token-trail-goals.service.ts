@@ -965,58 +965,39 @@ export class TokenTrailGoalsService {
         connections: TokenTrailConnection[],
         labelA: string,
     ): boolean {
-        const places = elements.filter((e) => e.type === 'Condition').map((e) => e.id);
-        const transitions = elements.filter((e) => e.type === 'Event');
-        const transIds = transitions.map((e) => e.id);
+        // Find the event ID(s) corresponding to labelA
+        const targetEventIds = elements.filter((e) => e.type === 'Event' && e.label === labelA).map((e) => e.id);
 
-        const targetTransIndices = transitions
-            .map((t, idx) => (t.label === labelA ? idx : -1))
-            .filter((idx) => idx !== -1);
+        if (targetEventIds.length === 0) return false;
 
-        if (targetTransIndices.length === 0 || places.length === 0 || transIds.length === 0) return false;
-
-        // Build incidence matrix C (places × transitions): +1 for output arc, -1 for input arc
-        const placeIndex = new Map(places.map((id, idx) => [id, idx]));
-        const transIndex = new Map(transIds.map((id, idx) => [id, idx]));
-        const C: number[][] = Array.from({ length: places.length }, () => Array(transIds.length).fill(0));
-
+        // Build adjacency list for the LPN graph
+        const adj: Record<string, string[]> = {};
+        for (const el of elements) {
+            adj[el.id] = [];
+        }
         for (const conn of connections) {
-            const fromTransIdx = transIndex.get(conn.from);
-            const toPlaceIdx = placeIndex.get(conn.to);
-            if (fromTransIdx !== undefined && toPlaceIdx !== undefined) {
-                C[toPlaceIdx][fromTransIdx] += conn.weight;
-            }
-            const fromPlaceIdx = placeIndex.get(conn.from);
-            const toTransIdx = transIndex.get(conn.to);
-            if (fromPlaceIdx !== undefined && toTransIdx !== undefined) {
-                C[fromPlaceIdx][toTransIdx] -= conn.weight;
+            if (adj[conn.from]) {
+                adj[conn.from].push(conn.to);
             }
         }
 
-        const y = Array<number>(transIds.length).fill(0);
-        let found = false;
-
-        const search = (idx: number) => {
-            if (found) return;
-            if (idx === transIds.length) {
-                const isInvariant = places.every((_, r) => {
-                    const sum = transIds.reduce((acc, _, c) => acc + C[r][c] * y[c], 0);
-                    return sum === 0;
-                });
-                if (isInvariant && targetTransIndices.some((tIdx) => y[tIdx] > 0)) {
-                    found = true;
+        // BFS to find if any targetEventId can reach itself in a cycle
+        for (const startId of targetEventIds) {
+            const visited = new Set<string>();
+            const queue = [...(adj[startId] ?? [])];
+            while (queue.length > 0) {
+                const curr = queue.shift()!;
+                if (curr === startId) {
+                    return true;
                 }
-                return;
+                if (!visited.has(curr)) {
+                    visited.add(curr);
+                    queue.push(...(adj[curr] ?? []));
+                }
             }
-            for (let val = 0; val <= 3; val++) {
-                y[idx] = val;
-                search(idx + 1);
-                if (found) return;
-            }
-        };
+        }
 
-        search(0);
-        return found;
+        return false;
     }
 
     // ─── Source Net Analysis Helpers ─────────────────────────────────────────────
