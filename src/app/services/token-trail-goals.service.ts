@@ -1,4 +1,5 @@
 import { Injectable, inject, signal, effect } from '@angular/core';
+import { toSignal } from '@angular/core/rxjs-interop';
 import { TokenTrailStateService, LpnGenerationDifficulty, LpnDisplayMode } from './token-trail-state.service';
 import { SourcePetriNetService } from './source-petri-net.service';
 import { TokenTrailValidationService } from './token-trail-validation.service';
@@ -54,14 +55,13 @@ export class TokenTrailGoalsService {
     // Active goals list (with completed state)
     readonly activeGoals = signal<LpnGoal[]>([]);
 
-    readonly sourceNet = signal<Diagram | null>(null);
+    readonly sourceNet = toSignal(this.sourceNetService.sourceNet$, { initialValue: null });
 
     private lastSourceNetSignature = '';
     private lastDifficulty: LpnGenerationDifficulty | null = null;
 
     // Tracking properties for seeding traces in LPN synthesis
     public selectedSequence: [string, string] | null = null;
-    public selectedSplitLabel: string | null = null;
     public selectedConflict: [string, string] | null = null;
     public selectedConcurrency: [string, string] | null = null;
     public selectedLoopLabel: string | null = null;
@@ -72,16 +72,12 @@ export class TokenTrailGoalsService {
     constructor() {
         this.loadProgress();
 
-        this.sourceNetService.sourceNet$.subscribe((net) => {
-            this.sourceNet.set(net);
-        });
-
         // Regenerate construction goals whenever the source net structure or selected difficulty changes
         effect(() => {
             const net = this.sourceNet();
             const difficulty = this.currentDifficulty();
 
-            const sig = this.getNetSignature(net);
+            const sig = Diagram.getSignature(net);
             if (sig === this.lastSourceNetSignature && difficulty === this.lastDifficulty) {
                 return;
             }
@@ -271,7 +267,7 @@ export class TokenTrailGoalsService {
         difficulty: LpnGenerationDifficulty,
         force = false,
     ): LpnGenerationDifficulty {
-        const sig = sourceNet ? this.getNetSignature(sourceNet) : '';
+        const sig = sourceNet ? Diagram.getSignature(sourceNet) : '';
         if (
             !force &&
             sig === this.lastSourceNetSignature &&
@@ -287,7 +283,6 @@ export class TokenTrailGoalsService {
         this.stateService.cachedConstructionSolutionElements = null;
         this.stateService.cachedConstructionSolutionConnections = null;
         this.selectedSequence = null;
-        this.selectedSplitLabel = null;
         this.selectedConflict = null;
         this.selectedConcurrency = null;
         this.selectedLoopLabel = null;
@@ -377,7 +372,6 @@ export class TokenTrailGoalsService {
 
     private checkSequenceNetTopology(elements: TokenTrailElement[], connections: TokenTrailConnection[]): boolean {
         const places = elements.filter((e) => e.type === 'Condition');
-        const transitions = elements.filter((e) => e.type === 'Event');
         if (places.length === 0) return false;
 
         const { preset, postset } = this.getPresetAndPostset(elements, connections);
@@ -391,20 +385,6 @@ export class TokenTrailGoalsService {
         const ends = places.filter((p) => postset[p.id].length === 0);
         if (ends.length !== 1) return false;
         const o = ends[0];
-
-        // i must have outdegree 1, o must have indegree 1
-        if (postset[i.id].length !== 1 || preset[o.id].length !== 1) return false;
-
-        // Every other place must have preset = 1 and postset = 1
-        for (const p of places) {
-            if (p.id === i.id || p.id === o.id) continue;
-            if (preset[p.id].length !== 1 || postset[p.id].length !== 1) return false;
-        }
-
-        // Every transition must have preset = 1 and postset = 1
-        for (const t of transitions) {
-            if (preset[t.id].length !== 1 || postset[t.id].length !== 1) return false;
-        }
 
         // Directed path from i to o visiting all nodes
         const path: string[] = [];
@@ -1225,25 +1205,6 @@ export class TokenTrailGoalsService {
             (adj[conn.from] ??= []).push(conn.to);
         }
         return adj;
-    }
-
-    private getNetSignature(net: Diagram | null): string {
-        if (!net) return '';
-        const nodes = net
-            .getNodes()
-            .map((n) => `${n.id}:${n.displayLabel || n.id}`)
-            .sort()
-            .join('|');
-        const markings = Object.entries(net.startMarking ?? {})
-            .map(([placeId, tokenCount]) => `${placeId}:${tokenCount}`)
-            .sort()
-            .join('|');
-        const edges = net
-            .getEdges()
-            .map((a) => `${a.source}->${a.target}:${(a as unknown as { weight?: number }).weight ?? 1}`)
-            .sort()
-            .join('|');
-        return `${nodes}::${markings}::${edges}`;
     }
 
     public hasConcurrencyInNet(sourceNet: Diagram): boolean {
