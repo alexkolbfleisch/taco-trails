@@ -19,7 +19,7 @@ import { ToasterNotificationService } from './toaster-notification.service';
 import { TokenTrailValidatorService } from '../../../ilpn-components/src/lib/algorithms/pn/validation/token-trails/token-trail-validator.service';
 import { TokenTrailValidationResult } from '../../../ilpn-components/src/lib/algorithms/pn/validation/classes/validation-result';
 import { TabStateService } from './tab-state.service';
-import { catchError, Observable, of, take } from 'rxjs';
+import { catchError, forkJoin, map, Observable, of, take } from 'rxjs';
 import { TokenTrailGoalsService } from './token-trail-goals.service';
 import { TokenTrailValidationService } from './token-trail-validation.service';
 import { PetriNet, TokenTrailElement, TokenTrailConnection } from '../classes/token-trail.model';
@@ -60,15 +60,11 @@ export class TokenTrailLpnService {
         overrideDifficulty?: LpnGenerationDifficulty,
         onFailure?: () => void,
     ) {
-        let difficulty = overrideDifficulty;
-        if (!difficulty) {
-            difficulty =
-                this.stateService.displayMode() === LpnDisplayMode.Puzzle
-                    ? this.stateService.lpnGenerationDifficulty()
-                    : this.goalsService.currentDifficulty();
-        }
-
-        const finalDifficulty = this.goalsService.generateGoals(sourceNet, difficulty);
+        // ponytail: generate goals and update difficulty state
+        const finalDifficulty = this.goalsService.generateGoals(
+            sourceNet,
+            this.getEffectiveDifficulty(overrideDifficulty),
+        );
 
         this.stateService.setLpnGenerationDifficulty(finalDifficulty);
         this.goalsService.currentDifficulty.set(finalDifficulty);
@@ -107,17 +103,7 @@ export class TokenTrailLpnService {
         this._synthesisTimeoutId = setTimeout(() => {
             if (runId !== this._synthesisActiveRunId) return;
             console.warn('LPN synthesis timed out after 15 seconds.');
-            this.loadingService.hide();
-            this._synthesisActiveRunId = 0;
-            this._synthesisTimeoutId = null;
-
-            if (onFailure) onFailure();
-            if (this.tabStateService.currentTab() === Tab.TOKEN_TRAIL) {
-                this.toaster.showWarning(
-                    'TOKEN_TRAIL.LPN_SYNTHESIS_ERROR_TITLE',
-                    'TOKEN_TRAIL.LPN_SYNTHESIS_ERROR_BODY',
-                );
-            }
+            this.cleanupAndFail(onFailure, false);
         }, 15000);
 
         this.attemptSynthesis(sourceNet, ilpnSource, validEntries, maxTraces, maxEdges, config, 1, runId, onFailure);
@@ -138,77 +124,377 @@ export class TokenTrailLpnService {
         const selectedEntries = this._selectEntriesWithVariation(validEntries, maxTraces);
         const inputNets = this.buildInputNets(selectedEntries, config.splittingProbability);
 
+        const difficulty = this.getEffectiveDifficulty();
+
+        if (difficulty === LpnGenerationDifficulty.Easy) {
+            this.synthesiseEasyMode(
+                sourceNet,
+                ilpnSource,
+                selectedEntries,
+                validEntries,
+                maxTraces,
+                maxEdges,
+                config,
+                attempt,
+                runId,
+                onFailure,
+            );
+            return;
+        }
+
+        // ponytail: Expert mode synthesises subnets for conflict/concurrency and combines them with loop sequence nets
+        if (difficulty === LpnGenerationDifficulty.Expert) {
+            this.synthesiseExpertMode(
+                sourceNet,
+                ilpnSource,
+                selectedEntries,
+                validEntries,
+                inputNets,
+                maxTraces,
+                maxEdges,
+                config,
+                attempt,
+                runId,
+                onFailure,
+            );
+            return;
+        }
+
         this.regionSynthesisService
             .synthesise(inputNets, config.synthesisConfig)
             .pipe(take(1))
             .subscribe({
                 next: (result) => {
                     if (runId !== this._synthesisActiveRunId) return;
+                    this.processSynthesisResult(
+                        result.result,
+                        maxEdges,
+                        ilpnSource,
+                        sourceNet,
+                        validEntries,
+                        maxTraces,
+                        config,
+                        attempt,
+                        runId,
+                        onFailure,
+                    );
+                },
+                error: (err) => {
+                    if (runId !== this._synthesisActiveRunId) return;
+                    this.handleSynthesisError(err, onFailure);
+                },
+            });
+    }
 
-                    const candidate = this.buildAndPrepareCandidate(result.result, maxEdges);
-                    const ilpnSpec = this.convertLpnToIlpn(candidate.elements, candidate.connections);
+    private synthesiseEasyMode(
+        sourceNet: Diagram,
+        ilpnSource: IlpnPetriNet,
+        selectedEntries: FiringEntry[],
+        validEntries: FiringEntry[],
+        maxTraces: number,
+        maxEdges: number,
+        config: LpnGenerationConfiguration,
+        attempt: number,
+        runId: number,
+        onFailure?: () => void,
+    ) {
+        // ponytail: select a random entry from selectedEntries or validEntries
+        const entry =
+            selectedEntries[Math.floor(Math.random() * selectedEntries.length)] ||
+            validEntries[Math.floor(Math.random() * validEntries.length)];
 
-                    this.validateSafe(ilpnSource, ilpnSpec)
+        if (!entry) {
+            this.handleSynthesisError(new Error('No valid entry found'), onFailure);
+            return;
+        }
+        const inputNet = this.buildInputNetFromEntry(entry, 0);
+        this.processSynthesisResult(
+            inputNet,
+            maxEdges,
+            ilpnSource,
+            sourceNet,
+            validEntries,
+            maxTraces,
+            config,
+            attempt,
+            runId,
+            onFailure,
+        );
+    }
+
+    private synthesiseExpertMode(
+        sourceNet: Diagram,
+        ilpnSource: IlpnPetriNet,
+        selectedEntries: FiringEntry[],
+        validEntries: FiringEntry[],
+        inputNets: IlpnPetriNet[],
+        maxTraces: number,
+        maxEdges: number,
+        config: LpnGenerationConfiguration,
+        attempt: number,
+        runId: number,
+        onFailure?: () => void,
+    ) {
+        const loopLabel = this.goalsService.selectedLoopLabel;
+
+        // 1. Loop Subnet - Use BFS search to find traces with 0, 1, 2, 3 occurrences and synthesise loop subnet
+        let loopSynthesis$: Observable<IlpnPetriNet | null> = of(null);
+        if (loopLabel) {
+            const loopTraces: FiringEntry[] = [];
+            for (let i = 0; i <= 3; i++) {
+                const trace = this.findTraceWithLoopOccurrences(sourceNet, loopLabel, i);
+                if (trace) {
+                    loopTraces.push(trace);
+                }
+            }
+            if (loopTraces.length > 0) {
+                const loopInputNets = this.buildInputNets(loopTraces, 0);
+                loopSynthesis$ = this.regionSynthesisService.synthesise(loopInputNets, config.synthesisConfig).pipe(
+                    take(1),
+                    map((res) => res.result),
+                    catchError(() => of(null)),
+                );
+            }
+        }
+
+        // 2. Conflict Subnet Synthesis
+        const conflict = this.goalsService.selectedConflict;
+        let conflictSynthesis$: Observable<IlpnPetriNet | null> = of(null);
+        if (conflict) {
+            const [Y, Z] = conflict;
+            const { traceY, traceZ } = this._findAlignedConflictTraces(validEntries, Y, Z);
+            const conflictEntries = [traceY, traceZ].filter((e): e is FiringEntry => !!e);
+            if (conflictEntries.length > 0) {
+                const conflictInputNets = this.buildInputNets(conflictEntries, 0);
+                conflictSynthesis$ = this.regionSynthesisService
+                    .synthesise(conflictInputNets, config.synthesisConfig)
+                    .pipe(
+                        take(1),
+                        map((res) => res.result),
+                        catchError(() => of(null)),
+                    );
+            }
+        }
+
+        // 3. Concurrency Subnet Synthesis
+        const concurrent = this.goalsService.selectedConcurrency;
+        let concurrencySynthesis$: Observable<IlpnPetriNet | null> = of(null);
+        if (concurrent) {
+            const [A, B] = concurrent;
+            const { traceAB, traceBA } = this._findConcurrencyTraces(validEntries, A, B);
+            const concurrencyEntries = [traceAB, traceBA].filter((e): e is FiringEntry => !!e);
+            if (concurrencyEntries.length > 0) {
+                const splitProb = loopLabel ? 0 : config.splittingProbability;
+                const concurrencyInputNets = this.buildInputNets(concurrencyEntries, splitProb);
+                concurrencySynthesis$ = this.regionSynthesisService
+                    .synthesise(concurrencyInputNets, config.synthesisConfig)
+                    .pipe(
+                        take(1),
+                        map((res) => res.result),
+                        catchError(() => of(null)),
+                    );
+            }
+        }
+
+        // 4. Final Combined Synthesis
+        forkJoin({
+            loopNet: loopSynthesis$,
+            conflictNet: conflictSynthesis$,
+            concurrencyNet: concurrencySynthesis$,
+        })
+            .pipe(take(1))
+            .subscribe({
+                next: ({ loopNet, conflictNet, concurrencyNet }) => {
+                    if (runId !== this._synthesisActiveRunId) return;
+
+                    const finalInputNets: IlpnPetriNet[] = [];
+                    if (loopNet) {
+                        finalInputNets.push(loopNet);
+                    }
+                    if (conflictNet) {
+                        finalInputNets.push(conflictNet);
+                    }
+                    if (concurrencyNet) {
+                        finalInputNets.push(concurrencyNet);
+                    }
+
+                    // Homogeneous Fallback: if all intermediate subnets fail, use the default flat pool
+                    if (finalInputNets.length === 0) {
+                        finalInputNets.push(...inputNets);
+                    }
+
+                    this.regionSynthesisService
+                        .synthesise(finalInputNets, config.synthesisConfig)
                         .pipe(take(1))
                         .subscribe({
-                            next: (results) => {
+                            next: (result) => {
                                 if (runId !== this._synthesisActiveRunId) return;
-
-                                const allValid =
-                                    results.length === ilpnSource.getPlaces().length &&
-                                    results.every((res) => res.valid);
-
-                                if (!allValid) {
-                                    this.handleSynthesisFailure(
-                                        sourceNet,
-                                        ilpnSource,
-                                        validEntries,
-                                        maxTraces,
-                                        maxEdges,
-                                        config,
-                                        attempt,
-                                        runId,
-                                        onFailure,
-                                    );
-                                    return;
-                                }
-
-                                const solvedTrailsMap = this.mapValidatorResultsToSolvedTrails(results);
-                                this.populateCandidateTrailMarkings(candidate, solvedTrailsMap);
-
-                                const input = this.buildValidationInputForCandidate(
+                                this.processSynthesisResult(
+                                    result.result,
+                                    maxEdges,
+                                    ilpnSource,
                                     sourceNet,
-                                    candidate.elements,
-                                    candidate.connections,
+                                    validEntries,
+                                    maxTraces,
+                                    config,
+                                    attempt,
+                                    runId,
+                                    onFailure,
                                 );
-                                const allGoalsMet =
-                                    !input ||
-                                    this.goalsService.internalGoals.every((goal) =>
-                                        goal.check(input.elements, input.connections, input.petri),
-                                    );
-
-                                if (!allGoalsMet) {
-                                    this.handleSynthesisFailure(
-                                        sourceNet,
-                                        ilpnSource,
-                                        validEntries,
-                                        maxTraces,
-                                        maxEdges,
-                                        config,
-                                        attempt,
-                                        runId,
-                                        onFailure,
-                                    );
-                                    return;
-                                }
-
-                                this.applySuccessfulLpn(candidate, solvedTrailsMap, sourceNet);
                             },
                             error: (err) => {
                                 if (runId !== this._synthesisActiveRunId) return;
                                 this.handleSynthesisError(err, onFailure);
                             },
                         });
+                },
+                error: (err) => {
+                    if (runId !== this._synthesisActiveRunId) return;
+                    this.handleSynthesisError(err, onFailure);
+                },
+            });
+    }
+
+    private findTraceWithLoopOccurrences(
+        sourceNet: Diagram,
+        loopLabel: string,
+        occurrences: number,
+    ): FiringEntry | null {
+        const placeIds = sourceNet.places.map((p) => p.id);
+        const originalMarking = { ...sourceNet.marking };
+
+        sourceNet.resetMarking();
+        const initialMarking = { ...sourceNet.marking };
+
+        const queue: { marking: Record<string, number>; sequence: string[]; depth: number }[] = [];
+        queue.push({ marking: initialMarking, sequence: [], depth: 0 });
+
+        const visited = new Set<string>();
+        const maxDepth = 50; // counts all fired transitions, including silent ones
+        let resultEntry: FiringEntry | null = null;
+
+        // ponytail: check sink without mutating state — a sink has no enabled transition
+        const isSink = (m: Record<string, number>) =>
+            sourceNet.transitions.every((t) => {
+                const flow = t.getInputFlow();
+                return flow.length > 0 && flow.some(({ place, weight }) => (m[place.id] ?? 0) < weight);
+            });
+
+        while (queue.length > 0) {
+            const { marking, sequence, depth } = queue.shift()!;
+            const count = sequence.filter((l) => l === loopLabel).length;
+
+            if (count === occurrences && isSink(marking)) {
+                resultEntry = new FiringEntry(-1, sequence.join(' '), sequence.length, marking, true, true);
+                break;
+            }
+
+            if (depth >= maxDepth) continue;
+
+            for (const transition of sourceNet.transitions) {
+                sourceNet.marking = { ...marking };
+                if (transition.isActivated()) {
+                    transition.fire(false);
+                    sourceNet.updateMarking();
+
+                    const nextMarking = { ...sourceNet.marking };
+                    const nextSequence = [...sequence, transition.label || transition.id];
+                    const nextCount = nextSequence.filter((l) => l === loopLabel).length;
+
+                    if (nextCount <= occurrences) {
+                        const stateKey = `${nextSequence.join(' ')}::${placeIds.map((p) => nextMarking[p] ?? 0).join(',')}`;
+                        if (!visited.has(stateKey)) {
+                            visited.add(stateKey);
+                            queue.push({ marking: nextMarking, sequence: nextSequence, depth: depth + 1 });
+                        }
+                    }
+                }
+            }
+        }
+
+        sourceNet.marking = originalMarking;
+        return resultEntry;
+    }
+
+    private validateAndApplyCandidate(
+        candidate: { elements: LabeledNetNode[]; connections: LabeledNetEdge[] },
+        ilpnSource: IlpnPetriNet,
+        ilpnSpec: IlpnPetriNet,
+        sourceNet: Diagram,
+        validEntries: FiringEntry[],
+        maxTraces: number,
+        maxEdges: number,
+        config: LpnGenerationConfiguration,
+        attempt: number,
+        runId: number,
+        onFailure?: () => void,
+    ) {
+        this.validateSafe(ilpnSource, ilpnSpec)
+            .pipe(take(1))
+            .subscribe({
+                next: (results) => {
+                    if (runId !== this._synthesisActiveRunId) return;
+
+                    const allValid =
+                        results.length === ilpnSource.getPlaces().length && results.every((res) => res.valid);
+
+                    if (!allValid) {
+                        this.handleSynthesisFailure(
+                            sourceNet,
+                            ilpnSource,
+                            validEntries,
+                            maxTraces,
+                            maxEdges,
+                            config,
+                            attempt,
+                            runId,
+                            onFailure,
+                        );
+                        return;
+                    }
+
+                    const solvedTrailsMap = this.mapValidatorResultsToSolvedTrails(results);
+                    console.log(
+                        '[DEBUG LPN] candidate elements:',
+                        candidate.elements.map((e) => ({
+                            id: e.id,
+                            type: e instanceof Condition ? 'Condition' : 'Event',
+                            label: e.label,
+                        })),
+                    );
+                    console.log(
+                        '[DEBUG LPN] solvedTrailsMap:',
+                        Array.from(solvedTrailsMap.entries()).map(([k, v]) => `${k} -> ${JSON.stringify(v)}`),
+                    );
+                    this.populateCandidateTrailMarkings(candidate, solvedTrailsMap);
+
+                    const input = this.buildValidationInputForCandidate(
+                        sourceNet,
+                        candidate.elements,
+                        candidate.connections,
+                    );
+                    const allGoalsMet =
+                        !input ||
+                        this.goalsService.internalGoals.every((goal) =>
+                            goal.check(input.elements, input.connections, input.petri),
+                        );
+
+                    if (!allGoalsMet) {
+                        this.handleSynthesisFailure(
+                            sourceNet,
+                            ilpnSource,
+                            validEntries,
+                            maxTraces,
+                            maxEdges,
+                            config,
+                            attempt,
+                            runId,
+                            onFailure,
+                        );
+                        return;
+                    }
+
+                    this.applySuccessfulLpn(candidate, solvedTrailsMap, sourceNet);
                 },
                 error: (err) => {
                     if (runId !== this._synthesisActiveRunId) return;
@@ -270,7 +556,9 @@ export class TokenTrailLpnService {
                     if (labelCounts.get(label)! > 1) {
                         const conflict = this.goalsService.selectedConflict;
                         const isConflictTrans = conflict && (label === conflict[0] || label === conflict[1]);
-                        if (!isConflictTrans) {
+                        const loopLabel = this.goalsService.selectedLoopLabel;
+                        const isLoopTrans = loopLabel && label === loopLabel;
+                        if (!isConflictTrans && !isLoopTrans) {
                             finalLabel = `${label}_instance${occ}`;
                         }
                     }
@@ -279,7 +567,7 @@ export class TokenTrailLpnService {
             }),
         );
 
-        return this.jsonParser.parse(
+        return this.parseAndEnsureLabels(
             JSON.stringify({
                 places,
                 transitions,
@@ -287,7 +575,7 @@ export class TokenTrailLpnService {
                 marking: { p0: 1 },
                 labels,
             }),
-        )!;
+        );
     }
 
     private buildAndPrepareCandidate(
@@ -322,11 +610,7 @@ export class TokenTrailLpnService {
         sourceNet: Diagram,
     ) {
         // Clear timeout
-        if (this._synthesisTimeoutId) {
-            clearTimeout(this._synthesisTimeoutId);
-            this._synthesisTimeoutId = null;
-        }
-        this._synthesisActiveRunId = 0;
+        this.clearSynthesisTimeout();
 
         // Valid and goals satisfied! Render it visually by updating the state service
         this.stateService.clear(false);
@@ -399,49 +683,34 @@ export class TokenTrailLpnService {
                 onFailure,
             );
         } else {
-            if (this._synthesisTimeoutId) {
-                clearTimeout(this._synthesisTimeoutId);
-                this._synthesisTimeoutId = null;
-            }
-            this._synthesisActiveRunId = 0;
-            this.loadingService.hide();
-
-            if (onFailure) {
-                onFailure();
-            }
-            if (this.tabStateService.currentTab() === Tab.TOKEN_TRAIL) {
-                this.toaster.showWarning(
-                    'TOKEN_TRAIL.LPN_SYNTHESIS_ERROR_TITLE',
-                    'TOKEN_TRAIL.LPN_SYNTHESIS_ERROR_BODY',
-                );
-            }
+            this.cleanupAndFail(onFailure, false);
         }
     }
 
     private handleSynthesisError(err: unknown, onFailure?: () => void) {
-        if (this._synthesisTimeoutId) {
-            clearTimeout(this._synthesisTimeoutId);
-            this._synthesisTimeoutId = null;
-        }
-        this._synthesisActiveRunId = 0;
         if (err) {
             console.error('LPN check validator solver error:', err);
         }
-        this.loadingService.hide();
-        if (onFailure) {
-            onFailure();
-        }
-        if (this.tabStateService.currentTab() === Tab.TOKEN_TRAIL) {
-            this.toaster.showError('TOKEN_TRAIL.LPN_SYNTHESIS_ERROR_TITLE', 'TOKEN_TRAIL.LPN_SYNTHESIS_ERROR_BODY');
-        }
+        this.cleanupAndFail(onFailure, true);
     }
 
     public convertSourceNetToIlpn(sourceNet: Diagram): IlpnPetriNet {
-        return this.jsonParser.parse(this.serializationService.serializeJson(sourceNet))!;
+        return this.parseAndEnsureLabels(this.serializationService.serializeJson(sourceNet));
     }
 
     public convertLpnToIlpn(drawnElements: LabeledNetNode[], connections: LabeledNetEdge[]): IlpnPetriNet {
-        return this.jsonParser.parse(this.serializationService.serializeLpn(drawnElements, connections, 'json'))!;
+        return this.parseAndEnsureLabels(this.serializationService.serializeLpn(drawnElements, connections, 'json'));
+    }
+
+    private parseAndEnsureLabels(jsonStr: string): IlpnPetriNet {
+        const net = this.jsonParser.parse(jsonStr)!;
+        // ponytail: fallback undefined transition labels to their ID (silent/unlabeled transitions)
+        net.getTransitions().forEach((t) => {
+            if (t.label === undefined) {
+                t.label = t.getId();
+            }
+        });
+        return net;
     }
 
     public mapValidatorResultsToSolvedTrails(
@@ -471,23 +740,11 @@ export class TokenTrailLpnService {
      * @returns A subset of firing entries.
      */
     private _selectEntriesWithVariation(validEntries: FiringEntry[], maxTraces: number): FiringEntry[] {
-        const difficulty =
-            this.stateService.displayMode() === LpnDisplayMode.Puzzle
-                ? this.stateService.lpnGenerationDifficulty()
-                : this.goalsService.currentDifficulty();
+        const difficulty = this.getEffectiveDifficulty();
 
         if (difficulty === LpnGenerationDifficulty.Easy) {
             const seq = this.goalsService.selectedSequence;
-            let candidates = seq
-                ? validEntries.filter((e) => e.labels.some((l, i) => l === seq[0] && e.labels[i + 1] === seq[1]))
-                : [];
-            if (candidates.length === 0 && seq) {
-                candidates = validEntries.filter((e) => {
-                    const idxA = e.labels.indexOf(seq[0]);
-                    const idxB = e.labels.indexOf(seq[1]);
-                    return idxA !== -1 && idxB !== -1 && idxA < idxB;
-                });
-            }
+            let candidates = seq ? this._findCausalSequenceTraces(validEntries, seq[0], seq[1]) : validEntries;
             if (candidates.length === 0) candidates = validEntries;
 
             let selected: FiringEntry;
@@ -508,35 +765,17 @@ export class TokenTrailLpnService {
         // 1. Causal Sequence
         const seq = this.goalsService.selectedSequence;
         if (seq) {
-            const [A, B] = seq;
-            const traceAB =
-                validEntries.find((e) => {
-                    const idxA = e.labels.indexOf(A);
-                    const idxB = e.labels.indexOf(B);
-                    return idxA !== -1 && idxB !== -1 && idxB === idxA + 1;
-                }) ??
-                validEntries.find((e) => {
-                    const idxA = e.labels.indexOf(A);
-                    const idxB = e.labels.indexOf(B);
-                    return idxA !== -1 && idxB !== -1 && idxA < idxB;
-                });
-            if (traceAB) mustHave.add(traceAB);
+            const candidates = this._findCausalSequenceTraces(validEntries, seq[0], seq[1]);
+            if (candidates.length > 0) {
+                mustHave.add(candidates[0]);
+            }
         }
 
         // 2. Concurrency
         const concurrent = this.goalsService.selectedConcurrency;
         if (concurrent) {
             const [A, B] = concurrent;
-            const traceAB = validEntries.find((e) => {
-                const idxA = e.labels.indexOf(A);
-                const idxB = e.labels.indexOf(B);
-                return idxA !== -1 && idxB !== -1 && idxA < idxB;
-            });
-            const traceBA = validEntries.find((e) => {
-                const idxA = e.labels.indexOf(A);
-                const idxB = e.labels.indexOf(B);
-                return idxA !== -1 && idxB !== -1 && idxB < idxA;
-            });
+            const { traceAB, traceBA } = this._findConcurrencyTraces(validEntries, A, B);
             if (traceAB) mustHave.add(traceAB);
             if (traceBA) mustHave.add(traceBA);
         }
@@ -629,6 +868,104 @@ export class TokenTrailLpnService {
         }
 
         return { traceY: bestY, traceZ: bestZ };
+    }
+
+    private _findConcurrencyTraces(
+        validEntries: FiringEntry[],
+        A: string,
+        B: string,
+    ): { traceAB?: FiringEntry; traceBA?: FiringEntry } {
+        // ponytail: find traces exhibiting A before B and B before A
+        const findTrace = (first: string, second: string) =>
+            validEntries.find((e) => {
+                const idxF = e.labels.indexOf(first);
+                const idxS = e.labels.indexOf(second);
+                return idxF !== -1 && idxS !== -1 && idxF < idxS;
+            });
+        return {
+            traceAB: findTrace(A, B),
+            traceBA: findTrace(B, A),
+        };
+    }
+
+    private _findCausalSequenceTraces(validEntries: FiringEntry[], A: string, B: string): FiringEntry[] {
+        // ponytail: prefer adjacent occurrences, fallback to any A before B
+        const adjacent = validEntries.filter((e) => e.labels.some((l, i) => l === A && e.labels[i + 1] === B));
+        if (adjacent.length > 0) return adjacent;
+        return validEntries.filter((e) => {
+            const idxA = e.labels.indexOf(A);
+            const idxB = e.labels.indexOf(B);
+            return idxA !== -1 && idxB !== -1 && idxA < idxB;
+        });
+    }
+
+    private getEffectiveDifficulty(overrideDifficulty?: LpnGenerationDifficulty): LpnGenerationDifficulty {
+        // ponytail: resolve difficulty based on display mode and override
+        if (overrideDifficulty) {
+            return overrideDifficulty;
+        }
+        return this.stateService.displayMode() === LpnDisplayMode.Puzzle
+            ? this.stateService.lpnGenerationDifficulty()
+            : this.goalsService.currentDifficulty();
+    }
+
+    private processSynthesisResult(
+        resultNet: IlpnPetriNet,
+        maxEdges: number,
+        ilpnSource: IlpnPetriNet,
+        sourceNet: Diagram,
+        validEntries: FiringEntry[],
+        maxTraces: number,
+        config: LpnGenerationConfiguration,
+        attempt: number,
+        runId: number,
+        onFailure?: () => void,
+    ) {
+        // ponytail: common validation and application flow for candidate LPN
+        const candidate = this.buildAndPrepareCandidate(resultNet, maxEdges);
+        const ilpnSpec = this.convertLpnToIlpn(candidate.elements, candidate.connections);
+
+        this.validateAndApplyCandidate(
+            candidate,
+            ilpnSource,
+            ilpnSpec,
+            sourceNet,
+            validEntries,
+            maxTraces,
+            maxEdges,
+            config,
+            attempt,
+            runId,
+            onFailure,
+        );
+    }
+
+    private clearSynthesisTimeout() {
+        // ponytail: stop active synthesis timers
+        if (this._synthesisTimeoutId) {
+            clearTimeout(this._synthesisTimeoutId);
+            this._synthesisTimeoutId = null;
+        }
+        this._synthesisActiveRunId = 0;
+    }
+
+    private cleanupAndFail(onFailure?: () => void, isError = false) {
+        // ponytail: generic cleanup logic on synthesis warning/error
+        this.clearSynthesisTimeout();
+        this.loadingService.hide();
+        if (onFailure) {
+            onFailure();
+        }
+        if (this.tabStateService.currentTab() === Tab.TOKEN_TRAIL) {
+            if (isError) {
+                this.toaster.showError('TOKEN_TRAIL.LPN_SYNTHESIS_ERROR_TITLE', 'TOKEN_TRAIL.LPN_SYNTHESIS_ERROR_BODY');
+            } else {
+                this.toaster.showWarning(
+                    'TOKEN_TRAIL.LPN_SYNTHESIS_ERROR_TITLE',
+                    'TOKEN_TRAIL.LPN_SYNTHESIS_ERROR_BODY',
+                );
+            }
+        }
     }
 
     /**
