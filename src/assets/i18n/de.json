@@ -386,6 +386,7 @@
             "GOAL_ALTERNATIVE_FALLBACK": "Sequenz: Stellen Sie sicher, dass {{y}} vor {{z}} abgeschlossen ist.",
             "GOAL_CONCURRENCY_CHECK": "Nebenläufigkeit: Lassen Sie Ereignis {{a}} und {{b}} parallel schalten.",
             "GOAL_CONCURRENCY_FALLBACK": "Schleife: Modellieren Sie eine Schleife für das Ereignis {{a}}.",
+            "GOAL_REPEAT_EVENT": "Wiederholung: Modellieren Sie einen Pfad, in dem das Ereignis {{a}} mindestens zweimal schalten kann.",
             "HELP_TITLE_SEQUENCE_NET_TOPOLOGY": "Sequence-Net-Topologie",
             "HELP_TEXT_SEQUENCE_NET_TOPOLOGY": "Ein Sequence Net repräsentiert einen strikt sequentiellen Prozess. Es enthält keine Verzweigungsstrukturen (Branching), Schleifen oder Nebenläufigkeit. Die Transitionen müssen nacheinander auf einer Linie von Start bis Ende schalten.",
             "HELP_TITLE_PARTIAL_ORDER_TOPOLOGY": "Partial-Order-Net-Topologie",

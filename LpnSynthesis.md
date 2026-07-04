@@ -1,144 +1,110 @@
 # Labeled Petri Net (LPN) Synthesis & Verification Guide
 
-This document describes the design, implementation, and verification approach for **Labeled Petri Net (LPN) Synthesis** in the Token Trail tab, utilizing `ILPN-Components` region synthesis and linear programming (ILP) verification.
+This document describes the design, implementation, and verification approach for **Labeled Petri Net (LPN) Synthesis** in the Token Trail tab. It details both the simplified Easy Mode sequence net approach and the standard region synthesis route for higher difficulties.
 
 ---
 
 ## 1. Core Synthesis Process
 
-The generation of a candidate LPN from an original Petri net is executed in `TokenTrailLpnService.createLPNWithSynthesis`:
+The LPN is generated from an original Petri net in `TokenTrailLpnService.createLPNWithSynthesis`:
 
-1. **Trace Generation**:
-    - The play validation service calculates all possible execution paths (firing sequences/traces) from the original Petri net up to a difficulty-defined depth.
-    - We extract valid firing sequences (which contain non-empty transition labels).
+### 1.1 Trace Generation
 
-2. **Targeted Trace Seeding & Optimization**:
-    - Instead of selecting a completely random subset of valid traces, the system seeds the trace set using active, capability-based goals for each difficulty level:
-        - **Easy (Causal Sequence $A \rightarrow B$)**: Seeds the trace set with traces that contain the sequence $[A, B]$ (first checking for adjacency, then falling back to ordered $A$ followed by $B$) to guide region synthesis toward building causal sequence structures.
-        - **Medium (Concurrency $A \parallel B$ & Loops)**: Prioritizes traces where concurrent transitions $A$ and $B$ appear interleaved in alternate orderings (e.g., $[..., A, ..., B, ...]$ and $[..., B, ..., A, ...]$) to force the GLPK solver to construct parallel AND-split structures. Also selects loop traces that demonstrate repeated occurrences of loop transitions.
-        - **Hard (Conflict $Y$ vs $Z$ & Splits)**: Selects traces containing the conflict transitions $Y$ (and not $Z$) and $Z$ (and not $Y$) using a prefix-aligned strategy.
-        - **Expert (Concurrency, Conflicts, & Loops)**: Seeds all relevant traces for concurrency, loops, and conflict combinations to ensure the synthesized net includes all structural constraints simultaneously if they are possible in the source net.
-    - **Prefix-Aligned Conflict Trace Selection**: When selecting conflict traces for Hard or Expert mode, the system searches the trace space to find a pair of traces (`traceY` and `traceZ`) with the maximum possible common prefix before they branch into $Y$ and $Z$ (and ideally, exactly identical prefixes). This guides the region miner to merge the prefix paths and synthesize them branching from a shared preset place, directly representing a choice/conflict.
-    - **Conflict Transition Non-Splitting**: During region synthesis, we prevent splitting (renaming) of conflict transitions ($Y$ and $Z$), ensuring they are synthesized as single transitions and can successfully share their preset Condition.
-    - Remaining capacity up to the maximum trace limit is filled with other randomized traces.
-    - We track the selection with a hash check (`_lastSelectedEntriesHash`) to ensure consecutive synthesis requests always yield varied nets.
+- The play validation service calculates all possible execution paths (firing sequences/traces) from the original Petri net up to a difficulty-defined depth.
+- Valid firing sequences containing non-empty transition labels are filtered.
 
-3. **Mined Net Generation (Region Synthesis)**:
-    - For the selected set of traces, we construct individual sequential Petri net graphs.
-    - These nets are passed to `PetriNetRegionSynthesisService.synthesise` (using GLPK-based region mining) to construct a minimal Petri net that parses the language defined by these traces.
-    - The mined net is visualised by translating its places and transitions into LPN Conditions and Events and calculating a clean layout using the Sugiyama hierarchy.
+### 1.2 Easy Mode (Direct Sequence Net Synthesis)
 
----
+- **Bypass region synthesis**: Easy Mode does not use the GLPK region miner.
+- **Trace Selection**: We select a random firing sequence from the pool of valid traces (seeding it with the active sequence goal `A -> B` if possible).
+- **Sequence Net Construction**: We convert this single random firing entry directly into a sequence net path:
+  $$c_1 \rightarrow t_1 \rightarrow c_2 \rightarrow t_2 \rightarrow \dots \rightarrow c_{n+1}$$
+- **Validation & Marking**: The candidate is validated against the source Petri net to determine the unique token trail markings.
 
-## 2. Validation-Driven Synthesis (The Retry Loop)
+### 1.3 Medium, Hard, and Expert Modes (GLPK Region Synthesis)
 
-Sometimes, GLPK region synthesis generalizes the trace language excessively, yielding an LPN that contains invalid behaviors, violates the strict **token trail semantics** of the original Petri net, or fails to satisfy the active semantic/behavioral goals of the selected difficulty level.
+- **Trace Seeding**: Traces are seeded to satisfy active capability-based goals:
+    - **Concurrency**: Seeding interleaving traces (Medium difficulty).
+    - **Conflict**: Seeding prefix-aligned conflict traces (Hard difficulty).
+    - **Loop**: Seeding loop traces where the loop transition occurs exactly 0, 1, 2, and 3 times (Expert difficulty).
+    - **Repeat**: Seeding only the trace containing exactly 2 occurrences of the repeat label to prevent complex branching and keep the synthesized LPN simple and linear.
+- **Flat Trace Synthesis**: All selected traces (concurrency, conflict, loop) are compiled into a flat array of sequence nets and passed to `PetriNetRegionSynthesisService.synthesise` in a single run. This flat trace combination avoids GLPK solver contradictions.
+- **Configured Splitting**: Transitions that should not be split (such as loop and conflict transitions) are protected in the input net construction, while other transitions use the difficulty's `splittingProbability` to resolve concurrent dependencies.
+- **Retry Variation**: On the first attempt, only the minimal goal traces (`mustHave`) are sent to keep the net as clean as possible. On subsequent retry attempts, random additional traces are introduced to guide GLPK out of deterministic local minima.
 
-To guarantee that any synthesized LPN presented to the user is 100% solvable and compliant with active goals, we enforce a **Direct Check Verification Loop** during the generation phase:
+### 1.4 Trace Selection & Seeding Details
 
-```mermaid
-graph TD
-    A[Start LPN Generation] --> B[Generate & Seed Traces]
-    B --> C[Run Region Synthesis]
-    C --> D[Render Candidate LPN & Adjust Labels]
-    D --> E[Validate LPN via TokenTrailValidatorService]
-    E --> F{All places valid?}
-    F -- No --> H{Attempt < Max?}
-    F -- Yes --> G{Goals / Limits Met?}
-    G -- Yes --> I[Cache Solution & Hide Loading Spinner]
-    G -- No --> H
-    H -- Yes --> J[Retry with different traces]
-    J --> B
-    H -- No --> K[Clear faulty LPN from canvas]
-    K --> L[Show error with try again instruction & Stop]
-```
+To satisfy specific LPN validation goals, the trace selection explicitly includes:
 
-### 2.1 The Retry Mechanism
+- **Sequence**: A trace that executes transition $A$ before transition $B$.
+- **Concurrency**: A pair of traces showing $A$ before $B$ and $B$ before $A$ ($AB$ and $BA$).
+- **Loop**: A trace where the loop transition fires multiple times or at least once.
+- **Conflict**: A pair of prefix-aligned conflict traces showing branch choices ($Y$ and $Z$), generalized to support choice branches within loops.
+- **Hash-Based Variation**: The remaining traces are filled randomly up to the maximum trace budget. A hash of the chosen trace sequence set is checked against the previous run's hash to ensure each retry run synthesizes from a different variation of traces.
 
-- Inside `attemptSynthesis()`, once the candidate LPN is rendered, we immediately invoke `TokenTrailValidatorService.validate(ilpnSource, ilpnSpec)`.
-- If the ILP solver returns `allValid === true`, we verify that the candidate satisfies all active difficulty goals:
-    - We evaluate the active behavioral goals (e.g. Causal Sequence, Concurrency, Conflict, Loop, etc.) on the candidate LPN. Note that the overall token trail validity is checked implicitly by the ILP solver.
-- If the candidate is semantically valid AND all active goals are met, it is accepted.
-- If either check fails, we increment the attempt counter, log the warning, and trigger a new attempt with a different trace selection.
-- The retry loop is capped at a maximum of **50 attempts** in Construction Mode (and **15 attempts** in Puzzle Mode) to prevent infinite loops.
-- **Fail-Safe Cleanup**: If the maximum number of attempts is reached, or if an asynchronous error occurs, we call `this.stateService.clear()`. This completely wipes any invalid or partially constructed LPN from the canvas so the user is never presented with a faulty model.
+### 1.5 Transition Splitting & Protection Rules
+
+During sequence net construction, if a trace contains duplicate transition labels, splitting behavior is defined strictly by the active goals:
+
+- **Repeat Transitions (Split Probability = 1.0)**: Repeat transitions are ALWAYS split into separate unique instances (`_instance1`, `_instance2`, etc.) to prevent GLPK from trying to make an invalid cycle. Even if a transition is part of a conflict goal, it is split if it is also the active repeat target.
+- **True Loop & Conflict Transitions (Split Probability = 0.0)**: We explicitly shield and protect loop and conflict transitions (unless they are the repeat target) from splitting, forcing GLPK to merge them into unified cycle or decision structures.
+- **Other Transitions**: Split based on the difficulty configuration's `splittingProbability`.
 
 ---
 
-## 3. Caching & Instant Solution Resolution
+## 2. Structure Reduction & Simplification
 
-To optimize performance and avoid redundant NP-hard ILP computations, we implement a caching mechanism across tab interactions:
+To prevent LPN layouts from becoming overly complex, three levels of optimization are applied:
 
-### 3.1 Solution Cache (`TokenTrailStateService`)
+### 2.1 Arc Weight Minimization
 
-- On successful synthesis, the solved token trails (mapping: `petriNetPlaceId -> conditionId -> tokenCount`) returned by the validator are saved in `this.stateService.solutionCache`.
-- When the user toggles the **Show Solution** button (`toggleSolution()` in `token-trail-draw-display.ts`):
-    - **Cache Hit**: If `solutionCache` is present, the component instantly applies the markings to the canvas and toggles the solution view, completely bypassing the solver.
-    - **Cache Miss**: If `solutionCache` is null (e.g. in construction mode where elements are manually laid out), it falls back to querying the `TokenTrailValidatorService` asynchronously.
+- Enabled `noArcWeights: true` in synthesis configuration across all difficulties to ensure single-weighted arcs (weight = 1).
 
-### 3.2 Cache Invalidation
+### 2.2 Submodule Place Removers
 
-The solution cache is strictly tied to the visual structure of the net. To prevent showing out-of-date solutions on a modified LPN, any structural updates automatically invalidate the cache:
+- Apply `ImplicitPlaceRemoverService`, `DuplicatePlaceRemoverService`, and `DanglingPlaceRemoverService` in sequence to structurally simplify the synthesized net by removing redundant or dangling places.
 
-- Creating or deleting a Condition or Event (`addDrawnElement`, `removeDrawnElement`) sets `solutionCache = null`.
-- Creating, deleting, or altering a Connection weight (`addConnection`, `removeConnection`, `updateConnections`) sets `solutionCache = null`.
-- Finalizing or unmerging condition groups (`updateDrawnElements`) sets `solutionCache = null`.
-- Clearing the drawing completely sets `solutionCache = null`.
+### 2.3 Silent Conditions Pruning
+
+- Manually prune any remaining LPN conditions that have no trail markings (unmapped `cX` places) along with their incoming/outgoing arcs, ensuring only basis conditions representing source net places (`px + py`) are shown in the UI.
 
 ---
 
-## 4. Tab-Switch Preservation & Petri Net Structural Signatures
+## 3. Validation & The Retry Loop
 
-Since `TokenTrailDrawDisplayComponent` is destroyed when the user switches tabs and re-created when they return, subscribing directly to `sourceNet$` in `ngOnInit` would ordinarily trigger an immediate LPN regeneration on return, causing the user to lose their current puzzle progress.
+To guarantee that any synthesized LPN presented to the user is 100% correct, a validation check is executed:
 
-To solve this, we track the exact structure of the Petri net last used to generate the LPN:
-
-### 4.1 Structural Signature Generation (`TokenTrailLpnService`)
-
-We compute a unique structural signature string for the Petri Net via `getNetSignature(net: Diagram)`:
-
-- Maps all nodes (`id` + `label`) sorted alphabetically.
-- Maps all **initial start place markings** (`placeId` + `tokenCount` from `net.startMarking`) sorted alphabetically.
-- Maps all arcs (`source` + `target` + `weight`) sorted alphabetically.
-- Joins them as a single string: `nodes_signature::markings_signature::arcs_signature`.
-
-### 4.2 Preservation Check
-
-Upon successful synthesis, the signature is stored in `this.stateService.lastSynthesizedNetSignature`.
-When subscribing to `sourceNet$` on tab re-entry:
-
-- We check if an LPN is already drawn (`drawnElements().length > 0`).
-- We check if `getNetSignature(net)` matches `lastSynthesizedNetSignature`.
-- If both conditions are met, we **bypass synthesis completely**, retaining the user's current elements, connections, and progress intact.
+- **Validation Check**: `validatorService.validate(ilpnSource, ilpnSpec)` computes the solved token trails for all places.
+- **Goal Verification**:
+    - **Graph Cycle Loop Check**: The loop invariant check (`checkTInvariant`) is implemented as a directed cycle search in the LPN graph. This ensures the loop goal is satisfied robustly without being derailed by GLPK composite/redundant places or boundary start/sink places.
+- **Retry Logic**: If the LPN fails validation or does not meet active difficulty goals, synthesis is retried with a different trace selection (capped at 50 attempts in Construction Mode, and 15 attempts in Puzzle Mode).
+- **Consolidated Finalization**: Validated candidate LPNs are populated with their solved markings, checked for goals, and applied to the canvas.
 
 ---
 
-## 5. LPN Serialization & Exporting
+## 4. Puzzle Mode vs. Construction Mode Solution Presentation
 
-To allow users to save their Labeled Petri Nets, we support exporting the LPN layout to both standard **JSON** and **PNML (XML)** formats.
+### 4.1 Puzzle Mode
 
-### 5.1 Extension of `SerializationService`
+- **Unmarked by Default**: The generated LPN initially displays no token markings.
+- **Generic Labeling**: Conditions are always labeled generically (`c1`, `c2`, ... `cx`).
+- **Show Solution**: Toggling the solution displays the solved token counts inside the conditions while retaining the generic `c1`, `c2`, ... labeling (the place labels are hidden).
 
-- We introduced `serializeLpn(drawnElements: LabeledNetNode[], connections: LabeledNetEdge[], format: SUPPORTED_FORMAT): string` inside `SerializationService`.
-- It maps the current visual LPN structure into standard `DiagramPlace`, `DiagramTransition`, and `DiagramArc` classes, and then wraps them in a standard `Diagram` class for serialization.
+### 4.2 Construction Mode
 
-### 5.2 Export/Import Toolbar Actions
-
-- Dropdown menu allows exporting LPN to JSON or PNML format.
-- Drag-and-drop file loading parses JSON or PNML back to LPN canvas, restoring condition positions, baseNames, and trail markings.
+- **Show Solution**: When showing the solution, the canvas is populated with the solved LPN structure.
+- **Dynamic Labeling**: Conditions display the place names (`p1 + p5` or `p2 + 2*p3`) to represent their active token trail markings.
 
 ---
 
-## 6. LPN Condition Naming & Dynamic Labeling
+## 5. Caching & Tab-Switch Preservation
 
-### 6.1 Condition ID Naming Scheme (`c1` to `cx`)
+### 5.1 Solution Cache
 
-- All LPN conditions are assigned IDs matching the prefix pattern `c1`, `c2`, ..., `cx`.
+- On successful validation, the solved token trails are saved in `solutionCache` to bypass the solver when toggling the solution display.
+- Any structural edits to the canvas invalidate the cache.
 
-### 6.2 Dynamic Visual Labeling
+### 5.2 Structural Signatures
 
-LPN conditions dynamically adjust their visual labels directly on the canvas to represent their active token trail markings:
-
-- **Default State**: Visual label falls back to its base name (e.g., `c1`).
-- **Dynamic Marking State**: Displays the sum of the original Petri net place IDs (with multiplicity) that have a token here (e.g., `p1 + p5` or `p2 + 2*p3`).
-- Full labels are shown on hover via standard browser tooltips.
+- We compute a structural signature of the source Petri net (`nodes::markings::arcs`).
+- If the signature matches upon tab re-entry, regeneration is bypassed to preserve the user's active drawing/progress.
