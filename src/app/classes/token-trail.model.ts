@@ -80,7 +80,7 @@ export interface SourceNetCapabilities {
 }
 
 export interface CandidateGoal {
-    type: 'concurrency' | 'conflict' | 'loop' | 'sequence';
+    type: 'concurrency' | 'conflict' | 'loop' | 'repeat' | 'sequence';
     value: [string, string] | string | null;
     goal: InternalGoal;
 }

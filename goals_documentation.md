@@ -12,8 +12,7 @@ The progression system is powered by the `TokenTrailGoalsService` ([token-trail-
 
 Since the primary Petri net diagram state is held inside `SourcePetriNetService` as an RxJS `BehaviorSubject`, it is not tracked reactively by default inside Angular `effects`. To solve this:
 
-- We declared a reactive signal `sourceNet = signal<Diagram | null>(null)` in `TokenTrailGoalsService`.
-- We subscribed to the `sourceNet$` RxJS stream in the constructor to keep the signal in sync.
+- We declare `sourceNet = toSignal(this.sourceNetService.sourceNet$, { initialValue: null })` using Angular's `@angular/core/rxjs-interop` helper to convert the RxJS stream reactively into an Angular Signal.
 - We read `this.sourceNet()` inside the service's goal-generation and goal-evaluation effects. This ensures that the goals are dynamically regenerated whenever the user loads a new Petri net.
 
 ---
@@ -70,7 +69,7 @@ To ensure that clicking the difficulty switch or selecting a level yields differ
 - **Goal 1 (Partial Order Net Topology)**: The LPN must satisfy the Partial Order Net Topology properties (acyclic, start/end conditions, etc.).
 - **Goal 2 (True Concurrency)**: "Ensure that event $A$ and event $B$ can fire concurrently."
     - _Dynamic Mapping_: Select a pair $(A, B)$ where `hasConcurrency(A, B) === true`.
-    - _Fallback_: "Model a loop where event $A$ can be repeated infinitely." (Checked via T-invariant $C \cdot y = 0$ on the user's LPN where the entry for $A$ is greater than 0).
+    - _Fallback_: "Model a loop where event $A$ can be repeated." (Checked via directed cycle search in the LPN graph containing event $A$, selecting a transition that can fire at least twice if no infinite loops are available).
     - _Evaluation_: Use LPN BFS Explorer to find a reachable marking $M$ in the user's LPN where $M(p) \ge W_{in}(p, A) + W_{in}(p, B)$ for all $p \in P_L$.
 
 ### Hard Mode (Focus: Alternatives / Conflicts)
@@ -87,8 +86,10 @@ To ensure that clicking the difficulty switch or selecting a level yields differ
 - **Goals Offered**:
     - **True Concurrency**: Evaluates if $A$ and $B$ are concurrent in the LPN (if concurrency is possible in the source net).
     - **Alternative Branching**: Evaluates if $Y$ and $Z$ represent a choice/conflict and share a preset Condition (if conflict is possible in the source net).
-    - **Loop Invariant**: Evaluates if loop label $A$ can be executed repeatedly (if loops are possible in the source net).
+    - **Loop Invariant**: Evaluates if loop label $A$ can be executed repeatedly (by checking if a directed cycle containing transition $A$ exists in the LPN graph. If no infinite loops are available, we select a repeatable transition that can fire at least twice).
     - **Causal Sequence (Fallback)**: If the source net doesn't support at least two of the primary properties, sequence path fallbacks are populated to guarantee exactly two goals are shown.
+
+---
 
 ## 6. Lightweight State Space Explorer
 
@@ -117,7 +118,7 @@ To assist users when they are stuck in Construction Mode, a dynamic LPN solution
 
 - **Trigger**: When the user clicks the "Show Solution" lightbulb button in Construction Mode, the canvas is temporarily replaced with a synthesized LPN.
 - **Synthesis Process**: An LPN is generated from valid firing sequences of the source Petri net via region synthesis.
-- **Verification Loop**: Reruns active goal checking (`evaluateGoals(L_sol)`) within the 15-attempt validation loop. A solution is only accepted if it is semantically valid AND all three active goals are completed.
+- **Verification Loop**: Reruns active goal checking (`evaluateGoals(L_sol)`) within the 50-attempt validation loop. A solution is only accepted if it is semantically valid AND all three active goals are completed.
 - **No Artificial Event Duplication**: If the "Label Splitting" goal is active, transition $X$ is programmatically split into duplicate nodes $X_1$ and $X_2$ while copying their exact preset/postset arcs, maintaining mathematically valid token flows. Disconnected, floating, or random duplicate transitions are never appended.
 - **Layouting**: The Sugiyama layout algorithm is run on the adjusted LPN structure, aligning the transitions and conditions beautifully.
 
@@ -125,7 +126,7 @@ To assist users when they are stuck in Construction Mode, a dynamic LPN solution
 
 - **State Preservation**: Before displaying the solution, the user's active drawing (elements and connections) is deep-cloned and stored in backup fields (`backedUpDrawnElements`, `backedUpConnections`).
 - **Toggle Off**: When the user hides the solution, the backup is restored, putting the user's drawing back on the canvas.
-- **Failure Recovery**: If the region synthesis fails (e.g. error or all 15 attempts exhausted), the backup is automatically restored, ensuring no user progress is lost.
+- **Failure Recovery**: If the region synthesis fails (e.g. error or all 50 attempts exhausted), the backup is automatically restored, ensuring no user progress is lost.
 - **Canvas Read-Only Constraint**: All canvas interactions and drawing actions are disabled when the solution mode is active, preventing accidental modifications of the solution LPN.
 
 ---
@@ -134,8 +135,9 @@ To assist users when they are stuck in Construction Mode, a dynamic LPN solution
 
 To ensure generated LPNs in Puzzle Mode remain readable and appropriately difficult, we adjust synthesis parameters and enforce goal checks during synthesis:
 
-- **Difficulty Configurations**:
-    - **Easy**: Uses shorter trace lengths and fewer traces to keep the net simple, with no short loops and no arc weights.
+- **Difficulty Configurations & Optimization**:
+    - `noArcWeights: true` is enabled globally across all difficulties (Easy, Medium, Hard, Expert) to ensure LPNs are generated with clean, single-weighted arcs.
+    - **Easy**: Uses shorter trace lengths and fewer traces to keep the net simple, with no short loops.
     - **Medium**: Moderate trace lengths and count with no short loops.
     - **Hard**: Longer trace lengths and a wider trace search space to synthesize conflicts.
     - **Expert**: Maximum trace lengths and traces to encompass all concurrency, loops, and conflict combinations possible.

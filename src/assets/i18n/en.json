@@ -387,6 +387,7 @@
             "GOAL_ALTERNATIVE_FALLBACK": "Sequence: Ensure event {{y}} is completed before {{z}} starts.",
             "GOAL_CONCURRENCY_CHECK": "Concurrency: Ensure event {{a}} and event {{b}} can fire concurrently.",
             "GOAL_CONCURRENCY_FALLBACK": "Loop: Model a loop where event {{a}} can be repeated.",
+            "GOAL_REPEAT_EVENT": "Repeat: Model a path where event {{a}} can fire at least twice.",
             "HELP_TITLE_SEQUENCE_NET_TOPOLOGY": "Sequence Net Topology",
             "HELP_TEXT_SEQUENCE_NET_TOPOLOGY": "A Sequence Net represents a strictly sequential process. It has no branching structures, loops, or concurrency. Transitions must execute one after another in a single line from start to end.",
             "HELP_TITLE_PARTIAL_ORDER_TOPOLOGY": "Partial Order Net Topology",

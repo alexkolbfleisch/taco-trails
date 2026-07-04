@@ -51,6 +51,12 @@ export class TokenTrailGoalsService {
     public selectedConflict: [string, string] | null = null;
     public selectedConcurrency: [string, string] | null = null;
     public selectedLoopLabel: string | null = null;
+    public selectedRepeatLabel: string | null = null;
+    public repeatableLabels: string[] = [];
+
+    public get isTrueLoopActive(): boolean {
+        return this.activeGoals().some((g) => g.id === 'loop-invariant' || g.id === 'true-concurrency-fallback');
+    }
 
     // Internal goal definitions (with check functions)
     public internalGoals: InternalGoal[] = [];
@@ -272,6 +278,8 @@ export class TokenTrailGoalsService {
         this.selectedConflict = null;
         this.selectedConcurrency = null;
         this.selectedLoopLabel = null;
+        this.selectedRepeatLabel = null;
+        this.repeatableLabels = [];
 
         if (!sourceNet) {
             this.internalGoals = [];
@@ -286,6 +294,10 @@ export class TokenTrailGoalsService {
         const caps = this.exploreSourceNet(sourceNet);
         const placeIds = sourceNet.places.map((p) => p.id);
         const transitionIds = sourceNet.transitions.map((t) => t.id);
+
+        this.repeatableLabels = sourceNet.transitions
+            .filter((t) => this.canTransitionFireTwice(sourceNet, caps, t.id))
+            .map((t) => t.label);
 
         const strategies: Record<LpnGenerationDifficulty, () => InternalGoal[]> = {
             [LpnGenerationDifficulty.Easy]: () => this.buildEasyGoals(sourceNet, caps, placeIds, transitionIds),
@@ -627,35 +639,29 @@ export class TokenTrailGoalsService {
         this.selectedConflict = null;
         this.selectedLoopLabel = null;
 
-        const availableLoop = this.pickLoopLabel(sourceNet, caps);
+        const availableConcurrency = this.pickConcurrentPair(sourceNet, caps, placeIds);
         const availableConflict = this.pickConflictPair(sourceNet, caps, placeIds);
 
-        // ponytail: Determine which types are available and select up to 2 first
-        const availableTypes: string[] = [];
-        if (availableLoop) availableTypes.push('loop');
-        if (availableConflict) availableTypes.push('conflict');
-        availableTypes.push('concurrency');
+        const trueLoopOptions = sourceNet.transitions
+            .filter((t) => this.isTransitionInTrueLoop(sourceNet, caps, t.id))
+            .map((t) => t.label);
+        const availableTrueLoop =
+            trueLoopOptions.length > 0 ? trueLoopOptions[Math.floor(Math.random() * trueLoopOptions.length)] : null;
 
-        availableTypes.sort(() => Math.random() - 0.5);
-        const selectedTypes = availableTypes.slice(0, 2);
+        const repeatOptions = sourceNet.transitions
+            .filter((t) => this.canTransitionFireTwice(sourceNet, caps, t.id))
+            .map((t) => t.label);
+        const availableRepeat =
+            repeatOptions.length > 0 ? repeatOptions[Math.floor(Math.random() * repeatOptions.length)] : null;
 
-        // Only enforce loop constraints if the loop goal is actually going to be active
-        if (selectedTypes.includes('loop')) {
-            this.selectedLoopLabel = availableLoop;
-        } else {
-            this.selectedLoopLabel = null;
-        }
+        const availableSequence = this.pickSequencePair(sourceNet, caps, placeIds, transitionIds);
 
-        let availableConcurrency: [string, string] | null = null;
-        if (selectedTypes.includes('concurrency')) {
-            availableConcurrency = this.pickConcurrentPair(sourceNet, caps, placeIds);
-        }
+        // Build the pool of all structurally available goals for this source net
+        const pool: CandidateGoal[] = [];
 
-        const candidates: CandidateGoal[] = [];
-
-        if (availableConcurrency && selectedTypes.includes('concurrency')) {
+        if (availableConcurrency) {
             const [A, B] = availableConcurrency;
-            candidates.push({
+            pool.push({
                 type: 'concurrency',
                 value: availableConcurrency,
                 goal: {
@@ -667,9 +673,9 @@ export class TokenTrailGoalsService {
             });
         }
 
-        if (availableConflict && selectedTypes.includes('conflict')) {
+        if (availableConflict) {
             const [Y, Z] = availableConflict;
-            candidates.push({
+            pool.push({
                 type: 'conflict',
                 value: availableConflict,
                 goal: {
@@ -681,43 +687,56 @@ export class TokenTrailGoalsService {
             });
         }
 
-        if (availableLoop && selectedTypes.includes('loop')) {
-            candidates.push({
+        if (availableTrueLoop) {
+            pool.push({
                 type: 'loop',
-                value: availableLoop,
+                value: availableTrueLoop,
                 goal: {
                     id: 'loop-invariant',
                     descriptionKey: 'TOKEN_TRAIL.GOALS.GOAL_CONCURRENCY_FALLBACK',
-                    descriptionParams: { a: availableLoop },
-                    check: (elements, connections) => this.checkTInvariant(elements, connections, availableLoop),
+                    descriptionParams: { a: availableTrueLoop },
+                    check: (elements, connections) => this.checkTInvariant(elements, connections, availableTrueLoop),
                 },
             });
         }
 
-        const selected = [...candidates];
+        if (availableRepeat) {
+            pool.push({
+                type: 'repeat',
+                value: availableRepeat,
+                goal: {
+                    id: 'repeat-event',
+                    descriptionKey: 'TOKEN_TRAIL.GOALS.GOAL_REPEAT_EVENT',
+                    descriptionParams: { a: availableRepeat },
+                    check: (elements) =>
+                        this.checkTransitionFiresTwice(elements, availableRepeat),
+                },
+            });
+        }
+
+        // Shuffle the pool and select up to 2 goals
+        pool.sort(() => Math.random() - 0.5);
+        const selected = pool.slice(0, 2);
 
         // Fallback to causal sequence to guarantee we have exactly two goals if possible
-        if (selected.length < 2) {
-            const fallbackSeqPair = this.pickSequencePair(sourceNet, caps, placeIds, transitionIds);
-            if (fallbackSeqPair) {
-                const [Y, Z] = fallbackSeqPair;
-                selected.push({
-                    type: 'sequence',
-                    value: fallbackSeqPair,
-                    goal: {
-                        id: 'sequence-path',
-                        descriptionKey: 'TOKEN_TRAIL.GOALS.GOAL_ALTERNATIVE_FALLBACK',
-                        descriptionParams: { y: Y, z: Z },
-                        check: (elements, connections) => this.findPathBetweenLabels(elements, connections, Y, Z),
-                    },
-                });
-            }
+        if (selected.length < 2 && availableSequence) {
+            const [Y, Z] = availableSequence;
+            selected.push({
+                type: 'sequence',
+                value: availableSequence,
+                goal: {
+                    id: 'sequence-path',
+                    descriptionKey: 'TOKEN_TRAIL.GOALS.GOAL_ALTERNATIVE_FALLBACK',
+                    descriptionParams: { y: Y, z: Z },
+                    check: (elements, connections) => this.findPathBetweenLabels(elements, connections, Y, Z),
+                },
+            });
         }
 
         // Apply selection to the service properties
-        this.selectedConcurrency = null;
         this.selectedConflict = null;
         this.selectedLoopLabel = null;
+        this.selectedRepeatLabel = null;
         for (const item of selected) {
             if (item.type === 'concurrency') {
                 this.selectedConcurrency = item.value as [string, string];
@@ -725,6 +744,8 @@ export class TokenTrailGoalsService {
                 this.selectedConflict = item.value as [string, string];
             } else if (item.type === 'loop') {
                 this.selectedLoopLabel = item.value as string;
+            } else if (item.type === 'repeat') {
+                this.selectedRepeatLabel = item.value as string;
             }
         }
 
@@ -857,11 +878,60 @@ export class TokenTrailGoalsService {
     }
 
     private pickLoopLabel(sourceNet: Diagram, caps: SourceNetCapabilities): string | null {
-        const options = sourceNet.transitions
+        const trueLoops = sourceNet.transitions
             .filter((t) => this.isTransitionInTrueLoop(sourceNet, caps, t.id))
             .map((t) => t.label);
-        if (options.length > 0) return options[Math.floor(Math.random() * options.length)];
+        if (trueLoops.length > 0) return trueLoops[Math.floor(Math.random() * trueLoops.length)];
+
+        // Fallback: Find repeatable transitions that can fire at least 2 times
+        const repeatable = sourceNet.transitions
+            .filter((t) => this.canTransitionFireTwice(sourceNet, caps, t.id))
+            .map((t) => t.label);
+        if (repeatable.length > 0) return repeatable[Math.floor(Math.random() * repeatable.length)];
+
         return null;
+    }
+
+    private canTransitionFireTwice(sourceNet: Diagram, caps: SourceNetCapabilities, tId: string): boolean {
+        const placeIds = sourceNet.places.map((p) => p.id);
+        const transitionIds = sourceNet.transitions.map((t) => t.id);
+        const getMarkingKey = (m: Record<string, number>) => placeIds.map((pId) => m[pId] ?? 0).join(',');
+
+        const startMarking: Record<string, number> = Object.fromEntries(
+            sourceNet.places.map((p) => [p.id, sourceNet.startMarking[p.id] ?? 0]),
+        );
+
+        const startKey = getMarkingKey(startMarking);
+        const visited = new Map<string, number>([[startKey, 0]]);
+        const queue: { marking: Record<string, number>; count: number }[] = [{ marking: startMarking, count: 0 }];
+
+        while (queue.length > 0) {
+            const { marking, count } = queue.shift()!;
+            if (count >= 2) return true;
+
+            for (const otherTId of transitionIds) {
+                const req = caps.preset[otherTId];
+                if (!req) continue;
+                const enabled = placeIds.every((pId) => (marking[pId] ?? 0) >= (req[pId] ?? 0));
+                if (!enabled) continue;
+
+                const next: Record<string, number> = { ...marking };
+                const add = caps.postset[otherTId] ?? {};
+                for (const pId of placeIds) {
+                    next[pId] = (next[pId] ?? 0) - (req[pId] ?? 0) + (add[pId] ?? 0);
+                }
+
+                const nextCount = count + (otherTId === tId ? 1 : 0);
+                const nextKey = getMarkingKey(next);
+                const prevCount = visited.get(nextKey);
+                if (prevCount === undefined || nextCount > prevCount) {
+                    visited.set(nextKey, nextCount);
+                    queue.push({ marking: next, count: nextCount });
+                }
+            }
+        }
+
+        return false;
     }
 
     private isTransitionInTrueLoop(sourceNet: Diagram, caps: SourceNetCapabilities, tId: string): boolean {
@@ -998,6 +1068,14 @@ export class TokenTrailGoalsService {
         }
 
         return false;
+    }
+
+    private checkTransitionFiresTwice(
+        elements: TokenTrailElement[],
+        labelA: string,
+    ): boolean {
+        const nodesCount = elements.filter((e) => e.type === 'Event' && e.label === labelA).length;
+        return nodesCount >= 2;
     }
 
     // ─── Source Net Analysis Helpers ─────────────────────────────────────────────
@@ -1183,7 +1261,6 @@ export class TokenTrailGoalsService {
         label1: string,
         label2: string,
     ): boolean {
-        // ponytail: Map LPN elements and connections to Diagram, DiagramPlace, DiagramTransition, and DiagramArc
         const places = elements
             .filter((e) => e.type === 'Condition')
             .map((c) => new DiagramPlace(c.id, c.isStartCondition ? 1 : (c.marking ?? 0), c.label));
@@ -1196,7 +1273,6 @@ export class TokenTrailGoalsService {
 
         const lpnDiagram = new Diagram(places, transitions, arcs);
 
-        // ponytail: reuse exploreSourceNet directly to calculate reachability graph and sets
         const caps = this.exploreSourceNet(lpnDiagram);
         const placeIds = lpnDiagram.places.map((p) => p.id);
 

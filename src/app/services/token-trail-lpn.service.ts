@@ -11,7 +11,6 @@ import { JsonPetriNetParserService } from '../../../ilpn-components/src/lib/mode
 import { Diagram } from '../classes/diagram/diagram';
 import { Condition, Event as LabeledEvent, LabeledNetEdge, LabeledNetNode } from '../classes/labeled-net.model';
 import { PanningService } from './panning.service';
-import { ModeService } from './mode.service';
 import { Tab } from '../classes/tabs';
 import { DIFFICULTY_CONFIGURATIONS, LpnGenerationConfiguration } from './token-trail-lpn.config';
 import { LoadingService } from './loading.service';
@@ -20,9 +19,10 @@ import { TokenTrailValidatorService } from '../../../ilpn-components/src/lib/alg
 import { TokenTrailValidationResult } from '../../../ilpn-components/src/lib/algorithms/pn/validation/classes/validation-result';
 import { TabStateService } from './tab-state.service';
 import { ImplicitPlaceRemoverService } from '../../../ilpn-components/src/lib/algorithms/pn/transformation/implicit-place-remover.service';
+import { DuplicatePlaceRemoverService } from '../../../ilpn-components/src/lib/algorithms/pn/transformation/duplicate-place-remover.service';
+import { DanglingPlaceRemoverService } from '../../../ilpn-components/src/lib/algorithms/pn/transformation/dangling-place-remover.service';
 import { catchError, Observable, of, take } from 'rxjs';
 import { TokenTrailGoalsService } from './token-trail-goals.service';
-import { TokenTrailValidationService } from './token-trail-validation.service';
 import { PetriNet, TokenTrailElement, TokenTrailConnection } from '../classes/token-trail.model';
 
 @Injectable({
@@ -33,16 +33,16 @@ export class TokenTrailLpnService {
     private playValidationService = inject(PlayValidationService);
     private regionSynthesisService = inject(PetriNetRegionSynthesisService);
     private implicitPlaceRemover = inject(ImplicitPlaceRemoverService);
+    private duplicatePlaceRemover = inject(DuplicatePlaceRemoverService);
+    private danglingPlaceRemover = inject(DanglingPlaceRemoverService);
     private stateService = inject(TokenTrailStateService);
     private sugiyamaService = inject(SugiyamaService);
     private panningService = inject(PanningService);
-    private modeService = inject(ModeService);
     private loadingService = inject(LoadingService);
     private toaster = inject(ToasterNotificationService);
     private validatorService = inject(TokenTrailValidatorService);
     private tabStateService = inject(TabStateService);
     private goalsService = inject(TokenTrailGoalsService);
-    private validationService = inject(TokenTrailValidationService);
     private jsonParser = inject(JsonPetriNetParserService);
     private serializationService = inject(SerializationService);
     private _lastSelectedEntriesHash = '';
@@ -62,7 +62,6 @@ export class TokenTrailLpnService {
         overrideDifficulty?: LpnGenerationDifficulty,
         onFailure?: () => void,
     ) {
-        // ponytail: generate goals and update difficulty state
         const finalDifficulty = this.goalsService.generateGoals(
             sourceNet,
             this.getEffectiveDifficulty(overrideDifficulty),
@@ -123,8 +122,8 @@ export class TokenTrailLpnService {
         onFailure?: () => void,
     ) {
         this.stateService.resetCounters();
-        const selectedEntries = this._selectEntriesWithVariation(validEntries, maxTraces);
-        const inputNets = this.buildInputNets(selectedEntries, config.splittingProbability);
+        const selectedEntries = this._selectEntriesWithVariation(validEntries, maxTraces, attempt);
+        const inputNets = this.buildInputNets(selectedEntries);
 
         const difficulty = this.getEffectiveDifficulty();
 
@@ -144,14 +143,12 @@ export class TokenTrailLpnService {
             return;
         }
 
-        // ponytail: Expert mode synthesises subnets for conflict/concurrency and combines them with loop sequence nets
         if (difficulty === LpnGenerationDifficulty.Expert) {
             this.synthesiseExpertMode(
                 sourceNet,
                 ilpnSource,
                 selectedEntries,
                 validEntries,
-                inputNets,
                 maxTraces,
                 maxEdges,
                 config,
@@ -200,7 +197,6 @@ export class TokenTrailLpnService {
         runId: number,
         onFailure?: () => void,
     ) {
-        // ponytail: select a random entry from selectedEntries or validEntries
         const entry =
             selectedEntries[Math.floor(Math.random() * selectedEntries.length)] ||
             validEntries[Math.floor(Math.random() * validEntries.length)];
@@ -209,7 +205,7 @@ export class TokenTrailLpnService {
             this.handleSynthesisError(new Error('No valid entry found'), onFailure);
             return;
         }
-        const inputNet = this.buildInputNetFromEntry(entry, 0);
+        const inputNet = this.buildInputNetFromEntry(entry);
         this.processSynthesisResult(
             inputNet,
             maxEdges,
@@ -229,7 +225,6 @@ export class TokenTrailLpnService {
         ilpnSource: IlpnPetriNet,
         selectedEntries: FiringEntry[],
         validEntries: FiringEntry[],
-        inputNets: IlpnPetriNet[],
         maxTraces: number,
         maxEdges: number,
         config: LpnGenerationConfiguration,
@@ -237,33 +232,26 @@ export class TokenTrailLpnService {
         runId: number,
         onFailure?: () => void,
     ) {
-        // ponytail: Expert mode synthesises loops, conflicts, and concurrency in a single flat region synthesis run
-        // by combining multi-iteration loop traces (0 to 3 occurrences) with other goal-relevant traces.
         const loopLabel = this.goalsService.selectedLoopLabel;
-        console.debug('[LPN SYNTHESIS] synthesiseExpertMode started. loopLabel:', loopLabel);
+        const repeatLabel = this.goalsService.selectedRepeatLabel;
 
         const expertTraces = new Set<FiringEntry>(selectedEntries);
 
         if (loopLabel) {
             for (let i = 0; i <= 3; i++) {
                 const trace = this.findTraceWithLoopOccurrences(sourceNet, loopLabel, i);
-                console.debug(
-                    `[LPN SYNTHESIS] Loop trace with ${i} occurrences of "${loopLabel}":`,
-                    trace ? trace.firingSequence : 'NOT FOUND',
-                );
                 if (trace) {
                     expertTraces.add(trace);
                 }
             }
+        } else if (repeatLabel) {
+            const trace = this.findTraceWithLoopOccurrences(sourceNet, repeatLabel, 2);
+            if (trace) {
+                expertTraces.add(trace);
+            }
         }
 
-        console.debug(
-            `[LPN SYNTHESIS] Expert mode traces list (${expertTraces.size}):`,
-            Array.from(expertTraces).map((t) => t.firingSequence),
-        );
-
-        const splitProb = config.splittingProbability;
-        const combinedInputNets = this.buildInputNets(Array.from(expertTraces), splitProb);
+        const combinedInputNets = this.buildInputNets(Array.from(expertTraces));
 
         this.regionSynthesisService
             .synthesise(combinedInputNets, config.synthesisConfig)
@@ -271,7 +259,6 @@ export class TokenTrailLpnService {
             .subscribe({
                 next: (result) => {
                     if (runId !== this._synthesisActiveRunId) return;
-                    console.debug('[LPN SYNTHESIS] Synthesized candidate Petri net structure successfully.');
                     this.processSynthesisResult(
                         result.result,
                         maxEdges,
@@ -298,7 +285,6 @@ export class TokenTrailLpnService {
         loopLabel: string,
         occurrences: number,
     ): FiringEntry | null {
-        console.debug(`[LPN SYNTHESIS] Searching for trace with ${occurrences} occurrences of loop: "${loopLabel}"`);
         const placeIds = sourceNet.places.map((p) => p.id);
         const originalMarking = { ...sourceNet.marking };
 
@@ -312,7 +298,6 @@ export class TokenTrailLpnService {
         const maxDepth = 50; // counts all fired transitions, including silent ones
         let resultEntry: FiringEntry | null = null;
 
-        // ponytail: check sink without mutating state — a sink has no enabled transition
         const isSink = (m: Record<string, number>) =>
             sourceNet.transitions.every((t) => {
                 const flow = t.getInputFlow();
@@ -352,10 +337,6 @@ export class TokenTrailLpnService {
         }
 
         sourceNet.marking = originalMarking;
-        console.debug(
-            `[LPN SYNTHESIS] findTraceWithLoopOccurrences for ${occurrences} loop occurrences returned:`,
-            resultEntry ? resultEntry.firingSequence : 'null',
-        );
         return resultEntry;
     }
 
@@ -372,7 +353,6 @@ export class TokenTrailLpnService {
         runId: number,
         onFailure?: () => void,
     ) {
-        console.debug('[LPN SYNTHESIS] Validating candidate safety...');
         this.validateSafe(ilpnSource, ilpnSpec)
             .pipe(take(1))
             .subscribe({
@@ -405,18 +385,6 @@ export class TokenTrailLpnService {
                     }
 
                     const solvedTrailsMap = this.mapValidatorResultsToSolvedTrails(results);
-                    console.log(
-                        '[DEBUG LPN] candidate elements:',
-                        candidate.elements.map((e) => ({
-                            id: e.id,
-                            type: e instanceof Condition ? 'Condition' : 'Event',
-                            label: e.label,
-                        })),
-                    );
-                    console.log(
-                        '[DEBUG LPN] solvedTrailsMap:',
-                        Array.from(solvedTrailsMap.entries()).map(([k, v]) => `${k} -> ${JSON.stringify(v)}`),
-                    );
                     this.populateCandidateTrailMarkings(candidate, solvedTrailsMap);
 
                     // ponytail: Prune "silent conditions" that do not correspond to any source place (empty trailMarkings)
@@ -469,7 +437,6 @@ export class TokenTrailLpnService {
                         return;
                     }
 
-                    console.debug('[LPN SYNTHESIS] All checks passed successfully!');
                     this.applySuccessfulLpn(candidate, solvedTrailsMap, sourceNet);
                 },
                 error: (err) => {
@@ -494,26 +461,21 @@ export class TokenTrailLpnService {
         }
     }
 
-    private buildInputNets(selectedEntries: FiringEntry[], splittingProbability: number): IlpnPetriNet[] {
+    private buildInputNets(selectedEntries: FiringEntry[]): IlpnPetriNet[] {
         const inputNets: IlpnPetriNet[] = [];
         for (const entry of selectedEntries) {
-            inputNets.push(this.buildInputNetFromEntry(entry, splittingProbability));
+            inputNets.push(this.buildInputNetFromEntry(entry));
         }
         return inputNets;
     }
 
-    private buildInputNetFromEntry(entry: FiringEntry, splittingProbability: number): IlpnPetriNet {
+    private buildInputNetFromEntry(entry: FiringEntry): IlpnPetriNet {
         const labelCounts = new Map<string, number>();
-        let hasDuplicates = false;
         for (const label of entry.labels) {
             const count = (labelCounts.get(label) || 0) + 1;
             labelCounts.set(label, count);
-            if (count > 1) {
-                hasDuplicates = true;
-            }
         }
 
-        const applySplitting = hasDuplicates && Math.random() < splittingProbability;
         const currentOccurrence = new Map<string, number>();
 
         const places = Array.from({ length: entry.labels.length + 1 }, (_, i) => `p${i}`);
@@ -527,18 +489,17 @@ export class TokenTrailLpnService {
         const labels = Object.fromEntries(
             entry.labels.map((label, i) => {
                 let finalLabel = label;
-                if (applySplitting) {
-                    const occ = (currentOccurrence.get(label) || 0) + 1;
-                    currentOccurrence.set(label, occ);
-                    if (labelCounts.get(label)! > 1) {
-                        const conflict = this.goalsService.selectedConflict;
-                        const isConflictTrans = conflict && (label === conflict[0] || label === conflict[1]);
-                        const loopLabel = this.goalsService.selectedLoopLabel;
-                        const isLoopTrans = loopLabel && label === loopLabel;
-                        if (!isConflictTrans && !isLoopTrans) {
-                            finalLabel = `${label}_instance${occ}`;
-                        }
-                    }
+                const occ = (currentOccurrence.get(label) || 0) + 1;
+                currentOccurrence.set(label, occ);
+                const conflict = this.goalsService.selectedConflict;
+                const isConflictTrans = conflict && (label === conflict[0] || label === conflict[1]);
+                const loopLabel = this.goalsService.selectedLoopLabel;
+                const isLoopTrans = loopLabel && label === loopLabel && this.goalsService.isTrueLoopActive;
+                const repeatLabel = this.goalsService.selectedRepeatLabel;
+                const isRepeatTarget = repeatLabel && label === repeatLabel;
+
+                if ((!isConflictTrans || isRepeatTarget) && !isLoopTrans) {
+                    finalLabel = `${label}_instance${occ}`;
                 }
                 return [`t${i}`, finalLabel];
             }),
@@ -681,7 +642,6 @@ export class TokenTrailLpnService {
 
     private parseAndEnsureLabels(jsonStr: string): IlpnPetriNet {
         const net = this.jsonParser.parse(jsonStr)!;
-        // ponytail: fallback undefined transition labels to their ID (silent/unlabeled transitions)
         net.getTransitions().forEach((t) => {
             if (t.label === undefined) {
                 t.label = t.getId();
@@ -716,7 +676,7 @@ export class TokenTrailLpnService {
      * @param maxTraces The maximum number of traces to select.
      * @returns A subset of firing entries.
      */
-    private _selectEntriesWithVariation(validEntries: FiringEntry[], maxTraces: number): FiringEntry[] {
+    private _selectEntriesWithVariation(validEntries: FiringEntry[], maxTraces: number, attempt = 1): FiringEntry[] {
         const difficulty = this.getEffectiveDifficulty();
 
         if (difficulty === LpnGenerationDifficulty.Easy) {
@@ -757,12 +717,14 @@ export class TokenTrailLpnService {
             if (traceBA) mustHave.add(traceBA);
         }
 
-        // 3. Loop
+        // 3. Loop / Repeat
         const loopA = this.goalsService.selectedLoopLabel;
-        if (loopA) {
+        const repeatA = this.goalsService.selectedRepeatLabel;
+        const activeLoop = loopA || repeatA;
+        if (activeLoop) {
             const traceWithLoop =
-                validEntries.find((e) => e.labels.filter((l) => l === loopA).length > 1) ??
-                validEntries.find((e) => e.labels.includes(loopA));
+                validEntries.find((e) => e.labels.filter((l) => l === activeLoop).length > 1) ??
+                validEntries.find((e) => e.labels.includes(activeLoop));
             if (traceWithLoop) mustHave.add(traceWithLoop);
         }
 
@@ -775,6 +737,11 @@ export class TokenTrailLpnService {
             if (traceZ) mustHave.add(traceZ);
         }
 
+        // If a repeat goal is active in Expert Mode, return only the must-have traces on first attempt.
+        if (attempt === 1 && difficulty === LpnGenerationDifficulty.Expert && this.goalsService.selectedRepeatLabel) {
+            return Array.from(mustHave);
+        }
+
         // Fill up to maxTraces with variation
         const baseSelection = Array.from(mustHave);
         const remainingEntries = validEntries.filter((entry) => !mustHave.has(entry));
@@ -782,10 +749,17 @@ export class TokenTrailLpnService {
         let hash: string;
         let retries = 0;
 
+        // Cap trace selections to avoid overly complex spaghetti LPNs
+        let cap = 4;
+        if (difficulty === LpnGenerationDifficulty.Medium) cap = 3;
+        else if (difficulty === LpnGenerationDifficulty.Hard) cap = 3;
+        else if (difficulty === LpnGenerationDifficulty.Expert) cap = 4;
+
         do {
             const shuffledRemaining = [...remainingEntries].sort(() => 0.5 - Math.random());
             const minSize = Math.max(baseSelection.length, 1);
-            const maxSize = Math.max(minSize, maxTraces);
+            const rawMaxSize = Math.max(minSize, maxTraces);
+            const maxSize = Math.max(minSize, Math.min(rawMaxSize, cap));
             const targetSize = minSize + Math.floor(Math.random() * (maxSize - minSize + 1));
             const additional = shuffledRemaining.slice(0, targetSize - baseSelection.length);
 
@@ -811,12 +785,12 @@ export class TokenTrailLpnService {
         let maxCommonPrefixLen = -1;
 
         for (const entryY of validEntries) {
-            if (!entryY.labels.includes(Y) || entryY.labels.includes(Z)) continue;
+            if (!entryY.labels.includes(Y)) continue;
             const idxY = entryY.labels.indexOf(Y);
             const prefixY = entryY.labels.slice(0, idxY);
 
             for (const entryZ of validEntries) {
-                if (!entryZ.labels.includes(Z) || entryZ.labels.includes(Y)) continue;
+                if (!entryZ.labels.includes(Z)) continue;
                 const idxZ = entryZ.labels.indexOf(Z);
                 const prefixZ = entryZ.labels.slice(0, idxZ);
 
@@ -839,9 +813,9 @@ export class TokenTrailLpnService {
         }
 
         if (!bestY || !bestZ) {
-            const traceYNotZ = validEntries.find((entry) => entry.labels.includes(Y) && !entry.labels.includes(Z));
-            const traceZNotY = validEntries.find((entry) => entry.labels.includes(Z) && !entry.labels.includes(Y));
-            return { traceY: traceYNotZ, traceZ: traceZNotY };
+            const traceY = validEntries.find((entry) => entry.labels.includes(Y));
+            const traceZ = validEntries.find((entry) => entry.labels.includes(Z));
+            return { traceY, traceZ };
         }
 
         return { traceY: bestY, traceZ: bestZ };
@@ -852,7 +826,6 @@ export class TokenTrailLpnService {
         A: string,
         B: string,
     ): { traceAB?: FiringEntry; traceBA?: FiringEntry } {
-        // ponytail: find traces exhibiting A before B and B before A
         const findTrace = (first: string, second: string) =>
             validEntries.find((e) => {
                 const idxF = e.labels.indexOf(first);
@@ -866,7 +839,6 @@ export class TokenTrailLpnService {
     }
 
     private _findCausalSequenceTraces(validEntries: FiringEntry[], A: string, B: string): FiringEntry[] {
-        // ponytail: prefer adjacent occurrences, fallback to any A before B
         const adjacent = validEntries.filter((e) => e.labels.some((l, i) => l === A && e.labels[i + 1] === B));
         if (adjacent.length > 0) return adjacent;
         return validEntries.filter((e) => {
@@ -877,7 +849,6 @@ export class TokenTrailLpnService {
     }
 
     private getEffectiveDifficulty(overrideDifficulty?: LpnGenerationDifficulty): LpnGenerationDifficulty {
-        // ponytail: resolve difficulty based on display mode and override
         if (overrideDifficulty) {
             return overrideDifficulty;
         }
@@ -898,8 +869,12 @@ export class TokenTrailLpnService {
         runId: number,
         onFailure?: () => void,
     ) {
-        // ponytail: remove implicit places to simplify the synthesized net
-        const simplifiedNet = this.implicitPlaceRemover.removeImplicitPlaces(resultNet);
+        // ponytail: remove implicit, duplicate, and dangling places to simplify the synthesized net structurally
+        let simplifiedNet = resultNet;
+        simplifiedNet = this.implicitPlaceRemover.removeImplicitPlaces(simplifiedNet);
+        simplifiedNet = this.duplicatePlaceRemover.removeDuplicatePlaces(simplifiedNet);
+        simplifiedNet = this.danglingPlaceRemover.removeDanglingPlaces(simplifiedNet);
+
         const candidate = this.buildAndPrepareCandidate(simplifiedNet, maxEdges);
         const ilpnSpec = this.convertLpnToIlpn(candidate.elements, candidate.connections);
 
@@ -919,7 +894,6 @@ export class TokenTrailLpnService {
     }
 
     private clearSynthesisTimeout() {
-        // ponytail: stop active synthesis timers
         if (this._synthesisTimeoutId) {
             clearTimeout(this._synthesisTimeoutId);
             this._synthesisTimeoutId = null;
@@ -928,7 +902,6 @@ export class TokenTrailLpnService {
     }
 
     private cleanupAndFail(onFailure?: () => void, isError = false) {
-        // ponytail: generic cleanup logic on synthesis warning/error
         this.clearSynthesisTimeout();
         this.loadingService.hide();
         if (onFailure) {
@@ -1146,7 +1119,6 @@ export class TokenTrailLpnService {
      * Restores LPN Condition trail markings, baseNames, event coordinates, and edge bendPoints.
      */
     public loadLpnFromDiagram(diagram: Diagram) {
-        // ponytail: simplify LPN loading logic
         this.stateService.clear();
         const hasStartPlaces = diagram.places.some((place) => place.isStartPlace);
 
