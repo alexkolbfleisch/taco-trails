@@ -5,6 +5,7 @@ import {
     effect,
     ElementRef,
     inject,
+    Input,
     OnDestroy,
     OnInit,
     signal,
@@ -51,7 +52,7 @@ import { SourcePetriNetService } from '../../../../services/source-petri-net.ser
 import { Diagram } from '../../../../classes/diagram/diagram';
 import { LoadingService } from '../../../../services/loading.service';
 import { ModeService } from '../../../../services/mode.service';
-import { Tab } from '../../../../classes/tabs';
+import { TabStateService } from '../../../../services/tab-state.service';
 import { TokenTrailValidatorService } from '../../../../../../ilpn-components/src/lib/algorithms/pn/validation/token-trails/token-trail-validator.service';
 import { DrawingDisplayService } from '../../../../services/drawing-display.service';
 import { ParserService } from '../../../../services/parser.service';
@@ -97,6 +98,7 @@ import { computeBendPointsForArc } from '../../../../services/arc-parallel-offse
     styleUrls: ['./token-trail-draw-display.css'],
 })
 export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterViewInit {
+    @Input() mode!: LpnDisplayMode | 'construction' | 'puzzle';
     @ViewChild('drawingArea') drawingArea!: ElementRef<SVGGraphicsElement>;
     @ViewChild('helpDialogTemplate') helpDialogTemplate!: TemplateRef<unknown>;
     protected helpDialogTitle = '';
@@ -116,13 +118,14 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
     private serializationService = inject(SerializationService);
     private parserService = inject(ParserService);
     protected tourService = inject(TokenTrailTourService);
+    protected tabStateService = inject(TabStateService);
 
     // Bind to service state
     readonly drawnElements = this.stateService.drawnElements;
     readonly connections = this.stateService.connections;
     readonly isDisabled = computed(() => this.drawnElements().length === 0);
 
-    protected readonly isExamMode = computed(() => this._modeService.isExamMode(Tab.TOKEN_TRAIL));
+    protected readonly isExamMode = computed(() => this._modeService.isExamMode(this.tabStateService.currentTab()));
     readonly isGoalsMinimized = signal<boolean>(false);
 
     // Bubble open states mapping
@@ -293,7 +296,6 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
     protected readonly toolbarActions = computed<DrawToolbarAction[]>(() => {
         const mode = this.stateService.displayMode();
         const showingSolution = this.stateService.showingSolution();
-        const tourRunning = this.tourService.isTourRunning();
         const disabled = this.isDisabled();
 
         const actions: DrawToolbarAction[] = [];
@@ -307,16 +309,7 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
             action: () => this.validationService.onValidate(),
         });
 
-        // 2. Toggle Mode Action (Both modes)
-        actions.push({
-            icon: this.getModeToggleIcon(),
-            tooltip: this.getModeToggleTooltip(),
-            color: 'accent',
-            isActive: !showingSolution && !tourRunning,
-            action: () => this.toggleMode(),
-        });
-
-        // 3. Solution Action (Both modes)
+        // 2. Solution Action (Both modes)
         actions.push({
             icon: showingSolution ? 'lightbulb' : 'lightbulb_outline',
             tooltip: showingSolution ? 'TOKEN_TRAIL.BUTTON_HIDE_SOLUTION' : 'TOKEN_TRAIL.BUTTON_SHOW_SOLUTION',
@@ -528,56 +521,6 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
         return actions;
     });
 
-    private getModeToggleIcon(): string {
-        return this.stateService.displayMode() === LpnDisplayMode.Puzzle ? 'construction' : 'extension';
-    }
-
-    private getModeToggleTooltip(): string {
-        return this.stateService.displayMode() === LpnDisplayMode.Puzzle
-            ? 'TOKEN_TRAIL.MODE_CONSTRUCTION'
-            : 'TOKEN_TRAIL.MODE_PUZZLE';
-    }
-
-    private toggleMode(): void {
-        const currentMode = this.stateService.displayMode();
-        const nextMode = currentMode === LpnDisplayMode.Puzzle ? LpnDisplayMode.Construction : LpnDisplayMode.Puzzle;
-
-        // 1. If showing solution, toggle it off first so we don't save the solution state as the snapshot
-        if (this.stateService.showingSolution()) {
-            this.toggleSolution();
-        }
-
-        // 2. Save snapshot of the current mode
-        const currentMergeState =
-            currentMode === LpnDisplayMode.Construction ? this.mergeService.getMergeStateSnapshot() : undefined;
-        this.stateService.saveSnapshot(currentMode, currentMergeState);
-
-        const hasNextSnapshot = this.stateService.hasSnapshot(nextMode);
-
-        // 3. Set the display mode to the next mode
-        this.stateService.setDisplayMode(nextMode);
-
-        // 4. Try to restore snapshot of the next mode
-        if (hasNextSnapshot) {
-            const restoredMergeState = this.stateService.restoreSnapshot(nextMode);
-            // Restore was successful!
-            if (nextMode === LpnDisplayMode.Construction && restoredMergeState) {
-                this.mergeService.restoreMergeStateSnapshot(restoredMergeState);
-            }
-            // Fit view after a brief timeout to let UI update
-            setTimeout(() => {
-                this.stateService.requestFitView();
-            }, 50);
-        } else {
-            // No snapshot exists for the next mode (first time entering it)
-            this.clearDrawingStateOnly();
-
-            if (nextMode === LpnDisplayMode.Puzzle) {
-                this.createNewLPNWithSynthesis();
-            }
-        }
-    }
-
     protected readonly toolbarInstructions = computed<DrawToolbarInstruction[]>(() => {
         if (this.stateService.displayMode() === LpnDisplayMode.Puzzle) {
             return [
@@ -636,7 +579,7 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
         const elements = this.drawnElements();
         const displayMode = this.stateService.displayMode();
         const showingSolution = this.stateService.showingSolution();
-        const isExam = this._modeService.isExamMode(Tab.TOKEN_TRAIL);
+        const isExam = this._modeService.isExamMode(this.tabStateService.currentTab());
         const selectedPlaceId = this.stateService.selectedPetriPlaceId();
 
         const invalidNodeIds = this.validationService.invalidNodeIds();
@@ -716,7 +659,7 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
     readonly connectionMetadataMap = computed(() => {
         const connections = this.connections();
         const showingSolution = this.stateService.showingSolution();
-        const isExam = this._modeService.isExamMode(Tab.TOKEN_TRAIL);
+        const isExam = this._modeService.isExamMode(this.tabStateService.currentTab());
         const displayMode = this.stateService.displayMode();
         const selectedPlaceId = this.stateService.selectedPetriPlaceId();
 
@@ -766,7 +709,7 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
     private readonly _tokenPreviewEffect = effect(() => {
         const displayMode = this.stateService.displayMode();
         const selectedPlaceId = this.stateService.selectedPetriPlaceId();
-        const isExam = this._modeService.isExamMode(Tab.TOKEN_TRAIL);
+        const isExam = this._modeService.isExamMode(this.tabStateService.currentTab());
         const showSolution = this.stateService.showingSolution();
         const solvedTrails = this.stateService.solvedTokenTrails();
 
@@ -851,6 +794,11 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
     // Now they are handled by the ILP TokenTrailValidatorService securely.
 
     ngOnInit() {
+        // Set display mode first
+        this.stateService.setDisplayMode(this.mode as LpnDisplayMode);
+
+        this.clearDrawingStateOnly();
+
         this.downloadSub = this.displayService.downloadRequest$.subscribe(({ format, target }) => {
             if (target && target !== GRAPH_IDS.PROCESS_NET) {
                 return;
@@ -878,7 +826,7 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
                 const isSameSignature = currentSig === this.stateService.lastSynthesizedNetSignature;
 
                 if (!isSameSignature) {
-                    this.stateService.clearSnapshots();
+                    this.stateService.clear(true);
                 }
 
                 if (this.stateService.displayMode() === LpnDisplayMode.Puzzle) {

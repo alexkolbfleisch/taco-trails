@@ -20,7 +20,14 @@ export class ModeService {
     >();
 
     constructor() {
-        const tabs: Tab[] = [Tab.DRAW, Tab.PLAY, Tab.REACHABILITY_GRAPH, Tab.PROCESS_NET, Tab.TOKEN_TRAIL];
+        const tabs: Tab[] = [
+            Tab.DRAW,
+            Tab.PLAY,
+            Tab.REACHABILITY_GRAPH,
+            Tab.PROCESS_NET,
+            Tab.TOKEN_TRAIL,
+            Tab.PRACTICE,
+        ];
         tabs.forEach((tab) => {
             this._tabModeSignals.set(tab, {
                 mode: signal<AppMode>(AppMode.LEARN),
@@ -76,6 +83,7 @@ export class ModeService {
             case Tab.REACHABILITY_GRAPH:
                 return this._injector.get(ReachabilityGraphService).reachabilityGraphSignal().nodes.length > 1;
             case Tab.TOKEN_TRAIL:
+            case Tab.PRACTICE:
                 return this._injector.get(TokenTrailStateService).drawnElements().length > 0;
             default:
                 return false;

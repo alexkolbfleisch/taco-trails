@@ -49,6 +49,7 @@ export class ConfirmDialogComponent {
                 this.reachabilityGraphService.clear();
                 break;
             case Tab.TOKEN_TRAIL:
+            case Tab.PRACTICE:
                 this.tokenTrailStateService.clear();
                 break;
             default:

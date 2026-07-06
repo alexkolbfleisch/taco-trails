@@ -907,7 +907,8 @@ export class TokenTrailLpnService {
         if (onFailure) {
             onFailure();
         }
-        if (this.tabStateService.currentTab() === Tab.TOKEN_TRAIL) {
+        const currentTab = this.tabStateService.currentTab();
+        if (currentTab === Tab.TOKEN_TRAIL || currentTab === Tab.PRACTICE) {
             if (isError) {
                 this.toaster.showError('TOKEN_TRAIL.LPN_SYNTHESIS_ERROR_TITLE', 'TOKEN_TRAIL.LPN_SYNTHESIS_ERROR_BODY');
             } else {

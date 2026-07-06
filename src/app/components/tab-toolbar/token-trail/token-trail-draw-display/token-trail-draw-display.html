@@ -1,16 +1,4 @@
 <div class="drawing-area-container">
-    <div
-        class="mode-indicator"
-        [class.puzzle-mode]="stateService.displayMode() === 'puzzle' && !stateService.showingSolution()"
-        [class.solution-mode]="stateService.showingSolution()">
-        <mat-icon
-            >{{ stateService.showingSolution() ? 'lightbulb' : (stateService.displayMode() === 'puzzle' ? 'extension' :
-            'construction') }}</mat-icon
-        >
-        {{ (stateService.showingSolution() ? 'TOKEN_TRAIL.MODE_SOLUTION_ACTIVE' : (stateService.displayMode() ===
-        'puzzle' ? 'TOKEN_TRAIL.MODE_PUZZLE_ACTIVE' : 'TOKEN_TRAIL.MODE_CONSTRUCTION_ACTIVE')) | translate }}
-    </div>
-
     @if (stateService.displayMode() === 'construction' && !stateService.showingSolution() &&
     goalsService.activeGoals().length > 0) {
     <mat-card class="goals-panel" [class.minimized]="isGoalsMinimized()">

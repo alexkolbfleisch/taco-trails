@@ -9,7 +9,6 @@ import { DragDropUtil } from '../../../../utils/drag-drop.util';
 import { ToasterNotificationService } from '../../../../services/toaster-notification.service';
 import { TokenTrailValidationService, ValidationIssue } from '../../../../services/token-trail-validation.service';
 import { ModeService } from '../../../../services/mode.service';
-import { Tab } from '../../../../classes/tabs';
 import { ValidationBubbleComponent } from '../token-trail-draw-display/validation-bubble/validation-bubble.component';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
@@ -81,7 +80,7 @@ export class TokenTrailDisplayComponent extends DisplayComponent {
     }
 
     canShowValidationInfo(node: DisplayableNode): boolean {
-        const isExam = this._modeService.isExamMode(Tab.TOKEN_TRAIL);
+        const isExam = this._modeService.isExamMode(this._tabStateService.currentTab());
         const isConstruction = this._tokenTrailStateService.displayMode() === LpnDisplayMode.Construction;
         const isPuzzle = this._tokenTrailStateService.displayMode() === LpnDisplayMode.Puzzle;
         const hasValidated =
