@@ -7,7 +7,7 @@ import { Diagram } from '../classes/diagram/diagram';
 import { Condition, Event as LabeledEvent } from '../classes/labeled-net.model';
 import { ToasterNotificationService } from './toaster-notification.service';
 import { ModeService } from './mode.service';
-import { Tab } from '../classes/tabs';
+import { TabStateService } from './tab-state.service';
 import {
     PetriNet,
     TokenTrailElement,
@@ -31,6 +31,7 @@ export class TokenTrailValidationService {
     private displayService = inject(DisplayService);
     private toaster = inject(ToasterNotificationService);
     private modeService = inject(ModeService);
+    private tabStateService = inject(TabStateService);
 
     readonly lastExplicitValidationTriggerKey = signal<string | null>(null);
 
@@ -38,7 +39,7 @@ export class TokenTrailValidationService {
     readonly explicitValidation$ = this._explicitValidation$.asObservable();
 
     readonly validPetriPlaceIds = computed(() => {
-        const isExamMode = this.modeService.isExamMode(Tab.TOKEN_TRAIL);
+        const isExamMode = this.modeService.isExamMode(this.tabStateService.currentTab());
         if (isExamMode && this.validationTriggerKey() !== this.lastExplicitValidationTriggerKey()) {
             return new Set<string>();
         }
@@ -55,7 +56,7 @@ export class TokenTrailValidationService {
     });
 
     readonly invalidPetriPlaceIds = computed(() => {
-        const isExamMode = this.modeService.isExamMode(Tab.TOKEN_TRAIL);
+        const isExamMode = this.modeService.isExamMode(this.tabStateService.currentTab());
         if (isExamMode && this.validationTriggerKey() !== this.lastExplicitValidationTriggerKey()) {
             return new Set<string>();
         }

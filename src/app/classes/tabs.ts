@@ -4,4 +4,5 @@ export enum Tab {
     REACHABILITY_GRAPH,
     PROCESS_NET,
     TOKEN_TRAIL,
+    PRACTICE,
 }

@@ -708,8 +708,7 @@ export class TokenTrailGoalsService {
                     id: 'repeat-event',
                     descriptionKey: 'TOKEN_TRAIL.GOALS.GOAL_REPEAT_EVENT',
                     descriptionParams: { a: availableRepeat },
-                    check: (elements) =>
-                        this.checkTransitionFiresTwice(elements, availableRepeat),
+                    check: (elements) => this.checkTransitionFiresTwice(elements, availableRepeat),
                 },
             });
         }
@@ -1070,10 +1069,7 @@ export class TokenTrailGoalsService {
         return false;
     }
 
-    private checkTransitionFiresTwice(
-        elements: TokenTrailElement[],
-        labelA: string,
-    ): boolean {
+    private checkTransitionFiresTwice(elements: TokenTrailElement[], labelA: string): boolean {
         const nodesCount = elements.filter((e) => e.type === 'Event' && e.label === labelA).length;
         return nodesCount >= 2;
     }

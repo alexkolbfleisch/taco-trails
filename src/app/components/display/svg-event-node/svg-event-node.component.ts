@@ -6,8 +6,8 @@ import { Condition } from '../../../classes/labeled-net.model';
 import { StateNode } from '../../../classes/reachability-graph.model';
 import { PLACE_RADIUS, TRANSITION_SIZE } from '../display.constants';
 import { ModeService } from '../../../services/mode.service';
-import { Tab } from '../../../classes/tabs';
 import { LpnDisplayMode } from '../../../services/token-trail-state.service';
+import { TabStateService } from '../../../services/tab-state.service';
 
 @Component({
     selector: 'g[appSvgEventNode]',
@@ -17,6 +17,7 @@ import { LpnDisplayMode } from '../../../services/token-trail-state.service';
 })
 export class SvgEventNodeComponent {
     private readonly _modeService = inject(ModeService);
+    private readonly _tabStateService = inject(TabStateService);
 
     readonly RADIUS = PLACE_RADIUS;
     readonly EVENT_SIZE = TRANSITION_SIZE;
@@ -180,6 +181,6 @@ export class SvgEventNodeComponent {
         const isStart = node instanceof Condition ? node.isStartPlace : false;
         if (!isStart) return false;
 
-        return !this._modeService.isExamMode(Tab.TOKEN_TRAIL);
+        return !this._modeService.isExamMode(this._tabStateService.currentTab());
     });
 }

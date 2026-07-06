@@ -9,6 +9,7 @@
     "TAB_REACHABILITY": "Reachability Graph",
     "TAB_PROCESS": "Process Net",
     "TAB_TOKEN_TRAIL": "Token Trail",
+    "TAB_PRACTICE": "Practice",
     "REACHABILITY_GRAPH": {
         "TOGGLE_VIEW": "Toggle View Mode",
         "BUTTON_VALIDATE_NET": "Validate Reachability Graph",
