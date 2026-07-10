@@ -26,7 +26,6 @@ import {
     DrawToolbarInstruction,
     DrawToolbarToggle,
 } from '../../draw-toolbar/draw-toolbar.component';
-import { Tab } from '../../../classes/tabs';
 import { DrawnElement } from '../../../classes/diagram/drawn-element';
 
 /**
@@ -120,10 +119,6 @@ export class DrawComponent implements AfterViewInit, OnDestroy, OnInit {
     readonly viewBox = this.draw.viewBox;
     /** Parsed viewBox object containing x, y, width, and height values */
     readonly viewBoxObj = this.draw.viewBoxObj;
-    /** Computed signal indicating whether the current mode is exam mode */
-    protected isExamMode = computed(() => {
-        return this._modeService.isExamMode(Tab.DRAW);
-    });
 
     /** Signal for toggle switch state */
     protected toggleState = signal(true);

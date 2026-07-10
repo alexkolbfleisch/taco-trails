@@ -52,7 +52,7 @@ export class ModeService {
         return this.getMode(tab) === AppMode.EXAM;
     }
 
-    toggleMode(tab: Tab): void {
+    toggleMode(tab: Tab, onDiscard?: () => void): void {
         const tabSignals = this._tabModeSignals.get(tab);
         if (!tabSignals) return;
 
@@ -62,6 +62,7 @@ export class ModeService {
                     title: 'CONFIRM_DIALOG.TITLE',
                     tab: tab,
                     message: tab === Tab.DRAW ? 'CONFIRM_DIALOG.MESSAGE_DRAW' : 'CONFIRM_DIALOG.MESSAGE_DEFAULT',
+                    onDiscard,
                 },
             });
         }

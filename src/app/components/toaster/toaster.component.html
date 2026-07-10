@@ -11,6 +11,16 @@
                 }
             </ul>
         }
+        @if (data.actions) {
+            <div class="toast-actions">
+                <button mat-button class="toast-action-btn dismiss-btn" (click)="onDismissAction()">
+                    {{ data.actions.dismiss.label | translate }}
+                </button>
+                <button mat-button class="toast-action-btn accept-btn" (click)="onAcceptAction()">
+                    {{ data.actions.accept.label | translate }}
+                </button>
+            </div>
+        }
     </div>
 
     <button class="close-button" (click)="closeToast()">

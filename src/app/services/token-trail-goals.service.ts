@@ -5,7 +5,6 @@ import { SourcePetriNetService } from './source-petri-net.service';
 import { TokenTrailValidationService } from './token-trail-validation.service';
 import { ToasterNotificationService } from './toaster-notification.service';
 import { ModeService } from './mode.service';
-import { Tab } from '../classes/tabs';
 import { PlayService } from './play.service';
 import { PlayValidationService } from './play-validation.service';
 import { FiringEntry } from '../classes/firing-entry';
@@ -79,54 +78,7 @@ export class TokenTrailGoalsService {
 
         // Evaluate goals in real-time or when explicitly validated
         effect(() => {
-            if (this.stateService.displayMode() === LpnDisplayMode.Puzzle) {
-                this.activeGoals.set([]);
-                return;
-            }
-
-            const isExam = this.modeService.isExamMode(Tab.TOKEN_TRAIL);
-            // Access sourceNet to establish reactive dependency on source net changes
-            this.sourceNet();
-            const triggerKey = this.validationService.validationTriggerKey();
-            const lastTriggerKey = this.validationService.lastExplicitValidationTriggerKey();
-
-            const input = this.validationService.buildValidationInput();
-            if (!input) {
-                this.activeGoals.set([]);
-                return;
-            }
-
-            // In exam mode, only re-evaluate goals if the validation has been explicitly triggered
-            if (isExam && triggerKey !== lastTriggerKey) {
-                return;
-            }
-
-            const evaluated = this.internalGoals.map((g) => ({
-                id: g.id,
-                descriptionKey: g.descriptionKey,
-                descriptionParams: g.descriptionParams,
-                completed: g.check(input.elements, input.connections, input.petri),
-            }));
-
-            this.activeGoals.set(evaluated);
-
-            // Automatic unlocking in Learn Mode
-            if (!isExam && !this.stateService.showingSolution()) {
-                const validation = this.validationService.liveValidation();
-                if (validation && validation.valid) {
-                    const displayMode = this.stateService.displayMode();
-                    if (displayMode === LpnDisplayMode.Puzzle) {
-                        const currentDiff = this.stateService.lpnGenerationDifficulty();
-                        this.unlockNextDifficulty(LpnDisplayMode.Puzzle, currentDiff);
-                    } else {
-                        const allGoalsMet = evaluated.every((g) => g.completed);
-                        if (allGoalsMet && evaluated.length > 0) {
-                            const currentDiff = this.currentDifficulty();
-                            this.unlockNextDifficulty(LpnDisplayMode.Construction, currentDiff);
-                        }
-                    }
-                }
-            }
+            this.activeGoals.set([]);
         });
 
         // Handle validation results and show appropriate toaster notifications

@@ -41,8 +41,8 @@
             <button
                 (click)="onTupleButtonClick()"
                 [disabled]="!tupleString.trim().length"
-                [title]="(isExamMode() ? 'TUPLE_INPUT.VALIDATE' : 'TUPLE_INPUT.GENERATE') | translate">
-                {{ (isExamMode() ? 'TUPLE_INPUT.VALIDATE' : 'TUPLE_INPUT.GENERATE') | translate }}
+                [title]="'TUPLE_INPUT.GENERATE' | translate">
+                {{ 'TUPLE_INPUT.GENERATE' | translate }}
             </button>
         </div>
 

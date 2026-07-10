@@ -1,51 +1,4 @@
 <div class="drawing-area-container">
-    @if (stateService.displayMode() === 'construction' && !stateService.showingSolution() &&
-    goalsService.activeGoals().length > 0) {
-    <mat-card class="goals-panel" [class.minimized]="isGoalsMinimized()">
-        <button
-            class="goals-header"
-            type="button"
-            (click)="isGoalsMinimized.set(!isGoalsMinimized())"
-            aria-label="Toggle goals list">
-            <span class="goals-title">
-                <mat-icon>emoji_events</mat-icon>
-                <span>{{ 'TOKEN_TRAIL.GOALS.PANEL_TITLE' | translate }}</span>
-            </span>
-            <div class="goals-header-actions">
-                <span class="difficulty-badge" [class]="goalsService.currentDifficulty()">
-                    {{ ('TOKEN_TRAIL.LPN_DIFFICULTY_' + goalsService.currentDifficulty().toUpperCase()) | translate }}
-                </span>
-                <mat-icon class="minimize-icon">{{ isGoalsMinimized() ? 'expand_more' : 'expand_less' }}</mat-icon>
-            </div>
-        </button>
-        @if (!isGoalsMinimized()) {
-        <mat-card-content class="goals-content">
-            <div class="goals-list">
-                @for (goal of goalsService.activeGoals(); track goal.id) {
-                <div class="goal-item" [class.completed]="goal.completed">
-                    <mat-icon class="status-icon">
-                        {{ goal.completed ? 'check_circle' : 'radio_button_unchecked' }}
-                    </mat-icon>
-                    <span class="goal-description">{{ goal.descriptionKey | translate: goal.descriptionParams }}</span>
-                    @if (goal.id === 'sequence-net-topology' || goal.id === 'partial-order-net-topology' || goal.id ===
-                    'state-graph-net-topology') {
-                    <button
-                        mat-icon-button
-                        class="goal-help-btn"
-                        (click)="showGoalHelp(goal.id)"
-                        type="button"
-                        [matTooltip]="'TOKEN_TRAIL.HELP_TOOLTIP' | translate">
-                        <mat-icon>help_outline</mat-icon>
-                    </button>
-                    }
-                </div>
-                }
-            </div>
-        </mat-card-content>
-        }
-    </mat-card>
-    }
-
     <svg
         #drawingArea
         class="drawing-canvas"
@@ -119,7 +72,6 @@
                     class="node-info-button"
                     [class.active]="isConnectionBubbleOpen(line.id)"
                     (click)="toggleConnectionBubble(line.id); $event.stopPropagation()"
-                    [matTooltip]="'TOKEN_TRAIL.SHOW_HINT' | translate"
                     type="button"
                     aria-label="Show validation info">
                     <mat-icon>{{ isConnectionBubbleOpen(line.id) ? 'cancel' : 'info' }}</mat-icon>
@@ -217,7 +169,6 @@
                     class="node-info-button"
                     [class.active]="isElementBubbleOpen(element.id)"
                     (click)="toggleElementBubble(element.id); $event.stopPropagation()"
-                    [matTooltip]="'TOKEN_TRAIL.SHOW_HINT' | translate"
                     type="button"
                     aria-label="Show validation info">
                     <mat-icon>{{ isElementBubbleOpen(element.id) ? 'cancel' : 'info' }}</mat-icon>
@@ -258,7 +209,8 @@
             [headerTitle]="'TOKEN_TRAIL.DRAWING_AREA_HEADER'"
             [helpTooltip]="'TOKEN_TRAIL.HELP_TOOLTIP'"
             [actions]="toolbarActions()"
-            [instructions]="toolbarInstructions()" />
+            [instructions]="toolbarInstructions()"
+            [toggle]="toolbarToggle()" />
     </div>
 
     @if (loadingService.isLoading()) {

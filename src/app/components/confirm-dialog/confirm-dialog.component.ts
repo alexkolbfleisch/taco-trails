@@ -14,6 +14,7 @@ export interface ConfirmDialogData {
     title: string;
     tab: Tab;
     message: string;
+    onDiscard?: () => void;
 }
 
 @Component({
@@ -38,22 +39,26 @@ export class ConfirmDialogComponent {
     }
 
     discard() {
-        switch (this.data.tab) {
-            case Tab.DRAW:
-                this.drawService.clearCanvas();
-                break;
-            case Tab.PROCESS_NET:
-                this.processNetFiringService.clear(this.modeService.getMode(this.data.tab));
-                break;
-            case Tab.REACHABILITY_GRAPH:
-                this.reachabilityGraphService.clear();
-                break;
-            case Tab.TOKEN_TRAIL:
-            case Tab.PRACTICE:
-                this.tokenTrailStateService.clear();
-                break;
-            default:
-                break;
+        if (this.data.onDiscard) {
+            this.data.onDiscard();
+        } else {
+            switch (this.data.tab) {
+                case Tab.DRAW:
+                    this.drawService.clearCanvas();
+                    break;
+                case Tab.PROCESS_NET:
+                    this.processNetFiringService.clear(this.modeService.getMode(this.data.tab));
+                    break;
+                case Tab.REACHABILITY_GRAPH:
+                    this.reachabilityGraphService.clear();
+                    break;
+                case Tab.TOKEN_TRAIL:
+                case Tab.PRACTICE:
+                    this.tokenTrailStateService.clear();
+                    break;
+                default:
+                    break;
+            }
         }
         this._dialogRef.close('discard');
     }

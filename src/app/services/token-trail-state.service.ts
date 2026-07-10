@@ -131,6 +131,55 @@ export class TokenTrailStateService {
         return `${prefix}-${++this.connectionIdCounter}`;
     }
 
+    synchronizeCounters(): void {
+        let maxConditionNum = 0;
+        let maxElementNum = 0;
+        let maxConnectionNum = 0;
+
+        this.drawnElements().forEach((node) => {
+            if (node instanceof Condition) {
+                if (node.baseName) {
+                    const matchBase = /^c(\d+)$/.exec(node.baseName.trim());
+                    if (matchBase) {
+                        const num = parseInt(matchBase[1], 10);
+                        if (!isNaN(num)) {
+                            maxConditionNum = Math.max(maxConditionNum, num);
+                        }
+                    }
+                }
+                const matchId = /^c(\d+)$/.exec(node.id.trim());
+                if (matchId) {
+                    const num = parseInt(matchId[1], 10);
+                    if (!isNaN(num)) {
+                        maxConditionNum = Math.max(maxConditionNum, num);
+                    }
+                }
+            }
+
+            const matchIdSuffix = /-(\d+)$/.exec(node.id.trim());
+            if (matchIdSuffix) {
+                const num = parseInt(matchIdSuffix[1], 10);
+                if (!isNaN(num)) {
+                    maxElementNum = Math.max(maxElementNum, num);
+                }
+            }
+        });
+
+        this.connections().forEach((conn) => {
+            const matchIdSuffix = /-(\d+)$/.exec(conn.id.trim());
+            if (matchIdSuffix) {
+                const num = parseInt(matchIdSuffix[1], 10);
+                if (!isNaN(num)) {
+                    maxConnectionNum = Math.max(maxConnectionNum, num);
+                }
+            }
+        });
+
+        this.conditionCounter = Math.max(this.conditionCounter, maxConditionNum);
+        this.elementIdCounter = Math.max(this.elementIdCounter, maxElementNum);
+        this.connectionIdCounter = Math.max(this.connectionIdCounter, maxConnectionNum);
+    }
+
     setDisplayMode(mode: LpnDisplayMode) {
         this.displayMode.set(mode);
     }
@@ -201,10 +250,11 @@ export class TokenTrailStateService {
                 this.releasedConditionNumbers.delete(num);
             }
         }
-        const condition = new Condition(id, initialTokens, label || generatedBaseName, {
-            hideTokens: options?.hideTokens ?? true,
+        const isStart = options?.isStartPlace ?? false;
+        const condition = new Condition(id, isStart ? 1 : initialTokens, label || generatedBaseName, {
+            hideTokens: options?.hideTokens ?? !isStart,
             labelPlacement: options?.labelPlacement ?? 'below',
-            isStartPlace: options?.isStartPlace ?? false,
+            isStartPlace: isStart,
             innerLabel: options?.innerLabel,
         });
         condition.baseName = generatedBaseName;
