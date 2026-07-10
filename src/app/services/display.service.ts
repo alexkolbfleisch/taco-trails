@@ -1,5 +1,5 @@
 import { Injectable, OnDestroy } from '@angular/core';
-import { BehaviorSubject, Observable, Subject } from 'rxjs';
+import { BehaviorSubject, Observable } from 'rxjs';
 import { DisplayableGraph } from '../classes/displayable-graph.interface';
 
 @Injectable({
@@ -7,7 +7,6 @@ import { DisplayableGraph } from '../classes/displayable-graph.interface';
 })
 export class DisplayService implements OnDestroy {
     private _diagram$: BehaviorSubject<DisplayableGraph | undefined>;
-    private _downloadRequest$ = new Subject<{ format: 'png' | 'jpeg'; target?: string }>();
     private _triggeredByFiring = false;
 
     constructor() {
@@ -16,11 +15,6 @@ export class DisplayService implements OnDestroy {
 
     ngOnDestroy(): void {
         this._diagram$.complete();
-        this._downloadRequest$.complete();
-    }
-
-    public get downloadRequest$(): Observable<{ format: 'png' | 'jpeg'; target?: string }> {
-        return this._downloadRequest$.asObservable();
     }
 
     public get diagram$(): Observable<DisplayableGraph | undefined> {
@@ -48,19 +42,5 @@ export class DisplayService implements OnDestroy {
     public clear() {
         this._triggeredByFiring = false;
         this._diagram$.next(undefined);
-    }
-
-    /**
-     * Triggers a download request for the currently displayed diagram.
-     *
-     * @param format
-     *          the image format in which the diagram should be exported.
-     *
-     * Supported formats are `'png'` and `'jpeg'`.
-     * @param target
-     *         optional target identifier to specify which diagram to export
-     */
-    public triggerDownload(format: 'png' | 'jpeg', target?: string) {
-        this._downloadRequest$.next({ format, target });
     }
 }

@@ -566,6 +566,10 @@ export class TokenTrailValidationService {
         solver$: Observable<GLPK>,
         drawnElements: LabeledNetNode[],
     ): void {
+        const valData = this.buildValidationInput();
+        const wasAlreadyValid =
+            !!valData && this.validateTokenTrail(valData.petri, valData.elements, valData.connections).valid;
+
         const secondValidator = new CustomTokenTrailValidator(ilpnSource, ilpnSpec, solver$, {});
         this.loadingService.show();
         secondValidator.validate().subscribe({
@@ -591,7 +595,7 @@ export class TokenTrailValidationService {
                     }
                 }
 
-                this.applyRearrangedSolution(solvedTrailsMap, originalMarkings);
+                this.applyRearrangedSolution(solvedTrailsMap, originalMarkings, wasAlreadyValid);
             },
             error: (err) => {
                 this.loadingService.hide();
@@ -604,6 +608,7 @@ export class TokenTrailValidationService {
     private applyRearrangedSolution(
         solvedTrailsMap: Map<string, Record<string, number>>,
         originalMarkings: Record<string, Record<string, number>>,
+        wasAlreadyValid: boolean,
     ): void {
         // Apply markings to ALL conditions and set highlight color if changed
         this.stateService.updateDrawnElements((elements) => {
@@ -622,18 +627,36 @@ export class TokenTrailValidationService {
                     node.trailMarkings = newMarkings;
                     node.updateDynamicLabel();
 
-                    if (isDiff) {
-                        node.highlightColor.set('#ffe0b2'); // clear coloring indication (soft orange)
+                    const wasEmpty = Object.keys(oldMarkings).length === 0;
+                    const isFilled = Object.keys(newMarkings).length > 0;
+
+                    if (wasEmpty) {
+                        if (isFilled) {
+                            node.highlightColor.set('#c8e6c9'); // Soft green highlight
+                        } else {
+                            node.highlightColor.set(null);
+                        }
                     } else {
-                        node.highlightColor.set(null);
+                        if (isDiff) {
+                            node.highlightColor.set('#ffe0b2'); // Soft yellow highlight
+                        } else {
+                            node.highlightColor.set(null);
+                        }
                     }
                 }
                 return node;
             });
         });
 
+        const titleKey = wasAlreadyValid
+            ? 'TOKEN_TRAIL.SOLVER.MINIMAL_SOLUTION_TITLE'
+            : 'TOKEN_TRAIL.SOLVER.REARRANGED_TITLE';
+        const bodyKey = wasAlreadyValid
+            ? 'TOKEN_TRAIL.SOLVER.MINIMAL_SOLUTION_BODY'
+            : 'TOKEN_TRAIL.SOLVER.REARRANGED_BODY';
+
         // Show toast with Accept and Dismiss buttons
-        this.toaster.showInfo('TOKEN_TRAIL.SOLVER.REARRANGED_TITLE', 'TOKEN_TRAIL.SOLVER.REARRANGED_BODY', {
+        this.toaster.showInfo(titleKey, bodyKey, {
             duration: undefined,
             actions: {
                 accept: {

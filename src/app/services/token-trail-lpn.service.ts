@@ -1096,6 +1096,10 @@ export class TokenTrailLpnService {
      * Restores LPN Condition trail markings, baseNames, event coordinates, and edge bendPoints.
      */
     public loadLpnFromDiagram(diagram: Diagram) {
+        // Force construction mode: this method targets the construction canvas.
+        // If the practice tab was visited last, displayMode may still be 'puzzle',
+        // which would prevent correct rendering and fitView.
+        this.stateService.setDisplayMode(LpnDisplayMode.Construction);
         this.stateService.clear();
         const hasStartPlaces = diagram.places.some((place) => place.isStartPlace);
 

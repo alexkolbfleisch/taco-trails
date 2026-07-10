@@ -3,7 +3,6 @@ import { Coords } from '../../../classes/json-petri-net';
 import { SHAPE } from '../../../classes/diagram/diagram-node';
 import { DisplayableNode } from '../../../classes/displayable-graph.interface';
 import { Condition } from '../../../classes/labeled-net.model';
-import { StateNode } from '../../../classes/reachability-graph.model';
 import { PLACE_RADIUS, TRANSITION_SIZE } from '../display.constants';
 import { ModeService } from '../../../services/mode.service';
 import { LpnDisplayMode } from '../../../services/token-trail-state.service';
@@ -33,8 +32,6 @@ export class SvgEventNodeComponent {
     readonly selected = input<boolean>(false);
 
     clickNode = output<DisplayableNode>();
-
-    stateNodeClick = output<StateNode>();
 
     readonly fillColor = signal('white');
 
@@ -81,7 +78,7 @@ export class SvgEventNodeComponent {
             label = n.baseName || n.displayLabel || '';
         }
 
-        if (label.length > this.MAX_CHARS && !(n instanceof StateNode)) {
+        if (label.length > this.MAX_CHARS) {
             return label.substring(0, this.MAX_CHARS) + '...';
         }
         return label;
