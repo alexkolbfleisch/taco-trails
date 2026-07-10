@@ -1,4 +1,4 @@
-import { Component, ElementRef, ViewChild, effect, inject, signal } from '@angular/core';
+import { Component, ElementRef, ViewChild, inject, computed, signal } from '@angular/core';
 import { DisplayComponent } from '../../../display/display.component';
 import { SvgNodeComponent } from '../../../display/svg-node/svg-node.component';
 import { SvgArcComponent } from '../../../display/svg-arc/svg-arc.component';
@@ -7,9 +7,8 @@ import { DisplayableNode } from '../../../../classes/displayable-graph.interface
 import { TokenTrailStateService, LpnDisplayMode } from '../../../../services/token-trail-state.service';
 import { DragDropUtil } from '../../../../utils/drag-drop.util';
 import { ToasterNotificationService } from '../../../../services/toaster-notification.service';
-import { TokenTrailValidationService, ValidationIssue } from '../../../../services/token-trail-validation.service';
+import { TokenTrailValidationService } from '../../../../services/token-trail-validation.service';
 import { ModeService } from '../../../../services/mode.service';
-import { ValidationBubbleComponent } from '../token-trail-draw-display/validation-bubble/validation-bubble.component';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatTooltipModule } from '@angular/material/tooltip';
@@ -18,15 +17,7 @@ import { TranslateModule } from '@ngx-translate/core';
 @Component({
     selector: 'app-token-trail-display',
     standalone: true,
-    imports: [
-        SvgNodeComponent,
-        SvgArcComponent,
-        ValidationBubbleComponent,
-        MatIconModule,
-        MatButtonModule,
-        MatTooltipModule,
-        TranslateModule,
-    ],
+    imports: [SvgNodeComponent, SvgArcComponent, MatIconModule, MatButtonModule, MatTooltipModule, TranslateModule],
     templateUrl: './token-trail-display.component.html',
     styleUrls: ['./token-trail-display.component.css'],
 })
@@ -41,20 +32,24 @@ export class TokenTrailDisplayComponent extends DisplayComponent {
     readonly validPetriPlaceIds = this._validationService.validPetriPlaceIds;
     readonly invalidPetriPlaceIds = this._validationService.invalidPetriPlaceIds;
 
-    readonly openBubblePlaceId = signal<string | null>(null);
+    readonly showEmptyPlace = computed(() => {
+        return this._tokenTrailStateService.displayMode() === LpnDisplayMode.Construction;
+    });
+
+    onEmptyPlaceMouseDown(event: MouseEvent) {
+        const simulatedNode: DisplayableNode = {
+            id: '__empty__',
+            shape: SHAPE.CIRCLE,
+            displayLabel: '',
+            tokenCount: signal(0),
+            x: 0,
+            y: 0,
+        };
+        DragDropUtil.handleNodeMouseDown(event, simulatedNode);
+    }
 
     constructor() {
         super();
-        effect(() => {
-            // Close the bubble if the LPN drawing/connections change or validation is re-run
-            this._validationService.validationTriggerKey();
-            this.openBubblePlaceId.set(null);
-        });
-        effect(() => {
-            // Close the bubble if the display mode changes
-            this._tokenTrailStateService.displayMode();
-            this.openBubblePlaceId.set(null);
-        });
     }
 
     override processDropEvent(e: DragEvent) {
@@ -63,48 +58,6 @@ export class TokenTrailDisplayComponent extends DisplayComponent {
 
     override processNodeClick(node: DisplayableNode) {
         super.processNodeClick(node);
-
-        if (this.canShowValidationInfo(node)) {
-            this.togglePlaceBubble(node.id);
-        } else {
-            this.openBubblePlaceId.set(null);
-        }
-    }
-
-    togglePlaceBubble(placeId: string) {
-        if (this.openBubblePlaceId() === placeId) {
-            this.openBubblePlaceId.set(null);
-        } else {
-            this.openBubblePlaceId.set(placeId);
-        }
-    }
-
-    canShowValidationInfo(node: DisplayableNode): boolean {
-        const isExam = this._modeService.isExamMode(this._tabStateService.currentTab());
-        const isConstruction = this._tokenTrailStateService.displayMode() === LpnDisplayMode.Construction;
-        const isPuzzle = this._tokenTrailStateService.displayMode() === LpnDisplayMode.Puzzle;
-        const hasValidated =
-            this._validationService.validationTriggerKey() ===
-            this._validationService.lastExplicitValidationTriggerKey();
-
-        return (
-            isExam &&
-            (isConstruction || isPuzzle) &&
-            hasValidated &&
-            node.shape === SHAPE.CIRCLE &&
-            this.invalidPetriPlaceIds().has(node.id)
-        );
-    }
-
-    override startPan(e: MouseEvent) {
-        super.startPan(e);
-        this.openBubblePlaceId.set(null);
-    }
-
-    getPlaceIssues(nodeId: string): ValidationIssue[] {
-        const result = this._validationService.liveValidation();
-        if (!result) return [];
-        return result.issues.filter((issue) => issue.placeId === nodeId);
     }
 
     getNodeFillColor(node: DisplayableNode): string | null {
@@ -132,10 +85,12 @@ export class TokenTrailDisplayComponent extends DisplayComponent {
 
         // Keep place selection responsive even when no drag is started.
         if (node.shape === SHAPE.CIRCLE) {
-            if (this._tokenTrailStateService.selectedPetriPlaceId() === node.id) {
-                this._tokenTrailStateService.setSelectedPetriPlaceId(null);
-            } else {
-                this._tokenTrailStateService.setSelectedPetriPlaceId(node.id);
+            if (this._tokenTrailStateService.displayMode() === LpnDisplayMode.Puzzle) {
+                if (this._tokenTrailStateService.selectedPetriPlaceId() === node.id) {
+                    this._tokenTrailStateService.setSelectedPetriPlaceId(null);
+                } else {
+                    this._tokenTrailStateService.setSelectedPetriPlaceId(node.id);
+                }
             }
         }
 

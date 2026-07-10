@@ -238,3 +238,91 @@ body {
 .shepherd-element.shepherd-theme-custom .shepherd-cancel-icon:hover {
     color: #1976d2 !important;
 }
+
+/* Toast Action Buttons */
+.toast-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 10px;
+}
+
+.toast-action-btn {
+    font-size: 0.85em !important;
+    font-weight: 500 !important;
+    padding: 6px 14px !important;
+    border-radius: 4px !important;
+    border: none !important;
+    cursor: pointer !important;
+    transition:
+        background-color 0.2s,
+        opacity 0.2s !important;
+    font-family: inherit !important;
+}
+
+/* Success Toast Buttons */
+.success-toast .dismiss-btn {
+    color: #388e3c !important;
+    background-color: transparent !important;
+    border: 1px solid rgba(56, 142, 60, 0.4) !important;
+}
+.success-toast .dismiss-btn:hover {
+    background-color: rgba(56, 142, 60, 0.1) !important;
+}
+.success-toast .accept-btn {
+    color: white !important;
+    background-color: #388e3c !important;
+}
+.success-toast .accept-btn:hover {
+    background-color: #2e7d32 !important;
+}
+
+/* Info Toast Buttons */
+.info-toast .dismiss-btn {
+    color: #1976d2 !important;
+    background-color: transparent !important;
+    border: 1px solid rgba(25, 118, 210, 0.4) !important;
+}
+.info-toast .dismiss-btn:hover {
+    background-color: rgba(25, 118, 210, 0.1) !important;
+}
+.info-toast .accept-btn {
+    color: white !important;
+    background-color: #1976d2 !important;
+}
+.info-toast .accept-btn:hover {
+    background-color: #1565c0 !important;
+}
+
+/* Warning Toast Buttons */
+.warning-toast .dismiss-btn {
+    color: #f57c00 !important;
+    background-color: transparent !important;
+    border: 1px solid rgba(245, 124, 0, 0.4) !important;
+}
+.warning-toast .dismiss-btn:hover {
+    background-color: rgba(245, 124, 0, 0.1) !important;
+}
+.warning-toast .accept-btn {
+    color: white !important;
+    background-color: #f57c00 !important;
+}
+.warning-toast .accept-btn:hover {
+    background-color: #e65100 !important;
+}
+
+/* Error Toast Buttons */
+.error-toast .dismiss-btn {
+    color: #d32f2f !important;
+    background-color: transparent !important;
+    border: 1px solid rgba(211, 47, 47, 0.4) !important;
+}
+.error-toast .dismiss-btn:hover {
+    background-color: rgba(211, 47, 47, 0.1) !important;
+}
+.error-toast .accept-btn {
+    color: white !important;
+    background-color: #d32f2f !important;
+}
+.error-toast .accept-btn:hover {
+    background-color: #c62828 !important;
+}

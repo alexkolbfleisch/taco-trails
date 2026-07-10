@@ -11,7 +11,6 @@ import { SourcePetriNetService } from './source-petri-net.service';
 import { SpringEmbedderService } from './spring-embedder.service';
 import { DisplayService } from './display.service';
 import { ToasterNotificationService } from './toaster-notification.service';
-import { Tab } from '../classes/tabs';
 import { Diagram } from '../classes/diagram/diagram';
 import { firstValueFrom, Subscription } from 'rxjs';
 import { SerializationService } from './serialization.service';
@@ -258,13 +257,7 @@ export class DrawService implements OnDestroy {
     /** Service for loading Petri nets from files */
     private _petriNetLoaderService = inject(PetriNetLoaderService);
 
-    /**
-     * Checks if the draw tab is in exam mode.
-     * @returns {boolean} True if exam mode is active for the draw tab
-     */
-    get isExamMode(): boolean {
-        return this._modeService.isExamMode(Tab.DRAW);
-    }
+    readonly isExamMode = false;
 
     /**
      * Gets the current viewBox as a string for the SVG element.

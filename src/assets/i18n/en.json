@@ -49,9 +49,9 @@
     },
     "SWITCH_TO_LEARNING_MODE": "Switch to Learning Mode",
     "SWITCH_TO_EXAM_MODE": "Switch to Exam Mode",
-    "EXAM_MODE": "Exam Mode",
+    "EXAM_MODE": "Hide Tips",
     "LEARNING_MODE": "Learning Mode",
-    "MODE_INFO_TOOLTIP": "Use the slider to switch between two modes: The Learning Mode helps you better understand the various areas. The Exam Mode is for your exam preparation with less support from the application and fewer hints.",
+    "MODE_INFO_TOOLTIP": "Hides feedback coloring, warnings and hint details.",
     "RENAME": "Rename",
     "START": "Start",
     "CANCEL": "Cancel",
@@ -146,7 +146,7 @@
             "SAVE_IMPOSSIBLE": "Save impossible",
             "TRANSITION_NOT_PRESENT": "Transition not present",
             "TRANSITION_NOT_ACTIVATED": "Transition not activated",
-            "MODE_SWITCHED": "Mode switched",
+            "MODE_SWITCHED": "Tips toggled",
             "READ_ERROR": "Read error",
             "DOWNLOAD_FAILED": "Download failed",
             "EMPTY_RESPONSE": "Empty response",
@@ -172,8 +172,8 @@
             "NO_NET_TO_SAVE": "There is no Petri net to save.",
             "TRANSITION_NOT_PRESENT": "The transition {{label}} is not present in the petri net.",
             "TRANSITION_NOT_ACTIVATED": "The transition {{label}} is not activated and cannot be fired.",
-            "MODE_SWITCHED_EXAM": "You are now in exam mode.",
-            "MODE_SWITCHED_LEARN": "You are now in learning mode.",
+            "MODE_SWITCHED_EXAM": "Hints and feedback markings have been hidden.",
+            "MODE_SWITCHED_LEARN": "Hints and feedback markings are visible again.",
             "FILE_EMPTY_OR_UNREADABLE": "The selected file is empty or could not be read.",
             "DOWNLOAD_FAILED": "File at {{url}} could not be loaded.{{details}}",
             "EMPTY_RESPONSE": "No content was returned from the server at {{url}}.",
@@ -249,6 +249,7 @@
         "INSTRUCTION_AUTO_FIRING_TEXT": "In learn mode, clicking activated transitions in the Petri net automatically builds the process net."
     },
     "TOKEN_TRAIL": {
+        "EMPTY_PLACE_TOOLTIP": "Drag this empty place to the LPN canvas to add a condition without any trail markings",
         "TOUR": {
             "START_BUTTON": "Start Tour",
             "RESTART_BUTTON": "Restart Tour",
@@ -305,6 +306,27 @@
         "BUTTON_SHOW_SOLUTION": "Show Solution",
         "BUTTON_HIDE_SOLUTION": "Hide Solution",
         "BUTTON_EXPORT_LPN": "Export LPN",
+        "BUTTON_FILL_EMPTY_CONDITIONS": "Solve/Fill Free Conditions",
+        "SOLVER": {
+            "NO_START_PLACE_TITLE": "No Start Condition Defined",
+            "NO_START_PLACE_BODY": "Please define at least one start condition (by adding a token with the mouse wheel) before solving/filling free conditions.",
+            "NO_SOLUTION_TITLE": "No Solution Possible",
+            "NO_SOLUTION_BODY": "No valid token trail exists for the current LPN structure.",
+            "SUCCESS_TITLE": "Conditions Filled",
+            "SUCCESS_BODY": "Free conditions were successfully filled with the correct multisets.",
+            "MINIMAL_TRAIL_TITLE": "Minimal Trail Determined",
+            "MINIMAL_TRAIL_BODY": "A minimal token trail was determined. Redundant conditions remain empty.",
+            "NO_EMPTY_TITLE": "No Free Conditions",
+            "NO_EMPTY_BODY": "There are no empty conditions on the canvas to fill.",
+            "REARRANGED_TITLE": "Alternative Solution Found",
+            "REARRANGED_BODY": "No solution was possible keeping your current token markings. However, we found a valid solution by rearranging existing tokens. Would you like to apply this rearranged solution?",
+            "ACCEPT": "Accept",
+            "DISMISS": "Dismiss",
+            "REARRANGED_ACCEPTED_TITLE": "Rearrangement Accepted",
+            "REARRANGED_ACCEPTED_BODY": "The rearranged marking has been applied successfully.",
+            "REARRANGED_DISMISSED_TITLE": "Rearrangement Dismissed",
+            "REARRANGED_DISMISSED_BODY": "The rearranged marking was discarded, reverting to your previous input."
+        },
         "EXPORT_JSON": "Export as JSON",
         "EXPORT_PNML": "Export as PNML",
         "SOLUTION_FOUND_TITLE": "Solution Found",
@@ -427,5 +449,6 @@
         "WS24": "WS24",
         "TASK1": "Task 1",
         "TASK2": "Task 2"
-    }
+    },
+    "LPS_MASCOT_TOOLTIP": "Mascot of the Lehrgebiet Programmiersysteme (LPS) 🐆"
 }

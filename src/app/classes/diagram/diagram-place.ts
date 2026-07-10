@@ -16,7 +16,7 @@ export class DiagramPlace extends DiagramNode {
     private _labelPlacement: DiagramPlaceLabelPlacement = 'below';
     private _hideTokens = signal<boolean>(false);
     private _innerLabel?: string;
-    private _isStartPlace = false;
+    private _isStartPlace = signal<boolean>(false);
 
     constructor(id: string, initialTokens = 0, label?: string, options?: DiagramPlaceOptions) {
         super(id);
@@ -25,7 +25,7 @@ export class DiagramPlace extends DiagramNode {
         this._labelPlacement = options?.labelPlacement ?? 'below';
         this._hideTokens.set(options?.hideTokens ?? false);
         this._innerLabel = options?.innerLabel;
-        this._isStartPlace = options?.isStartPlace ?? false;
+        this._isStartPlace.set(options?.isStartPlace ?? false);
     }
 
     override get tokenCount(): Signal<number> {
@@ -66,7 +66,11 @@ export class DiagramPlace extends DiagramNode {
     }
 
     get isStartPlace(): boolean {
-        return this._isStartPlace;
+        return this._isStartPlace();
+    }
+
+    set isStartPlace(value: boolean) {
+        this._isStartPlace.set(value);
     }
 
     override get displayLabel(): string {

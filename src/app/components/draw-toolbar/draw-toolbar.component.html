@@ -2,7 +2,11 @@
     <mat-expansion-panel class="pn-help-panel">
         <mat-expansion-panel-header class="pn-help-header">
             <div class="pn-help-header-title">
-                <mat-icon [matTooltip]="helpTooltip() | translate" color="primary">help_outline</mat-icon>
+                <span
+                    [matTooltip]="helpTooltip() | translate"
+                    style="font-size: 20px; cursor: pointer; user-select: none"
+                    >🐆</span
+                >
                 <mat-panel-title>{{ headerTitle() | translate }}</mat-panel-title>
             </div>
             @if (toggle(); as toggleConfig) {

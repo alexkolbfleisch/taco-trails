@@ -42,6 +42,7 @@ import {
     DrawToolbarAction,
     DrawToolbarComponent,
     DrawToolbarInstruction,
+    DrawToolbarToggle,
 } from '../../../draw-toolbar/draw-toolbar.component';
 import { ImageExportService } from '../../../../services/image-export.service';
 import { TokenTrailMergeService } from './token-trail-merge.service';
@@ -54,8 +55,15 @@ import { LoadingService } from '../../../../services/loading.service';
 import { ModeService } from '../../../../services/mode.service';
 import { TabStateService } from '../../../../services/tab-state.service';
 import { TokenTrailValidatorService } from '../../../../../../ilpn-components/src/lib/algorithms/pn/validation/token-trails/token-trail-validator.service';
+import { TokenTrailValidationResult } from '../../../../../../ilpn-components/src/lib/algorithms/pn/validation/classes/validation-result';
 import { DrawingDisplayService } from '../../../../services/drawing-display.service';
 import { ParserService } from '../../../../services/parser.service';
+import { JsonPetriNetParserService } from '../../../../../../ilpn-components/src/lib/models/pn/io/parser/json-petri-net-parser.service';
+import {
+    convertSourceNetToIlpn,
+    convertLpnToIlpn,
+    mapValidatorResultsToSolvedTrails,
+} from '../../../../utils/lpn-convert.util';
 import { ValidationBubbleComponent } from './validation-bubble/validation-bubble.component';
 import { TokenTrailTourService } from '../../../../services/token-trail-tour.service';
 import { TokenTrailGoalsService } from '../../../../services/token-trail-goals.service';
@@ -117,6 +125,7 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
     private drawingDisplayService = inject(DrawingDisplayService);
     private serializationService = inject(SerializationService);
     private parserService = inject(ParserService);
+    private jsonParser = inject(JsonPetriNetParserService);
     protected tourService = inject(TokenTrailTourService);
     protected tabStateService = inject(TabStateService);
 
@@ -300,23 +309,16 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
 
         const actions: DrawToolbarAction[] = [];
 
-        // 1. Validate Action (Both modes)
-        actions.push({
-            icon: 'checklist',
-            tooltip: 'TOKEN_TRAIL.BUTTON_VALIDATE_NET',
-            color: 'primary',
-            isActive: !disabled && !showingSolution,
-            action: () => this.validationService.onValidate(),
-        });
-
-        // 2. Solution Action (Both modes)
-        actions.push({
-            icon: showingSolution ? 'lightbulb' : 'lightbulb_outline',
-            tooltip: showingSolution ? 'TOKEN_TRAIL.BUTTON_HIDE_SOLUTION' : 'TOKEN_TRAIL.BUTTON_SHOW_SOLUTION',
-            color: 'primary',
-            isActive: showingSolution || mode === LpnDisplayMode.Construction || !disabled,
-            action: () => this.toggleSolution(),
-        });
+        // 2. Solution Action (Puzzle mode only)
+        if (mode === LpnDisplayMode.Puzzle) {
+            actions.push({
+                icon: showingSolution ? 'lightbulb' : 'lightbulb_outline',
+                tooltip: showingSolution ? 'TOKEN_TRAIL.BUTTON_HIDE_SOLUTION' : 'TOKEN_TRAIL.BUTTON_SHOW_SOLUTION',
+                color: 'primary',
+                isActive: showingSolution || !disabled,
+                action: () => this.toggleSolution(),
+            });
+        }
 
         const sourceNet = this.goalsService.sourceNet();
         const hasConcurrency = sourceNet ? this.goalsService.hasConcurrencyInNet(sourceNet) : false;
@@ -328,11 +330,40 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
         const isPuzzleHardUnlocked = this.goalsService.unlockedPuzzle().has(LpnGenerationDifficulty.Hard);
         const isPuzzleExpertUnlocked = this.goalsService.unlockedPuzzle().has(LpnGenerationDifficulty.Expert);
 
-        const isConstMediumUnlocked = this.goalsService.unlockedConstruction().has(LpnGenerationDifficulty.Medium);
-        const isConstHardUnlocked = this.goalsService.unlockedConstruction().has(LpnGenerationDifficulty.Hard);
-        const isConstExpertUnlocked = this.goalsService.unlockedConstruction().has(LpnGenerationDifficulty.Expert);
+        if (mode === LpnDisplayMode.Construction) {
+            actions.push({
+                icon: 'auto_fix_high',
+                tooltip: 'TOKEN_TRAIL.BUTTON_FILL_EMPTY_CONDITIONS',
+                color: 'accent',
+                isActive: !disabled,
+                action: () => this.validationService.solveEmptyConditions(),
+            });
+        }
 
-        // 4. Synthesize Action (Puzzle mode only) or Goals Difficulty Action (Construction mode only)
+        // 5. Export Action (Both modes)
+        actions.push({
+            icon: 'file_download',
+            tooltip: 'TOKEN_TRAIL.BUTTON_EXPORT_LPN',
+            color: 'primary',
+            isActive: !disabled && !showingSolution,
+            action: () => {
+                /* empty because we trigger the menu */
+            },
+            menu: [
+                {
+                    label: 'TOKEN_TRAIL.EXPORT_JSON',
+                    icon: 'code',
+                    action: () => this.exportLpn('json'),
+                },
+                {
+                    label: 'TOKEN_TRAIL.EXPORT_PNML',
+                    icon: 'article',
+                    action: () => this.exportLpn('pnml'),
+                },
+            ],
+        });
+
+        // 4. Synthesize Action (Puzzle mode only) - Placed last for Practice tab
         if (mode === LpnDisplayMode.Puzzle) {
             actions.push({
                 icon: 'science',
@@ -403,109 +434,7 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
                     },
                 ],
             });
-        } else {
-            actions.push({
-                icon: 'emoji_events',
-                tooltip: 'TOKEN_TRAIL.BUTTON_GOAL_DIFFICULTY',
-                color: 'accent',
-                isActive: !showingSolution,
-                action: () => {
-                    /* empty because we trigger the menu */
-                },
-                menu: [
-                    {
-                        label: 'TOKEN_TRAIL.LPN_DIFFICULTY_EASY',
-                        icon: 'sentiment_satisfied',
-                        action: () => this.goalsService.setDifficulty(LpnGenerationDifficulty.Easy),
-                    },
-                    {
-                        label: 'TOKEN_TRAIL.LPN_DIFFICULTY_MEDIUM',
-                        icon: !isConstMediumUnlocked
-                            ? 'sentiment_neutral'
-                            : !hasConcurrency
-                              ? 'block'
-                              : 'sentiment_neutral',
-                        action: () => {
-                            if (!hasConcurrency) {
-                                this.toaster.showWarning(
-                                    'TOKEN_TRAIL.GOALS.DIFFICULTY_DISABLED_TITLE',
-                                    'TOKEN_TRAIL.GOALS.DIFFICULTY_DISABLED_NO_CONCURRENCY',
-                                );
-                                return;
-                            }
-                            this.goalsService.setDifficulty(LpnGenerationDifficulty.Medium);
-                        },
-                        disabled: !isConstMediumUnlocked,
-                    },
-                    {
-                        label: 'TOKEN_TRAIL.LPN_DIFFICULTY_HARD',
-                        icon: !isConstHardUnlocked
-                            ? 'sentiment_very_dissatisfied'
-                            : !hasConflict
-                              ? 'block'
-                              : 'sentiment_very_dissatisfied',
-                        action: () => {
-                            if (!hasConflict) {
-                                this.toaster.showWarning(
-                                    'TOKEN_TRAIL.GOALS.DIFFICULTY_DISABLED_TITLE',
-                                    'TOKEN_TRAIL.GOALS.DIFFICULTY_DISABLED_NO_CONFLICT',
-                                );
-                                return;
-                            }
-                            this.goalsService.setDifficulty(LpnGenerationDifficulty.Hard);
-                        },
-                        disabled: !isConstHardUnlocked,
-                    },
-                    {
-                        label: 'TOKEN_TRAIL.LPN_DIFFICULTY_EXPERT',
-                        icon: !isConstExpertUnlocked ? 'psychology' : !hasAdvancedFeatures ? 'block' : 'psychology',
-                        action: () => {
-                            if (!hasAdvancedFeatures) {
-                                this.toaster.showWarning(
-                                    'TOKEN_TRAIL.GOALS.DIFFICULTY_DISABLED_TITLE',
-                                    'TOKEN_TRAIL.GOALS.DIFFICULTY_DISABLED_NO_ADVANCED_FEATURES',
-                                );
-                                return;
-                            }
-                            this.goalsService.setDifficulty(LpnGenerationDifficulty.Expert);
-                        },
-                        disabled: !isConstExpertUnlocked,
-                    },
-                ],
-            });
         }
-
-        // 5. Export Action (Both modes)
-        actions.push({
-            icon: 'file_download',
-            tooltip: 'TOKEN_TRAIL.BUTTON_EXPORT_LPN',
-            color: 'primary',
-            isActive: !disabled && !showingSolution,
-            action: () => {
-                /* empty because we trigger the menu */
-            },
-            menu: [
-                {
-                    label: 'TOKEN_TRAIL.EXPORT_JSON',
-                    icon: 'code',
-                    action: () => this.exportLpn('json'),
-                },
-                {
-                    label: 'TOKEN_TRAIL.EXPORT_PNML',
-                    icon: 'article',
-                    action: () => this.exportLpn('pnml'),
-                },
-            ],
-        });
-
-        // 6. Tour Action (Both modes)
-        actions.push({
-            icon: 'explore',
-            tooltip: 'TOKEN_TRAIL.TOUR.RESTART_BUTTON',
-            color: 'primary',
-            isActive: true,
-            action: () => this.tourService.startTour(true),
-        });
 
         // 7. Delete Action (Construction mode only) - Placed last
         if (mode === LpnDisplayMode.Construction) {
@@ -546,6 +475,21 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
             { label: 'TOKEN_TRAIL.INSTRUCTION_SOLUTION', text: 'TOKEN_TRAIL.INSTRUCTION_SOLUTION_CONSTRUCTION_TEXT' },
             { label: 'TOKEN_TRAIL.INSTRUCTION_VALIDATE', text: 'TOKEN_TRAIL.INSTRUCTION_VALIDATE_TOAST' },
         ];
+    });
+
+    protected readonly toolbarToggle = computed<DrawToolbarToggle>(() => {
+        const currentTab = this.tabStateService.currentTab();
+        const isExam = this._modeService.isExamMode(currentTab);
+        return {
+            label: 'EXAM_MODE',
+            tooltip: 'MODE_INFO_TOOLTIP',
+            checked: isExam,
+            onChange: () => {
+                this._modeService.toggleMode(currentTab, () => {
+                    this.stateService.clear();
+                });
+            },
+        };
     });
 
     private draggedElement: Condition | LabeledEvent | null = null;
@@ -713,50 +657,25 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
         const showSolution = this.stateService.showingSolution();
         const solvedTrails = this.stateService.solvedTokenTrails();
 
-        if (displayMode !== LpnDisplayMode.Puzzle && !showSolution) {
-            // In construction mode, tokens are never visible
-            let hasChanges = false;
-            for (const node of this.drawnElements()) {
-                if (!(node instanceof Condition)) {
-                    continue;
-                }
-                if (!node.hideTokens || node.tokenCount() !== 0) {
-                    hasChanges = true;
-                    break;
-                }
-            }
-
-            if (!hasChanges) {
-                return;
-            }
-
-            this.stateService.updateDrawnElements((elements) =>
-                elements.map((node) => {
-                    if (node instanceof Condition) {
-                        node.hideTokens = true;
-                        node.tokens = 0;
-                        node.updateDynamicLabel();
-                    }
-                    return node;
-                }),
-            );
-            return;
-        }
-
         let hasChanges = false;
         for (const node of this.drawnElements()) {
             if (!(node instanceof Condition)) {
                 continue;
             }
             const showStartPlaceTokens = node.isStartPlace && !isExam;
-            const desiredTokens = selectedPlaceId
-                ? showSolution
-                    ? (solvedTrails.get(selectedPlaceId)?.[node.id] ?? 0)
-                    : node.getTrailTokens(selectedPlaceId)
-                : showStartPlaceTokens
-                  ? 1
-                  : 0;
-            const desiredHideTokens = selectedPlaceId ? false : !showStartPlaceTokens;
+            const isConstruction = displayMode === LpnDisplayMode.Construction;
+
+            const desiredTokens =
+                isConstruction || !selectedPlaceId
+                    ? showStartPlaceTokens
+                        ? 1
+                        : 0
+                    : showSolution
+                      ? (solvedTrails.get(selectedPlaceId)?.[node.id] ?? 0)
+                      : node.getTrailTokens(selectedPlaceId);
+
+            const desiredHideTokens = isConstruction || !selectedPlaceId ? !showStartPlaceTokens : false;
+
             if (node.tokenCount() !== desiredTokens || node.hideTokens !== desiredHideTokens) {
                 hasChanges = true;
                 break;
@@ -775,14 +694,19 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
                 }
 
                 const showStartPlaceTokens = node.isStartPlace && !isExam;
-                node.hideTokens = selectedPlaceId ? false : !showStartPlaceTokens;
-                node.tokens = selectedPlaceId
-                    ? showSolution
-                        ? (solvedTrails.get(selectedPlaceId)?.[node.id] ?? 0)
-                        : node.getTrailTokens(selectedPlaceId)
-                    : showStartPlaceTokens
-                      ? 1
-                      : 0;
+                const isConstruction = displayMode === LpnDisplayMode.Construction;
+
+                node.hideTokens = isConstruction || !selectedPlaceId ? !showStartPlaceTokens : false;
+
+                node.tokens =
+                    isConstruction || !selectedPlaceId
+                        ? showStartPlaceTokens
+                            ? 1
+                            : 0
+                        : showSolution
+                          ? (solvedTrails.get(selectedPlaceId)?.[node.id] ?? 0)
+                          : node.getTrailTokens(selectedPlaceId);
+
                 node.updateDynamicLabel(); // Always compute the correct string based on trailMarkings first
 
                 return node;
@@ -796,8 +720,6 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
     ngOnInit() {
         // Set display mode first
         this.stateService.setDisplayMode(this.mode as LpnDisplayMode);
-
-        this.clearDrawingStateOnly();
 
         this.downloadSub = this.displayService.downloadRequest$.subscribe(({ format, target }) => {
             if (target && target !== GRAPH_IDS.PROCESS_NET) {
@@ -823,10 +745,15 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
         this.sourceNetSub = this.sourcePetriNetService.sourceNet$.subscribe((net) => {
             if (net) {
                 const currentSig = Diagram.getSignature(net);
+                if (!this.stateService.lastSynthesizedNetSignature) {
+                    this.stateService.lastSynthesizedNetSignature = currentSig;
+                }
+
                 const isSameSignature = currentSig === this.stateService.lastSynthesizedNetSignature;
 
                 if (!isSameSignature) {
                     this.stateService.clear(true);
+                    this.stateService.lastSynthesizedNetSignature = currentSig;
                 }
 
                 if (this.stateService.displayMode() === LpnDisplayMode.Puzzle) {
@@ -900,13 +827,21 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
 
         if (isSourceCondition) {
             const conditionId = this.stateService.generateConditionName();
-            newNode = this.stateService.buildCondition(conditionId, detail.elementId, elementTokens, {
-                isStartPlace: this.shouldMarkAsStartCondition(detail.elementId),
-                innerLabel: detail.elementId,
-                baseName: conditionId,
-            });
-            // In construction mode, the new Condition directly receives the trail marking of the dragged place:
-            (newNode as Condition).trailMarkings = { [detail.elementId]: 1 };
+            const isEmpty = detail.elementId === '__empty__';
+            newNode = this.stateService.buildCondition(
+                conditionId,
+                isEmpty ? undefined : detail.elementId,
+                elementTokens,
+                {
+                    isStartPlace: isEmpty ? false : this.shouldMarkAsStartCondition(detail.elementId),
+                    innerLabel: isEmpty ? undefined : detail.elementId,
+                    baseName: conditionId,
+                },
+            );
+            if (!isEmpty) {
+                // In construction mode, the new Condition directly receives the trail marking of the dragged place:
+                (newNode as Condition).trailMarkings = { [detail.elementId]: 1 };
+            }
             (newNode as Condition).updateDynamicLabel();
         } else if (isSourceEvent) {
             const uniqueId = this.stateService.generateElementId(`drawn-${detail.elementId}`);
@@ -1017,13 +952,21 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
 
             if (isSourceCondition) {
                 const conditionId = this.stateService.generateConditionName();
-                newNode = this.stateService.buildCondition(conditionId, dragData.elementId, elementTokens, {
-                    isStartPlace: this.shouldMarkAsStartCondition(dragData.elementId),
-                    innerLabel: dragData.elementId,
-                    baseName: conditionId,
-                });
-                // Set initial trail marking for the source place:
-                (newNode as Condition).trailMarkings = { [dragData.elementId]: 1 };
+                const isEmpty = dragData.elementId === '__empty__';
+                newNode = this.stateService.buildCondition(
+                    conditionId,
+                    isEmpty ? undefined : dragData.elementId,
+                    elementTokens,
+                    {
+                        isStartPlace: isEmpty ? false : this.shouldMarkAsStartCondition(dragData.elementId),
+                        innerLabel: isEmpty ? undefined : dragData.elementId,
+                        baseName: conditionId,
+                    },
+                );
+                if (!isEmpty) {
+                    // Set initial trail marking for the source place:
+                    (newNode as Condition).trailMarkings = { [dragData.elementId]: 1 };
+                }
                 (newNode as Condition).updateDynamicLabel();
             } else if (isSourceEvent) {
                 const uniqueId = this.stateService.generateElementId(`drawn-${dragData.elementId || 'element'}`);
@@ -1388,12 +1331,30 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
 
     onElementWheel(event: WheelEvent, element: LabeledNetNode) {
         if (this.stateService.showingSolution()) return;
-        if (this.stateService.displayMode() !== LpnDisplayMode.Puzzle || !(element instanceof Condition)) {
+        if (!(element instanceof Condition)) {
             return;
         }
 
         event.preventDefault();
         event.stopPropagation();
+
+        const displayMode = this.stateService.displayMode();
+        if (displayMode === LpnDisplayMode.Construction) {
+            // Scroll up = start condition (1 token), scroll down = non-start condition (0 tokens)
+            const isStart = event.deltaY < 0;
+            this.stateService.updateDrawnElements((elements) =>
+                elements.map((node) => {
+                    if (node.id === element.id && node instanceof Condition) {
+                        node.isStartPlace = isStart;
+                        node.tokens = isStart ? 1 : 0;
+                        node.hideTokens = !isStart;
+                        node.highlightColor.set(null);
+                    }
+                    return node;
+                }),
+            );
+            return;
+        }
 
         const selectedPlaceId = this.stateService.selectedPetriPlaceId();
         if (!selectedPlaceId) {
@@ -1442,6 +1403,7 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
 
                     // Visually update the UI right away
                     node.tokens = node.getTrailTokens(selectedPlaceId);
+                    node.highlightColor.set(null);
 
                     return node;
                 }
@@ -1457,15 +1419,6 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
         this.drawingDisplayService.resetDiagramMarking();
 
         this.stateService.clear();
-    }
-
-    clearDrawingStateOnly() {
-        this.selectedElementId.set(null);
-        this.mergeService.clearMergeState();
-
-        this.drawingDisplayService.resetDiagramMarking();
-
-        this.stateService.clear(false);
     }
 
     deleteElement(element: LabeledNetNode) {
@@ -1563,13 +1516,9 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
     }
 
     private shouldMarkAsStartCondition(conditionId: string, excludeConditionId?: string): boolean {
-        if (!this.drawingDisplayService.isMarkedId(conditionId)) {
-            return false;
-        }
-        return (
-            this.getCurrentStartConditionCount(conditionId, excludeConditionId) <
-            this.drawingDisplayService.getRequiredStartCount(conditionId)
-        );
+        void conditionId;
+        void excludeConditionId;
+        return false;
     }
 
     private createNewLPNWithDifficulty(difficulty: LpnGenerationDifficulty) {
@@ -1652,19 +1601,24 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
             this.originalDisplayMode = this.stateService.displayMode();
             this.stateService.setDisplayMode(LpnDisplayMode.Puzzle);
 
-            const ilpnSource = this.lpnService.convertSourceNetToIlpn(sourceNet);
-            const ilpnSpec = this.lpnService.convertLpnToIlpn(this.drawnElements(), this.connections());
+            const ilpnSource = convertSourceNetToIlpn(sourceNet, this.serializationService, this.jsonParser);
+            const ilpnSpec = convertLpnToIlpn(
+                this.drawnElements(),
+                this.connections(),
+                this.serializationService,
+                this.jsonParser,
+            );
             this.loadingService.show();
 
             this.tokenTrailValidatorService
                 .validate(ilpnSource, ilpnSpec)
                 .pipe(take(1))
                 .subscribe({
-                    next: (results) => {
+                    next: (results: TokenTrailValidationResult[]) => {
                         this.loadingService.hide();
 
                         // A solution exists only if every place in the source Petri net has a valid token trail.
-                        const allValid = results.every((res) => res.valid);
+                        const allValid = results.every((res: TokenTrailValidationResult) => res.valid);
                         if (!allValid) {
                             if (this.originalDisplayMode) {
                                 this.stateService.setDisplayMode(this.originalDisplayMode);
@@ -1681,8 +1635,10 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
                             }
 
                             const invalidPlaces = results
-                                .filter((res) => !res.valid)
-                                .map((res) => placeLabelMap.get(res.placeId) || res.placeId);
+                                .filter((res: TokenTrailValidationResult) => !res.valid)
+                                .map(
+                                    (res: TokenTrailValidationResult) => placeLabelMap.get(res.placeId) || res.placeId,
+                                );
 
                             this.toaster.showError(
                                 'TOKEN_TRAIL.SOLUTION_NOT_FOUND_TITLE',
@@ -1696,13 +1652,13 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
                             return;
                         }
 
-                        const solvedTrailsMap = this.lpnService.mapValidatorResultsToSolvedTrails(results);
+                        const solvedTrailsMap = mapValidatorResultsToSolvedTrails(results);
                         this.stateService.solutionCache = solvedTrailsMap;
                         this.stateService.setSolvedTokenTrails(solvedTrailsMap);
                         this.stateService.setShowingSolution(true);
                         this.toaster.showSuccess('TOKEN_TRAIL.SOLUTION_FOUND_TITLE', 'TOKEN_TRAIL.SOLUTION_FOUND_BODY');
                     },
-                    error: (err) => {
+                    error: (err: unknown) => {
                         this.loadingService.hide();
                         if (this.originalDisplayMode) {
                             this.stateService.setDisplayMode(this.originalDisplayMode);

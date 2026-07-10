@@ -1,3 +1,4 @@
+import { signal } from '@angular/core';
 import { DiagramPlace } from './diagram/diagram-place';
 import { DiagramTransition } from './diagram/diagram-transition';
 import { DisplayableEdge, DisplayableGraph, DisplayableNode } from './displayable-graph.interface';
@@ -11,6 +12,9 @@ export class Condition extends DiagramPlace {
 
     // Maps original Petri net place IDs to the number of tokens in this condition for that trail.
     trailMarkings: Record<string, number> = {};
+
+    // Custom background color to highlight changes/rearrangements
+    readonly highlightColor = signal<string | null>(null);
 
     getTrailTokens(petriPlaceId: string): number {
         return this.trailMarkings[petriPlaceId] || 0;
@@ -36,7 +40,7 @@ export class Condition extends DiagramPlace {
             }
         }
 
-        this.label = parts.length > 0 ? parts.join(' + ') : this.baseName;
+        this.label = parts.length > 0 ? parts.join(' + ') : '∅';
     }
 }
 

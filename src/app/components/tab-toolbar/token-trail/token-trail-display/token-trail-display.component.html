@@ -1,69 +1,80 @@
-<svg
-    #drawingArea
-    class="canvas"
-    [class.drag-over-invalid]="isDragOver()"
-    [attr.viewBox]="viewBox()"
-    preserveAspectRatio="xMidYMid meet"
-    (drop)="processDropEvent($event)"
-    (dragover)="onDragOver($event)"
-    (dragleave)="onDragLeave()"
-    (mousedown)="$event.target === drawingArea && startPan($event)"
-    (mousemove)="pan($event)"
-    (mouseup)="endPan()"
-    (mouseleave)="endPan()"
-    (wheel)="onWheel($event)">
-    <defs>
-        <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
-            <polygon points="0 0, 10 3.5, 0 7" fill="black" />
-        </marker>
-    </defs>
+<div class="display-container" style="position: relative; width: 100%">
+    <svg
+        #drawingArea
+        class="canvas"
+        [class.drag-over-invalid]="isDragOver()"
+        [attr.viewBox]="viewBox()"
+        preserveAspectRatio="xMidYMid meet"
+        (drop)="processDropEvent($event)"
+        (dragover)="onDragOver($event)"
+        (dragleave)="onDragLeave()"
+        (mousedown)="$event.target === drawingArea && startPan($event)"
+        (mousemove)="pan($event)"
+        (mouseup)="endPan()"
+        (mouseleave)="endPan()"
+        (wheel)="onWheel($event)">
+        <defs>
+            <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+                <polygon points="0 0, 10 3.5, 0 7" fill="black" />
+            </marker>
+        </defs>
 
-    @for (arc of diagram()?.getEdges(); track arc.id) {
-        <g appSvgArc [diagramArc]="arc" [nodes]="diagram()?.getNodes() || []" />
-    }
-
-    @for (node of diagram()?.getNodes(); track node.id) {
-        <g
-            appSvgNode
-            [diagramNode]="node"
-            [selected]="selectedPetriPlaceId() === node.id"
-            [fillColorOverride]="getNodeFillColor(node)"
-            (clickNode)="processNodeClick(node)"
-            (mousedown)="onNodeMouseDown($event, node)"
-            style="cursor: grab"
-            [showInnerLabel]="true"
-            [transitionLabelPlacement]="'inside'" />
-
-        @if (canShowValidationInfo(node)) {
-            <foreignObject class="node-info-fo" [attr.x]="node.x + 8" [attr.y]="node.y - 36" width="28" height="28">
-                <button
-                    mat-icon-button
-                    class="node-info-button"
-                    [class.active]="openBubblePlaceId() === node.id"
-                    (click)="togglePlaceBubble(node.id); $event.stopPropagation()"
-                    [matTooltip]="'TOKEN_TRAIL.SHOW_HINT' | translate"
-                    type="button"
-                    aria-label="Show validation info">
-                    <mat-icon>{{ openBubblePlaceId() === node.id ? 'cancel' : 'info' }}</mat-icon>
-                </button>
-            </foreignObject>
+        @for (arc of diagram()?.getEdges(); track arc.id) {
+            <g appSvgArc [diagramArc]="arc" [nodes]="diagram()?.getNodes() || []" />
         }
-    }
 
-    <!-- Validation bubbles overlay for Petri Net places in Exam Mode -->
-    @for (node of diagram()?.getNodes(); track node.id) {
-        @if (node.shape === 'circle' && openBubblePlaceId() === node.id) {
-            @let issues = getPlaceIssues(node.id);
-            @if (issues.length > 0) {
-                <foreignObject
-                    class="node-bubble-fo"
-                    [attr.x]="node.x - 128"
-                    [attr.y]="node.y - 300 - 44"
-                    width="300"
-                    height="300">
-                    <app-validation-bubble [issues]="issues" (closeBubble)="openBubblePlaceId.set(null)" />
-                </foreignObject>
-            }
+        @for (node of diagram()?.getNodes(); track node.id) {
+            <g
+                appSvgNode
+                [diagramNode]="node"
+                [selected]="selectedPetriPlaceId() === node.id"
+                [fillColorOverride]="getNodeFillColor(node)"
+                (clickNode)="processNodeClick(node)"
+                (mousedown)="onNodeMouseDown($event, node)"
+                style="cursor: grab"
+                [showInnerLabel]="true"
+                [transitionLabelPlacement]="'inside'" />
         }
+    </svg>
+
+    @if (showEmptyPlace()) {
+        <div
+            class="empty-place-draggable"
+            (mousedown)="onEmptyPlaceMouseDown($event)"
+            style="
+                position: absolute;
+                top: 16px;
+                right: 16px;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                cursor: grab;
+                z-index: 10;
+            ">
+            <div
+                style="
+                    width: 36px;
+                    height: 36px;
+                    border-radius: 50%;
+                    border: 2px dashed #94a3b8;
+                    background: white;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+                ">
+                <div
+                    style="
+                        width: 22px;
+                        height: 22px;
+                        border-radius: 50%;
+                        border: 2px solid #64748b;
+                        background: white;
+                    "></div>
+            </div>
+            <span style="font-size: 11px; margin-top: 4px; font-weight: bold; color: #64748b; font-family: monospace"
+                >∅</span
+            >
+        </div>
     }
-</svg>
+</div>

@@ -18,6 +18,12 @@ import { ToasterNotificationService } from './toaster-notification.service';
 import { TokenTrailValidatorService } from '../../../ilpn-components/src/lib/algorithms/pn/validation/token-trails/token-trail-validator.service';
 import { TokenTrailValidationResult } from '../../../ilpn-components/src/lib/algorithms/pn/validation/classes/validation-result';
 import { TabStateService } from './tab-state.service';
+import {
+    convertSourceNetToIlpn,
+    convertLpnToIlpn,
+    mapValidatorResultsToSolvedTrails,
+    parseAndEnsureLabels,
+} from '../utils/lpn-convert.util';
 import { ImplicitPlaceRemoverService } from '../../../ilpn-components/src/lib/algorithms/pn/transformation/implicit-place-remover.service';
 import { DuplicatePlaceRemoverService } from '../../../ilpn-components/src/lib/algorithms/pn/transformation/duplicate-place-remover.service';
 import { DanglingPlaceRemoverService } from '../../../ilpn-components/src/lib/algorithms/pn/transformation/dangling-place-remover.service';
@@ -94,7 +100,7 @@ export class TokenTrailLpnService {
         // Clear existing solution cache
         this.stateService.solutionCache = null;
 
-        const ilpnSource = this.convertSourceNetToIlpn(sourceNet);
+        const ilpnSource = convertSourceNetToIlpn(sourceNet, this.serializationService, this.jsonParser);
 
         const runId = ++this._synthesisActiveRunId;
         if (this._synthesisTimeoutId) {
@@ -384,7 +390,7 @@ export class TokenTrailLpnService {
                         return;
                     }
 
-                    const solvedTrailsMap = this.mapValidatorResultsToSolvedTrails(results);
+                    const solvedTrailsMap = mapValidatorResultsToSolvedTrails(results);
                     this.populateCandidateTrailMarkings(candidate, solvedTrailsMap);
 
                     // ponytail: Prune "silent conditions" that do not correspond to any source place (empty trailMarkings)
@@ -505,7 +511,7 @@ export class TokenTrailLpnService {
             }),
         );
 
-        return this.parseAndEnsureLabels(
+        return parseAndEnsureLabels(
             JSON.stringify({
                 places,
                 transitions,
@@ -513,6 +519,7 @@ export class TokenTrailLpnService {
                 marking: { p0: 1 },
                 labels,
             }),
+            this.jsonParser,
         );
     }
 
@@ -630,42 +637,6 @@ export class TokenTrailLpnService {
             console.error('LPN check validator solver error:', err);
         }
         this.cleanupAndFail(onFailure, true);
-    }
-
-    public convertSourceNetToIlpn(sourceNet: Diagram): IlpnPetriNet {
-        return this.parseAndEnsureLabels(this.serializationService.serializeJson(sourceNet));
-    }
-
-    public convertLpnToIlpn(drawnElements: LabeledNetNode[], connections: LabeledNetEdge[]): IlpnPetriNet {
-        return this.parseAndEnsureLabels(this.serializationService.serializeLpn(drawnElements, connections, 'json'));
-    }
-
-    private parseAndEnsureLabels(jsonStr: string): IlpnPetriNet {
-        const net = this.jsonParser.parse(jsonStr)!;
-        net.getTransitions().forEach((t) => {
-            if (t.label === undefined) {
-                t.label = t.getId();
-            }
-        });
-        return net;
-    }
-
-    public mapValidatorResultsToSolvedTrails(
-        results: TokenTrailValidationResult[],
-    ): Map<string, Record<string, number>> {
-        const solvedTrailsMap = new Map<string, Record<string, number>>();
-        for (const res of results) {
-            const markingRecord: Record<string, number> = {};
-            for (const key of res.tokenTrail.getKeys()) {
-                const prefix = 'n0_';
-                if (key.startsWith(prefix)) {
-                    const elId = key.substring(prefix.length);
-                    markingRecord[elId] = res.tokenTrail.get(key) ?? 0;
-                }
-            }
-            solvedTrailsMap.set(res.placeId, markingRecord);
-        }
-        return solvedTrailsMap;
     }
 
     /**
@@ -876,7 +847,12 @@ export class TokenTrailLpnService {
         simplifiedNet = this.danglingPlaceRemover.removeDanglingPlaces(simplifiedNet);
 
         const candidate = this.buildAndPrepareCandidate(simplifiedNet, maxEdges);
-        const ilpnSpec = this.convertLpnToIlpn(candidate.elements, candidate.connections);
+        const ilpnSpec = convertLpnToIlpn(
+            candidate.elements,
+            candidate.connections,
+            this.serializationService,
+            this.jsonParser,
+        );
 
         this.validateAndApplyCandidate(
             candidate,
@@ -1175,6 +1151,7 @@ export class TokenTrailLpnService {
 
         this.stateService.updateDrawnElements((e) => [...e]);
         this.stateService.updateConnections((c) => [...c]);
+        this.stateService.synchronizeCounters();
         this.stateService.requestFitView();
     }
 }

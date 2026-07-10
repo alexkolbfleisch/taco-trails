@@ -21,6 +21,23 @@ export class ToasterComponent {
     }
 
     closeToast() {
+        if (this.data.actions?.dismiss.action) {
+            this.data.actions.dismiss.action();
+        }
+        this.snackBarRef.dismiss();
+    }
+
+    onAcceptAction() {
+        if (this.data.actions?.accept.action) {
+            this.data.actions.accept.action();
+        }
+        this.snackBarRef.dismiss();
+    }
+
+    onDismissAction() {
+        if (this.data.actions?.dismiss.action) {
+            this.data.actions.dismiss.action();
+        }
         this.snackBarRef.dismiss();
     }
 }

@@ -55,6 +55,10 @@ export class SvgEventNodeComponent {
     });
 
     readonly conditionFillColor = computed(() => {
+        const node = this.diagramNode();
+        if (node instanceof Condition && node.highlightColor()) {
+            return node.highlightColor()!;
+        }
         return this.fillColor();
     });
 
