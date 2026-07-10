@@ -1,0 +1,17 @@
+<button mat-icon-button color="primary" [matTooltip]="'UPLOAD_NET' | translate" [matMenuTriggerFor]="uploadMenu">
+    <mat-icon>upload_file</mat-icon>
+</button>
+
+<mat-menu #uploadMenu="matMenu">
+    <button mat-menu-item (click)="petriInput.click()">
+        <mat-icon>schema</mat-icon>
+        <span>{{ 'UPLOAD_PETRI_NET' | translate }}</span>
+    </button>
+    <button mat-menu-item (click)="lpnInput.click()">
+        <mat-icon>linear_scale</mat-icon>
+        <span>{{ 'UPLOAD_LABELED_NET' | translate }}</span>
+    </button>
+</mat-menu>
+
+<input #petriInput type="file" hidden (change)="onPetriFileSelected($event)" accept=".json,.xml,.pnml" />
+<input #lpnInput type="file" hidden (change)="onLpnFileSelected($event)" accept=".json,.xml,.pnml" />

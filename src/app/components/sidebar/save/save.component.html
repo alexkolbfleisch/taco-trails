@@ -1,0 +1,18 @@
+<button
+    mat-icon-button
+    [matTooltip]="'SAVE_AS' | translate"
+    [matMenuTriggerFor]="saveMenu"
+    color="primary"
+    [disabled]="isDisabled()">
+    <mat-icon>save_alt</mat-icon>
+</button>
+<mat-menu #saveMenu="matMenu">
+    <button mat-menu-item (click)="onSave('json')">
+        <mat-icon class="icon-json">data_object</mat-icon>
+        <span>{{ 'SAVE_AS_JSON' | translate }}</span>
+    </button>
+    <button mat-menu-item (click)="onSave('pnml')">
+        <mat-icon class="icon-pnml">device_hub</mat-icon>
+        <span>{{ 'SAVE_AS_PNML' | translate }}</span>
+    </button>
+</mat-menu>

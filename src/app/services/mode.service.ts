@@ -1,13 +1,11 @@
 import { computed, inject, Injectable, Injector, signal } from '@angular/core';
 import { MatDialog } from '@angular/material/dialog';
-import { ConfirmDialogComponent } from '../components/confirm-dialog/confirm-dialog.component';
+import { ConfirmDialogComponent } from '../components/shared/confirm-dialog/confirm-dialog.component';
 import { AppMode } from '../classes/app-mode';
 import { Tab } from '../classes/tabs';
 import { ToasterNotificationService } from './toaster-notification.service';
-import { DrawService } from './draw.service';
-import { ProcessNetStateService } from './process-net-state.service';
-import { ReachabilityGraphService } from '../reachability-graph.service';
 import { TokenTrailStateService } from './token-trail-state.service';
+import { DrawService } from './draw.service';
 
 @Injectable({ providedIn: 'root' })
 export class ModeService {
@@ -79,10 +77,6 @@ export class ModeService {
         switch (tab) {
             case Tab.DRAW:
                 return this._injector.get(DrawService).drawnElements().length > 0;
-            case Tab.PROCESS_NET:
-                return this._injector.get(ProcessNetStateService).drawnElements().length > 0;
-            case Tab.REACHABILITY_GRAPH:
-                return this._injector.get(ReachabilityGraphService).reachabilityGraphSignal().nodes.length > 1;
             case Tab.TOKEN_TRAIL:
             case Tab.PRACTICE:
                 return this._injector.get(TokenTrailStateService).drawnElements().length > 0;

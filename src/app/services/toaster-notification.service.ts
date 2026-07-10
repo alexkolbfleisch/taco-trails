@@ -1,7 +1,7 @@
 import { inject, Injectable } from '@angular/core';
 import { MatSnackBar, MatSnackBarConfig } from '@angular/material/snack-bar';
 import { DEFAULT_TOAST_POSITION, ToastData, ToastDuration, ToastType, ToastOptions } from '../classes/toast';
-import { ToasterComponent } from '../components/toaster/toaster.component';
+import { ToasterComponent } from '../components/shared/toaster/toaster.component';
 
 @Injectable({
     providedIn: 'root',

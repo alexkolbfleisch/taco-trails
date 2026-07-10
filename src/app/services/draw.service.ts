@@ -19,10 +19,9 @@ import { TranslateService } from '@ngx-translate/core';
 import { TOAST_POSITIONS, ToastList } from '../classes/toast';
 import { applyParallelOffsetsToArcs, DEFAULT_PARALLEL_OFFSET } from './arc-parallel-offset.util';
 import { MatDialog } from '@angular/material/dialog';
-import { LabelEditDialogComponent } from '../components/label-edit-dialog/label-edit-dialog.component';
+import { LabelEditDialogComponent } from '../components/shared/label-edit-dialog/label-edit-dialog.component';
 import { PLACE_RADIUS as DISPLAY_PLACE_RADIUS, TRANSITION_SIZE } from '../components/display/display.constants';
 import { TabStateService } from './tab-state.service';
-import { ProcessNetStateService } from './process-net-state.service';
 import { PetriNetLoaderService } from './petri-net-loader.service';
 
 interface GlobalDragData {
@@ -98,7 +97,6 @@ export class DrawService implements OnDestroy {
     showTuplePreviewOnly = signal(false);
 
     private _tabStateService = inject(TabStateService);
-    private _processNetStateService = inject(ProcessNetStateService);
 
     readonly connectionLines = computed(() => {
         const nodeMap = new Map<string, DrawnElement>();
@@ -1494,7 +1492,6 @@ export class DrawService implements OnDestroy {
         this._sourceNetService.updateEditedNet(diagram);
         this._tabStateService.setAllLastMarkings(diagram.marking);
         this._displayService.display(diagram);
-        this._processNetStateService.clear();
 
         // In exam mode, preserve the original tuple string (the specification to match)
         if (!this.isExamMode) {

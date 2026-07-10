@@ -7,7 +7,6 @@ import { TabStateService } from '../../../services/tab-state.service';
 import { PlayService } from '../../../services/play.service';
 import { DiagramTransition } from '../../../classes/diagram/diagram-transition';
 import { DiagramPlace } from '../../../classes/diagram/diagram-place';
-import { StateNode } from '../../../classes/reachability-graph.model';
 import { PLACE_RADIUS, TRANSITION_SIZE } from '../display.constants';
 
 @Component({
@@ -58,8 +57,6 @@ export class SvgNodeComponent {
     readonly selected = input<boolean>(false);
 
     clickNode = output<DisplayableNode>();
-
-    stateNodeClick = output<StateNode>();
 
     readonly fillColor = signal('white');
 
@@ -114,7 +111,7 @@ export class SvgNodeComponent {
      */
     readonly displayLabel = computed(() => {
         const label = this.diagramNode()?.displayLabel || '';
-        if (label.length > this.MAX_CHARS && !(this.diagramNode() instanceof StateNode)) {
+        if (label.length > this.MAX_CHARS) {
             return label.substring(0, this.MAX_CHARS) + '...';
         }
         return label;
@@ -250,7 +247,6 @@ export class SvgNodeComponent {
     }
 
     public circleClick() {
-        const node = this.diagramNode();
-        if (node) this.stateNodeClick.emit(node as StateNode);
+        // No-op - click Node bindings are not needed
     }
 }

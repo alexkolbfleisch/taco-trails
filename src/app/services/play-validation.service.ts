@@ -1,19 +1,11 @@
 import { inject, Injectable } from '@angular/core';
-import { TranslateService } from '@ngx-translate/core';
 
-import { ToasterNotificationService } from './toaster-notification.service';
-import { ModeService } from './mode.service';
 import { PlayService } from './play.service';
 import { Diagram } from '../classes/diagram/diagram';
-import { FiringEntry } from '../classes/firing-entry';
-import { Tab } from '../classes/tabs';
 
 @Injectable({ providedIn: 'root' })
 export class PlayValidationService {
-    private _notificationService = inject(ToasterNotificationService);
-    private _modeService = inject(ModeService);
     private _playService = inject(PlayService);
-    private _translate = inject(TranslateService);
 
     /**
      * Finds valid firing sequences in a Petri net diagram beginning at its start marking.
@@ -68,65 +60,5 @@ export class PlayValidationService {
 
         // Restore the original marking after searching for sequences
         diagram.marking = originalMarking;
-    }
-
-    /**
-     * Validates a firing entry input.
-     * @param diagram - The diagram on which the firing entry is to be validated.
-     * @param entry - The firing entry to be validated.
-     * @returns A promise that resolves when the validation is complete.
-     */
-    async validateInput(diagram: Diagram, entry: FiringEntry): Promise<void> {
-        const hasOnlyValidTransitions: boolean = this.hasOnlyValidTransitions(diagram, entry);
-        if (hasOnlyValidTransitions) await this._playService.playSequence(diagram, entry, 0, false);
-    }
-
-    /**
-     * Checks if all labels correspond to existing transitions in the diagram.
-     * @param diagram - The diagram for which the sequence is to be checked.
-     * @param entry - The firing entry to be validated.
-     * @returns true if all labels correnspond to existing transitions, false otherwise.
-     */
-    private hasOnlyValidTransitions(diagram: Diagram, entry: FiringEntry): boolean {
-        const possibleTransitions: string[] = diagram.getTransitionLabels();
-        const labels = entry.labels;
-        entry.setValidity(true, null);
-        if (labels.length === 0) return true;
-
-        const visitedLabels: string[] = [];
-        for (const label of labels) {
-            visitedLabels.push(label);
-            const exactMatch = possibleTransitions.includes(label);
-            const partialMatch = possibleTransitions.some((transition) => transition.startsWith(label));
-
-            if (exactMatch) {
-                continue;
-            } else {
-                if (!this._modeService.isExamMode(Tab.PLAY) && !partialMatch)
-                    this._notificationService.showWarning(
-                        'TOASTER.HEADER.TRANSITION_NOT_PRESENT',
-                        'TOASTER.BODY.TRANSITION_NOT_PRESENT',
-                        { messageParams: { label: label } },
-                    );
-                entry.setValidity(false, {
-                    type: 'PLAY.NOT_PRESENT',
-                    invalidLabel: label,
-                    visitedLabels: visitedLabels,
-                });
-                break;
-            }
-        }
-        return entry.isValid === true;
-    }
-
-    /**
-     * Generates a user-friendly error message for an invalid firing sequence.
-     * @param entry - The firing entry containing the error details.
-     * @returns A formatted error message string.
-     */
-    getErrorMessage(entry: FiringEntry): string {
-        const error = entry.error;
-        if (!error) return '';
-        return `Transition ${error.invalidLabel} ${this._translate.instant(error.type)}: [ ${error.visitedLabels.join(' ')} <--- ... ]`;
     }
 }

@@ -8,7 +8,6 @@ import {
     LabeledNetNode,
 } from '../classes/labeled-net.model';
 import { viewBoxValues } from '../components/display/display.constants';
-import { Subject } from 'rxjs';
 
 export enum LpnGenerationDifficulty {
     Easy = 'easy',
@@ -47,11 +46,11 @@ export class TokenTrailStateService {
     public cachedConstructionSolutionElements: LabeledNetNode[] | null = null;
     public cachedConstructionSolutionConnections: LabeledNetEdge[] | null = null;
 
-    private readonly _fitViewRequest$ = new Subject<void>();
-    public readonly fitViewRequest$ = this._fitViewRequest$.asObservable();
+    /** Incremented each time a fit-view is requested. Components watch this with an effect(). */
+    readonly fitViewCount = signal(0);
 
     requestFitView() {
-        this._fitViewRequest$.next();
+        this.fitViewCount.update((n) => n + 1);
     }
 
     addDrawnElement(element: LabeledNetNode) {
@@ -111,6 +110,7 @@ export class TokenTrailStateService {
         this.resetCounters();
         this.showingSolution.set(false);
         this.solvedTokenTrails.set(new Map());
+        console.trace('[StateService] clear() called');
         if (clearCache) {
             this.solutionCache = null;
             this.lastSynthesizedNetSignature = null;

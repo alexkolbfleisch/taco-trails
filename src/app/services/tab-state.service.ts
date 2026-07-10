@@ -15,9 +15,8 @@ export class TabStateService {
         Record<string, number> | undefined
     >([
         [Tab.DRAW, undefined],
-        [Tab.PLAY, undefined],
-        [Tab.REACHABILITY_GRAPH, undefined],
-        [Tab.PROCESS_NET, undefined],
+        [Tab.TOKEN_TRAIL, undefined],
+        [Tab.PRACTICE, undefined],
     ]);
 
     switchTo(newTab: Tab) {
