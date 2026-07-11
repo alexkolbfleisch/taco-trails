@@ -4,7 +4,6 @@ import { SHAPE } from '../../../classes/diagram/diagram-node';
 import { DisplayableNode } from '../../../classes/displayable-graph.interface';
 import { Condition } from '../../../classes/labeled-net.model';
 import { PLACE_RADIUS, TRANSITION_SIZE } from '../display.constants';
-import { ModeService } from '../../../services/mode.service';
 import { LpnDisplayMode } from '../../../services/token-trail-state.service';
 import { TabStateService } from '../../../services/tab-state.service';
 
@@ -15,7 +14,6 @@ import { TabStateService } from '../../../services/tab-state.service';
     styleUrl: './svg-event-node.component.css',
 })
 export class SvgEventNodeComponent {
-    private readonly _modeService = inject(ModeService);
     private readonly _tabStateService = inject(TabStateService);
 
     readonly RADIUS = PLACE_RADIUS;
@@ -179,9 +177,6 @@ export class SvgEventNodeComponent {
 
     readonly isStartPlace = computed(() => {
         const node = this.diagramNode();
-        const isStart = node instanceof Condition ? node.isStartPlace : false;
-        if (!isStart) return false;
-
-        return !this._modeService.isExamMode(this._tabStateService.currentTab());
+        return node instanceof Condition ? node.isStartPlace : false;
     });
 }

@@ -1,4 +1,4 @@
-import { computed, effect, ElementRef, inject, Injectable, OnDestroy, signal } from '@angular/core';
+import { computed, ElementRef, inject, Injectable, OnDestroy, signal } from '@angular/core';
 import { DiagramNode } from '../classes/diagram/diagram-node';
 import { DiagramPlace, DiagramPlaceLabelPlacement } from '../classes/diagram/diagram-place';
 import { DiagramTransition, DiagramTransitionOptions } from '../classes/diagram/diagram-transition';
@@ -14,15 +14,13 @@ import { ToasterNotificationService } from './toaster-notification.service';
 import { Diagram } from '../classes/diagram/diagram';
 import { firstValueFrom, Subscription } from 'rxjs';
 import { SerializationService } from './serialization.service';
-import { ModeService } from './mode.service';
-import { TranslateService } from '@ngx-translate/core';
-import { TOAST_POSITIONS, ToastList } from '../classes/toast';
 import { applyParallelOffsetsToArcs, DEFAULT_PARALLEL_OFFSET } from './arc-parallel-offset.util';
 import { MatDialog } from '@angular/material/dialog';
 import { LabelEditDialogComponent } from '../components/shared/label-edit-dialog/label-edit-dialog.component';
 import { PLACE_RADIUS as DISPLAY_PLACE_RADIUS, TRANSITION_SIZE } from '../components/display/display.constants';
 import { TabStateService } from './tab-state.service';
 import { PetriNetLoaderService } from './petri-net-loader.service';
+import { DragDropUtil } from '../utils/drag-drop.util';
 
 interface GlobalDragData {
     elementType: 'place' | 'transition';
@@ -57,7 +55,6 @@ declare const window: any;
  * - Maintains visual state (selection, hover, drag-over feedback)
  * - Synchronizes canvas state with the source Petri Net across tabs
  * - Provides tuple notation parsing and validation
- * - Manages exam mode restrictions and validation
  * - Handles coordinate transformations between screen and SVG space
  * - Calculates arc offsets to prevent visual overlap
  *
@@ -69,12 +66,6 @@ declare const window: any;
  * - Double-click to edit element labels
  * - Scroll wheel to adjust token counts (places) or arc weights
  * - Automatic layout using spring embedder algorithm
- *
- * Exam Mode Features:
- * - Displays tuple specification without the solution diagram
- * - Validates student's drawn net against the specification
- * - Prevents synchronization with other tabs to protect student work
- * - Provides detailed feedback on correctness (places, transitions, arcs, tokens)
  *
  * State Synchronization:
  * - Syncs with SourcePetriNetService for cross-tab communication
@@ -164,17 +155,8 @@ export class DrawService implements OnDestroy {
     tupleString = signal('');
     readonly tuplePreview = computed(() => this.parseTuplePreview(this.tupleString()));
 
-    /** Signal to control whether the drawing should be loaded and displayed */
-    showDrawing = signal(true);
-
     setTupleString(value: string) {
         this.tupleString.set(value);
-    }
-
-    setShowDrawing(value: boolean) {
-        this.showDrawing.set(value);
-        // The toggle only controls whether incoming nets are drawn
-        // It does not retroactively load or clear existing drawings
     }
 
     showTupleInline() {
@@ -182,7 +164,6 @@ export class DrawService implements OnDestroy {
     }
 
     showTuplePreviewIfAvailable() {
-        if (this.isExamMode) return;
         const preview = this.tuplePreview();
         if (preview) {
             this.showTuplePreviewOnly.set(true);
@@ -192,14 +173,10 @@ export class DrawService implements OnDestroy {
     // ===== Subscriptions and State Flags =====
     /** Subscription to source Petri net changes from other tabs */
     private sourceNetSub?: Subscription;
-    /** Subscription to source text changes for tuple synchronization */
-    private sourceTextSub?: Subscription;
     /** Flag to prevent loading changes from source when we just updated it */
     private suppressNextSourceLoad = false;
     /** Flag indicating if a clear operation is in progress */
     private isClearing = false;
-    /** Flag indicating if user has made changes in exam mode (prevents tuple updates from external sources) */
-    private hasUserDrawnInExamMode = false;
 
     // ===== Drawing State =====
     /** Reference to the SVG drawing area element */
@@ -244,18 +221,12 @@ export class DrawService implements OnDestroy {
     private _displayService = inject(DisplayService);
     /** Service for showing toast notifications to the user */
     private _toaster = inject(ToasterNotificationService);
-    /** Service for managing application modes (normal/exam) */
-    private _modeService = inject(ModeService);
-    /** Service for internationalization/translation */
-    private _translate = inject(TranslateService);
     /** Service for handling pan and zoom operations */
     private panning = inject(PanningService);
     /** Angular Material dialog service for modals */
     private _dialog = inject(MatDialog);
     /** Service for loading Petri nets from files */
     private _petriNetLoaderService = inject(PetriNetLoaderService);
-
-    readonly isExamMode = false;
 
     /**
      * Gets the current viewBox as a string for the SVG element.
@@ -273,40 +244,8 @@ export class DrawService implements OnDestroy {
         return this.panning.viewBox;
     }
 
-    /** Effect for ensuring tuple preview is shown inline when entering exam mode */
-    private readonly _examModePreviewEffect = effect(() => {
-        if (this.isExamMode) {
-            this.showTupleInline();
-        }
-    });
-
-    /**
-     * Initializes the DrawService by setting up subscriptions.
-     *
-     * Subscribes to:
-     * - Source net changes from other tabs (to sync the drawing)
-     * - Source text changes (for tuple synchronization in exam mode)
-     *
-     * In exam mode, drawing changes from other tabs are ignored to prevent
-     * overwriting the student's work.
-     */
     init(): void {
-        if (this.sourceNetSub || this.sourceTextSub) return;
-
-        // Subscribe to sourceText$ to detect new net uploads (loadNewNet calls)
-        // This updates the tuple even in exam mode when a new net is uploaded
-        this.sourceTextSub = this._sourceNetService.sourceText$.subscribe((text: string) => {
-            if (text && this.isExamMode) {
-                // A new net was loaded via loadNewNet, update the tuple string
-                const diagram = this._sourceNetService.getCurrentSourceNet();
-                if (diagram) {
-                    const tuple = this._serializationService.serializeTuple(diagram);
-                    if (tuple) {
-                        this.tupleString.set(tuple);
-                    }
-                }
-            }
-        });
+        if (this.sourceNetSub) return;
 
         this.sourceNetSub = this._sourceNetService.sourceNet$.subscribe((diagram: Diagram | null) => {
             if (this.suppressNextSourceLoad) {
@@ -320,7 +259,7 @@ export class DrawService implements OnDestroy {
                 const isSameDiagram = this.diagramsMatch(currentDiagram, diagram);
 
                 // If only positions changed, update positions in place for smooth animation
-                if (isSameDiagram && this.showDrawing()) {
+                if (isSameDiagram) {
                     this.updateCanvasPositionsFromDiagram(diagram);
                 } else if (!isSameDiagram || this.drawnElements().length === 0) {
                     // Always clear old drawing when a new net arrives
@@ -328,19 +267,12 @@ export class DrawService implements OnDestroy {
                     this.connections.set([]);
                     this.selectedElementId.set(null);
 
-                    // Only load the new drawing if showDrawing is true
-                    if (this.showDrawing()) {
-                        this.loadDiagramIntoCanvas(diagram);
-                    }
+                    this.loadDiagramIntoCanvas(diagram);
                 }
 
-                // In exam mode, preserve the original tuple string (don't update from edited diagrams)
-                // The sourceText$ subscription above handles new uploads
-                if (!this.isExamMode) {
-                    const tuple = this._serializationService.serializeTuple(diagram);
-                    if (tuple) {
-                        this.tupleString.set(tuple);
-                    }
+                const tuple = this._serializationService.serializeTuple(diagram);
+                if (tuple) {
+                    this.tupleString.set(tuple);
                 }
                 this.showTuplePreviewIfAvailable();
             } else {
@@ -381,8 +313,6 @@ export class DrawService implements OnDestroy {
         document.removeEventListener('mousemove', this.onDocumentMouseMove, true);
         document.removeEventListener('mouseup', this.onDocumentMouseUp, true);
         this.sourceNetSub?.unsubscribe();
-        this.sourceTextSub?.unsubscribe();
-        this._examModePreviewEffect?.destroy?.();
     }
 
     /**
@@ -400,48 +330,7 @@ export class DrawService implements OnDestroy {
         if (event.dataTransfer) {
             event.dataTransfer.setData('element-type', type);
             event.dataTransfer.effectAllowed = 'copy';
-
-            // Create a custom SVG drag image
-            const svgNS = 'http://www.w3.org/2000/svg';
-            const size = 56;
-            const svg = document.createElementNS(svgNS, 'svg');
-            svg.setAttribute('width', size.toString());
-            svg.setAttribute('height', size.toString());
-            svg.setAttribute('viewBox', `0 0 ${size} ${size}`);
-            svg.style.background = 'none';
-
-            if (type === 'place') {
-                const circle = document.createElementNS(svgNS, 'circle');
-                circle.setAttribute('cx', '28');
-                circle.setAttribute('cy', '28');
-                circle.setAttribute('r', '22');
-                circle.setAttribute('fill', '#fff');
-                circle.setAttribute('stroke', '#222');
-                circle.setAttribute('stroke-width', '2.5');
-                svg.appendChild(circle);
-            } else {
-                const rect = document.createElementNS(svgNS, 'rect');
-                rect.setAttribute('x', '6');
-                rect.setAttribute('y', '6');
-                rect.setAttribute('width', '44');
-                rect.setAttribute('height', '44');
-                rect.setAttribute('fill', '#fff');
-                rect.setAttribute('stroke', '#222');
-                rect.setAttribute('stroke-width', '2.5');
-                rect.setAttribute('rx', '3');
-                svg.appendChild(rect);
-            }
-
-            // Add to DOM off-screen to render
-            svg.style.position = 'absolute';
-            svg.style.left = '-9999px';
-            document.body.appendChild(svg);
-
-            // Use the SVG as drag image
-            event.dataTransfer.setDragImage(svg, size / 2, size / 2);
-
-            // Remove after a short delay to ensure drag image is set
-            setTimeout(() => document.body.removeChild(svg), 0);
+            DragDropUtil.setPaletteDragImage(event, type);
         }
         window.__dragData = {
             elementType: type,
@@ -602,48 +491,14 @@ export class DrawService implements OnDestroy {
         this.connectionIdCounter = 0;
         this.placeLabelCounter = 0;
         this.transitionLabelCounter = 0;
-        this.hasUserDrawnInExamMode = false;
         if (this.drawingArea) {
             this.panning.resetViewBox(this.drawingArea);
         }
-        // In exam mode, don't clear the source net when clearing canvas locally
-        // This allows the sidebar delete button to remain functional
-        if (!triggeredByService && !this.isExamMode) {
+        if (!triggeredByService) {
             this._sourceNetService.clear();
         }
         this._displayService.clear();
         this.isClearing = false;
-    }
-
-    /**
-     * Deletes the currently selected element from the canvas without updating the tuple.
-     *
-     * This method removes the selected element and its connected arcs from the drawing,
-     * but preserves the tuple string. This is useful in exam mode where the tuple
-     * specification should remain unchanged while the student modifies their drawing.
-     *
-     * If an element is selected, this method:
-     * - Removes the element from the canvas
-     * - Removes all arcs connected to the element
-     * - Clears the selection
-     * - Does NOT update the tuple string
-     * - Does NOT sync to source net (in exam mode)
-     *
-     * Does nothing if no element is currently selected.
-     */
-    deleteSelectedElement() {
-        const selectedId = this.selectedElementId();
-        if (!selectedId) return;
-
-        const element = this.drawnElements().find((e) => e.id === selectedId);
-        if (element) {
-            // Delete the element without syncing/updating tuple
-            this.drawnElements.update((els) => els.filter((e) => e.id !== element.id));
-            this.connections.update((cs) => cs.filter((c) => c.aId !== element.id && c.bId !== element.id));
-            if (this.selectedElementId() === element.id) {
-                this.selectedElementId.set(null);
-            }
-        }
     }
 
     /**
@@ -683,15 +538,9 @@ export class DrawService implements OnDestroy {
     /**
      * Handles the tuple button click event.
      *
-     * Behavior depends on the current mode:
-     * - In exam mode: Validates the drawn net against the tuple specification
-     * - In normal mode: Generates a net from the tuple input
+     * Generates a net from the tuple input.
      */
     onTupleButtonClick(): void {
-        if (this.isExamMode) {
-            this.validateDrawnNetAgainstTuple();
-            return;
-        }
         this.generateNetFromInput();
     }
 
@@ -781,9 +630,6 @@ export class DrawService implements OnDestroy {
             };
             this.connections.update((cs) => [...cs, newConn]);
             this.selectedElementId.set(null);
-            if (this.isExamMode) {
-                this.hasUserDrawnInExamMode = true;
-            }
             this.syncSourceNetFromCanvas();
         } else {
             this.selectedElementId.set(element.id);
@@ -827,9 +673,6 @@ export class DrawService implements OnDestroy {
                 return { ...c, weight: newWeight };
             }),
         );
-        if (this.isExamMode) {
-            this.hasUserDrawnInExamMode = true;
-        }
         this.syncSourceNetFromCanvas();
     }
 
@@ -850,9 +693,6 @@ export class DrawService implements OnDestroy {
         if (delta === 0) return;
         const current = element.node.tokenCount();
         element.node.tokens = Math.max(0, current - delta);
-        if (this.isExamMode) {
-            this.hasUserDrawnInExamMode = true;
-        }
         this.syncSourceNetFromCanvas();
     }
 
@@ -903,9 +743,6 @@ export class DrawService implements OnDestroy {
                 if (this.selectedElementId() === oldId) {
                     this.selectedElementId.set(newLabel);
                 }
-                if (this.isExamMode) {
-                    this.hasUserDrawnInExamMode = true;
-                }
                 this.syncSourceNetFromCanvas();
             });
             return;
@@ -942,9 +779,6 @@ export class DrawService implements OnDestroy {
                 if (this.selectedElementId() === oldId) {
                     this.selectedElementId.set(newLabel);
                 }
-                if (this.isExamMode) {
-                    this.hasUserDrawnInExamMode = true;
-                }
                 this.syncSourceNetFromCanvas();
             });
         }
@@ -966,202 +800,6 @@ export class DrawService implements OnDestroy {
 
         const result = await firstValueFrom(dialogRef.afterClosed());
         return typeof result === 'string' ? result.trim() : undefined;
-    }
-
-    /**
-     * Validates the student's drawn Petri net against the tuple specification in exam mode.
-     *
-     * Performs comprehensive validation by comparing:
-     * - Places: Checks for missing and extra places
-     * - Transitions: Checks for missing and extra transitions
-     * - Arcs: Validates connections and their weights
-     * - Tokens: Verifies initial marking (token counts on places)
-     *
-     * Shows detailed error messages for any mismatches, or a success message if everything is correct.
-     * Uses a persistent toast notification (duration: 0) to ensure the validation result is visible.
-     *
-     * @private
-     */
-    private validateDrawnNetAgainstTuple() {
-        const tupleText = this.tupleString().trim();
-        if (!tupleText) {
-            this._toaster.showError('TUPLE_INPUT.TOAST_INVALIDATION_HEADER', 'TUPLE_INPUT.TOAST_INVALIDATION_BODY', {
-                duration: 0,
-                toastPosition: TOAST_POSITIONS.TOP_RIGHT,
-            });
-            return;
-        }
-
-        const parsed = this._parserService.parse(tupleText);
-        if (!parsed) {
-            this._toaster.showError('TUPLE_INPUT.TOAST_INVALIDATION_HEADER', 'TUPLE_INPUT.TOAST_INVALIDATION_BODY', {
-                duration: 0,
-                toastPosition: TOAST_POSITIONS.TOP_RIGHT,
-            });
-            return;
-        }
-
-        const drawnDiagram = this.buildDiagramFromCanvas();
-
-        const placeLabel = (p: DiagramPlace) => p.label ?? p.displayLabel ?? p.id;
-        const transitionLabel = (t: DiagramTransition) => t.label ?? t.displayLabel ?? t.id;
-
-        const parsedPlaceLabelById = new Map(parsed.places.map((p) => [p.id, placeLabel(p)]));
-        const parsedTransitionLabelById = new Map(parsed.transitions.map((t) => [t.id, transitionLabel(t)]));
-        const drawnPlaceLabelById = new Map(drawnDiagram.places.map((p) => [p.id, placeLabel(p)]));
-        const drawnTransitionLabelById = new Map(drawnDiagram.transitions.map((t) => [t.id, transitionLabel(t)]));
-
-        const idToLabel = (id: string, placeMap: Map<string, string>, transitionMap: Map<string, string>) =>
-            placeMap.get(id) ?? transitionMap.get(id) ?? id;
-
-        const expectedPlaces = new Set(
-            parsed.places.map((p) => idToLabel(p.id, parsedPlaceLabelById, parsedTransitionLabelById)),
-        );
-        const drawnPlaces = new Set(
-            drawnDiagram.places.map((p) => idToLabel(p.id, drawnPlaceLabelById, drawnTransitionLabelById)),
-        );
-
-        const expectedTransitions = new Set(
-            parsed.transitions.map((t) => idToLabel(t.id, parsedPlaceLabelById, parsedTransitionLabelById)),
-        );
-        const drawnTransitions = new Set(
-            drawnDiagram.transitions.map((t) => idToLabel(t.id, drawnPlaceLabelById, drawnTransitionLabelById)),
-        );
-
-        const expectedArcs = new Map<string, number>(
-            parsed.arcs.map((a) => {
-                const srcLabel = idToLabel(a.source, parsedPlaceLabelById, parsedTransitionLabelById);
-                const tgtLabel = idToLabel(a.target, parsedPlaceLabelById, parsedTransitionLabelById);
-                return [`${srcLabel}->${tgtLabel}`, a.weight ?? 1];
-            }),
-        );
-        const drawnArcs = new Map<string, number>(
-            drawnDiagram.arcs.map((a) => {
-                const srcLabel = idToLabel(a.source, drawnPlaceLabelById, drawnTransitionLabelById);
-                const tgtLabel = idToLabel(a.target, drawnPlaceLabelById, drawnTransitionLabelById);
-                return [`${srcLabel}->${tgtLabel}`, a.weight ?? 1];
-            }),
-        );
-
-        const expectedTokens = new Map<string, number>(
-            parsed.places.map((p) => [
-                idToLabel(p.id, parsedPlaceLabelById, parsedTransitionLabelById),
-                p.tokenCount(),
-            ]),
-        );
-        const drawnTokens = new Map<string, number>(
-            drawnDiagram.places.map((p) => [
-                idToLabel(p.id, drawnPlaceLabelById, drawnTransitionLabelById),
-                p.tokenCount(),
-            ]),
-        );
-
-        const errors: string[] = [];
-
-        const missingPlaces = [...expectedPlaces].filter((p) => !drawnPlaces.has(p));
-        const extraPlaces = [...drawnPlaces].filter((p) => !expectedPlaces.has(p));
-        if (missingPlaces.length)
-            errors.push(
-                this._translate.instant('TUPLE_INPUT.VALIDATION.MISSING_PLACES', {
-                    items: missingPlaces.join(', '),
-                }),
-            );
-        if (extraPlaces.length)
-            errors.push(
-                this._translate.instant('TUPLE_INPUT.VALIDATION.EXTRA_PLACES', {
-                    items: extraPlaces.join(', '),
-                }),
-            );
-
-        const missingTransitions = [...expectedTransitions].filter((t) => !drawnTransitions.has(t));
-        const extraTransitions = [...drawnTransitions].filter((t) => !expectedTransitions.has(t));
-        if (missingTransitions.length)
-            errors.push(
-                this._translate.instant('TUPLE_INPUT.VALIDATION.MISSING_TRANSITIONS', {
-                    items: missingTransitions.join(', '),
-                }),
-            );
-        if (extraTransitions.length)
-            errors.push(
-                this._translate.instant('TUPLE_INPUT.VALIDATION.EXTRA_TRANSITIONS', {
-                    items: extraTransitions.join(', '),
-                }),
-            );
-
-        expectedArcs.forEach((weight, key) => {
-            const drawnWeight = drawnArcs.get(key);
-            if (drawnWeight === undefined) {
-                errors.push(
-                    this._translate.instant('TUPLE_INPUT.VALIDATION.MISSING_ARC', {
-                        arc: key,
-                    }),
-                );
-            } else if (drawnWeight !== weight) {
-                errors.push(
-                    this._translate.instant('TUPLE_INPUT.VALIDATION.ARC_WEIGHT_MISMATCH', {
-                        arc: key,
-                        expected: weight,
-                        found: drawnWeight,
-                    }),
-                );
-            }
-        });
-        drawnArcs.forEach((_, key) => {
-            if (!expectedArcs.has(key)) {
-                errors.push(
-                    this._translate.instant('TUPLE_INPUT.VALIDATION.EXTRA_ARC', {
-                        arc: key,
-                    }),
-                );
-            }
-        });
-
-        expectedTokens.forEach((weight, placeId) => {
-            const drawnToken = drawnTokens.get(placeId) ?? 0;
-            if (drawnToken !== weight) {
-                const diff = weight - drawnToken;
-                errors.push(
-                    diff > 0
-                        ? this._translate.instant('TUPLE_INPUT.VALIDATION.TOKENS_MISSING', {
-                              count: Math.abs(diff),
-                              place: placeId,
-                              expected: weight,
-                              found: drawnToken,
-                          })
-                        : this._translate.instant('TUPLE_INPUT.VALIDATION.TOKENS_EXTRA', {
-                              count: Math.abs(diff),
-                              place: placeId,
-                              expected: weight,
-                              found: drawnToken,
-                          }),
-                );
-            }
-        });
-        drawnTokens.forEach((weight, placeId) => {
-            if (!expectedTokens.has(placeId) && weight !== 0) {
-                errors.push(
-                    this._translate.instant('TUPLE_INPUT.VALIDATION.TOKENS_UNEXPECTED', {
-                        place: placeId,
-                        found: weight,
-                    }),
-                );
-            }
-        });
-
-        if (errors.length === 0) {
-            this._toaster.showSuccess('TUPLE_INPUT.TOAST_VALIDATION_HEADER', 'TUPLE_INPUT.TOAST_VALIDATION_BODY', {
-                duration: 0,
-                toastPosition: TOAST_POSITIONS.TOP_RIGHT,
-            });
-            return;
-        }
-
-        const list: ToastList[] = errors.map((message) => ({ message }));
-        this._toaster.showError('TUPLE_INPUT.TOAST_INVALIDATION_HEADER', 'TUPLE_INPUT.TOAST_INVALIDATION_BODY', {
-            duration: 0,
-            toastPosition: TOAST_POSITIONS.TOP_RIGHT,
-            list,
-        });
     }
 
     /**
@@ -1239,9 +877,6 @@ export class DrawService implements OnDestroy {
         if (this.isDraggingElement) {
             event.preventDefault();
             event.stopImmediatePropagation();
-            if (this.isExamMode) {
-                this.hasUserDrawnInExamMode = true;
-            }
         }
         this.draggedElement = null;
         this.isDraggingElement = false;
@@ -1313,9 +948,6 @@ export class DrawService implements OnDestroy {
         newNode.x = x;
         newNode.y = y;
         this.drawnElements.update((elements) => [...elements, { id: newId, node: newNode }]);
-        if (this.isExamMode) {
-            this.hasUserDrawnInExamMode = true;
-        }
         this.syncSourceNetFromCanvas();
     }
 
@@ -1376,9 +1008,6 @@ export class DrawService implements OnDestroy {
         if (this.selectedElementId() === element.id) {
             this.selectedElementId.set(null);
         }
-        if (this.isExamMode) {
-            this.hasUserDrawnInExamMode = true;
-        }
         this.syncSourceNetFromCanvas();
     }
 
@@ -1392,9 +1021,6 @@ export class DrawService implements OnDestroy {
      */
     private deleteConnection(connectionId: string) {
         this.connections.update((cs) => cs.filter((c) => c.id !== connectionId));
-        if (this.isExamMode) {
-            this.hasUserDrawnInExamMode = true;
-        }
         this.syncSourceNetFromCanvas();
     }
 
@@ -1479,9 +1105,7 @@ export class DrawService implements OnDestroy {
      * - The source net service (for cross-tab synchronization)
      * - The display service (for visualization)
      * - The tab state service (for marking history)
-     * - The tuple string (for text representation, except in exam mode)
-     *
-     * In exam mode, the tuple string is preserved to show the original specification.
+     * - The tuple string (for text representation)
      *
      * @private
      */
@@ -1493,12 +1117,9 @@ export class DrawService implements OnDestroy {
         this._tabStateService.setAllLastMarkings(diagram.marking);
         this._displayService.display(diagram);
 
-        // In exam mode, preserve the original tuple string (the specification to match)
-        if (!this.isExamMode) {
-            const tuple = this._serializationService.serializeTuple(diagram);
-            if (tuple) {
-                this.tupleString.set(tuple);
-            }
+        const tuple = this._serializationService.serializeTuple(diagram);
+        if (tuple) {
+            this.tupleString.set(tuple);
         }
     }
 
@@ -1970,11 +1591,6 @@ export class DrawService implements OnDestroy {
      * @param {string | null} id - The element ID or null to clear hover state
      */
     setHoveredElementId(id: string | null) {
-        if (this.isExamMode) {
-            this.hoveredElementId.set(null);
-            this.hoveredConnectionId.set(null);
-            return;
-        }
         this.hoveredElementId.set(id);
         if (id !== null) {
             this.hoveredConnectionId.set(null);
@@ -1988,17 +1604,11 @@ export class DrawService implements OnDestroy {
      * Sets the ID of the currently hovered connection (arc).
      *
      * Clears element hover state when a connection is hovered.
-     * In exam mode, all hover states are disabled.
      * Shows tuple preview when hovering if not already showing.
      *
      * @param {string | null} id - The connection ID or null to clear hover state
      */
     setHoveredConnectionId(id: string | null) {
-        if (this.isExamMode) {
-            this.hoveredElementId.set(null);
-            this.hoveredConnectionId.set(null);
-            return;
-        }
         this.hoveredConnectionId.set(id);
         if (id !== null) {
             this.hoveredElementId.set(null);

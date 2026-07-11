@@ -4,7 +4,6 @@ import { ParserService } from './parser.service';
 import { DisplayService } from './display.service';
 import { catchError, of, take } from 'rxjs';
 import { HttpClient } from '@angular/common/http';
-import { ModeService } from './mode.service';
 import { SourcePetriNetService } from './source-petri-net.service';
 import { ToasterNotificationService } from './toaster-notification.service';
 import { TabStateService } from './tab-state.service';
@@ -25,7 +24,6 @@ export class PetriNetLoaderService {
     private _displayService = inject(DisplayService);
     private _http = inject(HttpClient);
     private _sourcePetriNetService = inject(SourcePetriNetService);
-    private _modeService = inject(ModeService);
     private _tabStateService = inject(TabStateService);
     private _serializationService = inject(SerializationService);
     private _panningService = inject(PanningService);
@@ -124,14 +122,7 @@ export class PetriNetLoaderService {
                     this._panningService.nudgeViewBox(0, -80);
                     this._panningService.expandViewBox(1.1);
                 }
-                if (this._modeService.isExamMode(Tab.DRAW) && inDrawTab) {
-                    this._toasterService.showSuccess(
-                        'TOASTER.HEADER.SUCCESS',
-                        'TOASTER.BODY.NET_LOADED_SUCCESSFULLY_HIDDEN',
-                    );
-                } else {
-                    this._toasterService.showSuccess('TOASTER.HEADER.SUCCESS', 'TOASTER.BODY.NET_LOADED_SUCCESSFULLY');
-                }
+                this._toasterService.showSuccess('TOASTER.HEADER.SUCCESS', 'TOASTER.BODY.NET_LOADED_SUCCESSFULLY');
                 // Build node map and apply parallel offsets to arcs
                 const nodeMap = new Map<string, DiagramNode>();
                 parsedNet.allNodes.forEach((node: DiagramNode) => nodeMap.set(node.id, node));
