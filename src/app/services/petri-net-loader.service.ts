@@ -31,6 +31,22 @@ export class PetriNetLoaderService {
     private _panningService = inject(PanningService);
     private _lpnService = inject(TokenTrailLpnService);
 
+    private _customLpnService?: TokenTrailLpnService;
+
+    /**
+     * Registers a custom TokenTrailLpnService (e.g. from the component-scoped injector).
+     */
+    public registerLpnService(lpnService: TokenTrailLpnService | undefined): void {
+        this._customLpnService = lpnService;
+    }
+
+    /**
+     * Gets the currently registered TokenTrailLpnService.
+     */
+    public getRegisteredLpnService(): TokenTrailLpnService | undefined {
+        return this._customLpnService;
+    }
+
     /**
      * Processes an uploaded file (File object).
      * Reads, parses and loads the net into the DisplayService.
@@ -148,7 +164,8 @@ export class PetriNetLoaderService {
                 try {
                     const parsedDiagram = this._parser.parse(content);
                     if (parsedDiagram) {
-                        this._lpnService.loadLpnFromDiagram(parsedDiagram);
+                        const targetLpnService = this._customLpnService || this._lpnService;
+                        targetLpnService.loadLpnFromDiagram(parsedDiagram);
                         this._toasterService.showSuccess(
                             'TOASTER.HEADER.SUCCESS',
                             'TOASTER.BODY.NET_LOADED_SUCCESSFULLY',

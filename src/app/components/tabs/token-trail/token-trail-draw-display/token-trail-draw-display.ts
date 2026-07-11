@@ -53,6 +53,7 @@ import { Diagram } from '../../../../classes/diagram/diagram';
 import { LoadingService } from '../../../../services/loading.service';
 import { ModeService } from '../../../../services/mode.service';
 import { TabStateService } from '../../../../services/tab-state.service';
+import { PetriNetLoaderService } from '../../../../services/petri-net-loader.service';
 import { TokenTrailValidatorService } from '../../../../../../ilpn-components/src/lib/algorithms/pn/validation/token-trails/token-trail-validator.service';
 import { TokenTrailValidationResult } from '../../../../../../ilpn-components/src/lib/algorithms/pn/validation/classes/validation-result';
 import { DrawingDisplayService } from '../../../../services/drawing-display.service';
@@ -127,6 +128,7 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
     private jsonParser = inject(JsonPetriNetParserService);
     protected tourService = inject(TokenTrailTourService);
     protected tabStateService = inject(TabStateService);
+    private loaderService = inject(PetriNetLoaderService);
 
     // Bind to service state
     readonly drawnElements = this.stateService.drawnElements;
@@ -507,6 +509,7 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
     private displayService = inject(DisplayService);
     private panningService = inject(PanningService);
     private sourceNetSub?: Subscription;
+    private fitViewSub?: Subscription;
 
     readonly viewBox = this.panningService.viewBoxAsString;
     readonly viewBoxObj = this.panningService.viewBox;
@@ -641,19 +644,6 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
         return map;
     });
 
-    private readonly _fitViewEffect = effect(() => {
-        // Both signals are read explicitly here so Angular tracks them as dependencies.
-        const count = this.stateService.fitViewCount();
-        const elements = this.drawnElements();
-        console.log('[FitViewEffect] count:', count, 'elements:', elements.length);
-        if (count === 0 || elements.length === 0) return;
-        // Capture the snapshot — do not use a lazy lambda, to stay inside the reactive context.
-        this.panningService.fitViewToGraph({
-            getNodes: () => elements,
-            getEdges: () => [],
-        });
-    });
-
     // Dimensions for condition/event nodes
     private readonly CONDITION_RADIUS = PLACE_RADIUS;
     private readonly UNMERGE_DRAG_DISTANCE = this.CONDITION_RADIUS * 2;
@@ -729,6 +719,17 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
         // Set display mode first
         this.stateService.setDisplayMode(this.mode as LpnDisplayMode);
 
+        if (this.mode === 'construction') {
+            this.loaderService.registerLpnService(this.lpnService);
+        }
+
+        this.fitViewSub = this.stateService.fitViewRequest$.subscribe(() => {
+            this.panningService.fitViewToGraph({
+                getNodes: () => this.drawnElements(),
+                getEdges: () => [],
+            });
+        });
+
         this.sourceNetSub = this.sourcePetriNetService.sourceNet$.subscribe((net) => {
             if (net) {
                 const currentSig = Diagram.getSignature(net);
@@ -774,6 +775,13 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
             canvas.removeEventListener('mousedown', this.handleCanvasMouseDown, true);
         }
         this.sourceNetSub?.unsubscribe();
+        this.fitViewSub?.unsubscribe();
+
+        if (this.mode === 'construction') {
+            if (this.loaderService.getRegisteredLpnService() === this.lpnService) {
+                this.loaderService.registerLpnService(undefined);
+            }
+        }
     }
 
     private handleCanvasMouseDown = (event: MouseEvent) => {
