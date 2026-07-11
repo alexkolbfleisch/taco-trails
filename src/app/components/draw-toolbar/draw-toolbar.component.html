@@ -25,7 +25,7 @@
                     </label>
                 </div>
             }
-            @for (action of actions(); track action.tooltip) {
+            @for (action of actions(); track $index) {
                 @if (action.menu) {
                     <button
                         mat-icon-button

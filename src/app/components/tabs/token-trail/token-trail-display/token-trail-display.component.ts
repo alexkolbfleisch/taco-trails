@@ -58,6 +58,9 @@ export class TokenTrailDisplayComponent extends DisplayComponent {
         if (node.shape !== SHAPE.CIRCLE) {
             return null;
         }
+        if (this._tokenTrailStateService.showingSolution()) {
+            return this.validPetriPlaceIds().has(node.id) ? '#d7ffd9' : '#ffe0b2'; // Green if already correct, yellow/orange if not yet correct
+        }
         if (this.validPetriPlaceIds().has(node.id)) {
             return '#d7ffd9'; // Green if valid
         }

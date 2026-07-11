@@ -460,7 +460,7 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
                     text: 'TOKEN_TRAIL.INSTRUCTION_PUZZLE_DIFFICULTY_TEXT',
                 },
                 { label: 'TOKEN_TRAIL.INSTRUCTION_SOLUTION', text: 'TOKEN_TRAIL.INSTRUCTION_SOLUTION_PUZZLE_TEXT' },
-                { label: 'TOKEN_TRAIL.INSTRUCTION_VALIDATE', text: 'TOKEN_TRAIL.INSTRUCTION_VALIDATE_TOAST' },
+                { label: 'TOKEN_TRAIL.INSTRUCTION_HIDE_TIPS', text: 'TOKEN_TRAIL.INSTRUCTION_HIDE_TIPS_TEXT' },
             ];
         }
         return [
@@ -471,10 +471,8 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
             { label: 'TOKEN_TRAIL.INSTRUCTION_DELETE_CONN', text: 'TOKEN_TRAIL.INSTRUCTION_MIDDLE_CLICK_DELETE_CONN' },
             { label: 'TOKEN_TRAIL.INSTRUCTION_MERGE', text: 'TOKEN_TRAIL.INSTRUCTION_MERGE_TEXT' },
             { label: 'TOKEN_TRAIL.INSTRUCTION_UNMERGE', text: 'TOKEN_TRAIL.INSTRUCTION_UNMERGE_TEXT' },
-            { label: 'TOKEN_TRAIL.INSTRUCTION_ACTIVE_GOALS', text: 'TOKEN_TRAIL.INSTRUCTION_ACTIVE_GOALS_TEXT' },
-            { label: 'TOKEN_TRAIL.INSTRUCTION_GOAL_DIFFICULTY', text: 'TOKEN_TRAIL.INSTRUCTION_GOAL_DIFFICULTY_TEXT' },
-            { label: 'TOKEN_TRAIL.INSTRUCTION_SOLUTION', text: 'TOKEN_TRAIL.INSTRUCTION_SOLUTION_CONSTRUCTION_TEXT' },
-            { label: 'TOKEN_TRAIL.INSTRUCTION_VALIDATE', text: 'TOKEN_TRAIL.INSTRUCTION_VALIDATE_TOAST' },
+            { label: 'TOKEN_TRAIL.INSTRUCTION_HIDE_TIPS', text: 'TOKEN_TRAIL.INSTRUCTION_HIDE_TIPS_TEXT' },
+            { label: 'TOKEN_TRAIL.INSTRUCTION_FILL_FREE', text: 'TOKEN_TRAIL.INSTRUCTION_FILL_FREE_TEXT' },
         ];
     });
 
@@ -740,7 +738,15 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
                 const isSameSignature = currentSig === this.stateService.lastSynthesizedNetSignature;
 
                 if (!isSameSignature) {
-                    this.stateService.clear(true);
+                    if (this.stateService.displayMode() === LpnDisplayMode.Puzzle) {
+                        this.stateService.clear(true);
+                    } else {
+                        this.stateService.showingSolution.set(false);
+                        this.stateService.solvedTokenTrails.set(new Map());
+                        this.stateService.solutionCache = null;
+                        this.stateService.cachedConstructionSolutionElements = null;
+                        this.stateService.cachedConstructionSolutionConnections = null;
+                    }
                     this.stateService.lastSynthesizedNetSignature = currentSig;
                 }
 

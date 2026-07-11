@@ -610,6 +610,29 @@ export class TokenTrailValidationService {
         originalMarkings: Record<string, Record<string, number>>,
         wasAlreadyValid: boolean,
     ): void {
+        let anyMarkingChanged = false;
+        for (const el of this.stateService.drawnElements()) {
+            if (el instanceof Condition) {
+                const oldMarkings = originalMarkings[el.id] || {};
+                const newMarkings: Record<string, number> = {};
+                for (const [placeId, markingRecord] of solvedTrailsMap.entries()) {
+                    const val = markingRecord[el.id] ?? 0;
+                    if (val > 0) {
+                        newMarkings[placeId] = val;
+                    }
+                }
+                if (areMarkingsDifferent(oldMarkings, newMarkings)) {
+                    anyMarkingChanged = true;
+                    break;
+                }
+            }
+        }
+
+        if (wasAlreadyValid && !anyMarkingChanged) {
+            this.toaster.showInfo('TOKEN_TRAIL.SOLVER.MOST_MINIMAL_TITLE', 'TOKEN_TRAIL.SOLVER.MOST_MINIMAL_BODY');
+            return;
+        }
+
         // Apply markings to ALL conditions and set highlight color if changed
         this.stateService.updateDrawnElements((elements) => {
             return elements.map((node) => {

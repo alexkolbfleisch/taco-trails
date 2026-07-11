@@ -855,8 +855,9 @@ export class TokenTrailGoalsService {
         const startKey = getMarkingKey(startMarking);
         const visited = new Map<string, number>([[startKey, 0]]);
         const queue: { marking: Record<string, number>; count: number }[] = [{ marking: startMarking, count: 0 }];
+        const maxStates = 1000;
 
-        while (queue.length > 0) {
+        while (queue.length > 0 && visited.size < maxStates) {
             const { marking, count } = queue.shift()!;
             if (count >= 2) return true;
 
