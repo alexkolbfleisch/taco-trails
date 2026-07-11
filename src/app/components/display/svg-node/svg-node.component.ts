@@ -2,8 +2,6 @@ import { Component, computed, inject, input, output, signal } from '@angular/cor
 import { Coords } from '../../../classes/json-petri-net';
 import { SHAPE } from '../../../classes/diagram/diagram-node';
 import { DisplayableNode } from '../../../classes/displayable-graph.interface';
-import { ModeService } from '../../../services/mode.service';
-import { TabStateService } from '../../../services/tab-state.service';
 import { PlayService } from '../../../services/play.service';
 import { DiagramTransition } from '../../../classes/diagram/diagram-transition';
 import { DiagramPlace } from '../../../classes/diagram/diagram-place';
@@ -25,8 +23,6 @@ export class SvgNodeComponent {
     });
 
     readonly diagramNode = input<DisplayableNode>();
-    private _modeService = inject(ModeService);
-    private _tabStateService = inject(TabStateService);
     private _playService = inject(PlayService);
 
     readonly showInnerLabel = input<boolean>(false);
@@ -38,9 +34,7 @@ export class SvgNodeComponent {
         if (this.disableActiveColoring()) return false;
         const node = this.diagramNode();
         if (node instanceof DiagramTransition) {
-            return (
-                this._playService.canBeFired(node) && !this._modeService.isExamMode(this._tabStateService.currentTab())
-            );
+            return this._playService.canBeFired(node);
         }
         return false;
     });
