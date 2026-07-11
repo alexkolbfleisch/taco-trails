@@ -65,6 +65,10 @@ export class MainTabComponent implements OnInit {
     }
 
     protected startTour() {
-        this.tourService.startTour(true);
+        if (this._tabStateService.activeTourService) {
+            this._tabStateService.activeTourService.startTour(true);
+        } else {
+            this.tourService.startTour(true);
+        }
     }
 }

@@ -31,6 +31,7 @@ export class TokenTrailComponent {
     constructor() {
         effect(() => {
             if (this._tabStateService.currentTab() === Tab.TOKEN_TRAIL) {
+                this._tabStateService.activeTourService = this._tourService;
                 // Introduce a small timeout to ensure the tab DOM elements are fully rendered and layout settled
                 setTimeout(() => {
                     this._tourService.startTour();
