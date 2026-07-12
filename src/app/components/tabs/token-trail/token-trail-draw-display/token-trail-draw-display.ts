@@ -756,6 +756,8 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
                         this.createNewLPNWithSynthesis();
                     }
                 }
+            } else {
+                this.stateService.clear(true);
             }
         });
     }

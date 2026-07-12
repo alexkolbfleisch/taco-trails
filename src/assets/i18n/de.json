@@ -127,6 +127,38 @@
         "TOGGLE": {
             "SHOW_DRAWING": "Zeichnung anzeigen",
             "SHOW_DRAWING_TOOLTIP": "Schalten Sie um, um die Zeichnung auf der Leinwand anzuzeigen oder auszublenden beim Laden eines Netzes. Die Tupel-Spezifikation ist immer sichtbar."
+        },
+        "TOUR": {
+            "BUTTON_NEXT": "Weiter",
+            "BUTTON_BACK": "Zurück",
+            "BUTTON_SKIP": "Überspringen",
+            "BUTTON_DONE": "Fertig",
+            "WELCOME_TITLE": "Willkommen im Zeichnen-Tab!",
+            "WELCOME_TEXT": "Diese Führung zeigt Ihnen, wie Sie Petri-Netze erstellen und bearbeiten. Sie lernen die Palette, die Tupel-Eingabe und alle verfügbaren Werkzeuge kennen.",
+            "PALETTE_TITLE": "Die Elementen-Palette",
+            "PALETTE_TEXT": "Verwenden Sie diese Palette, um neue Elemente zu erstellen. Ziehen Sie den Kreis (Stelle) oder das Rechteck (Transition) aus der Palette auf die Zeichenfläche, um sie Ihrem Petri-Netz hinzuzufügen.",
+            "TUPLE_INPUT_TITLE": "Tupel-Spezifikation",
+            "TUPLE_INPUT_TEXT": "Sie können Ihr Petri-Netz auch als formales Tupel definieren, genau wie im Vorlesungsskript. Geben Sie ein Tupel im Format (P, T, F, m₀) ein und klicken Sie auf 'Generieren', um das Netz zu erstellen.",
+            "CANVAS_TITLE": "Die Zeichenfläche",
+            "CANVAS_TEXT": "Dies ist Ihr Arbeitsbereich. Elemente, die Sie aus der Palette ziehen, erscheinen hier. Linksklick und Ziehen zum Verschieben. Mittelklick zum Löschen eines Elements oder einer Kante. Doppelklick zum Umbenennen.",
+            "SCROLL_TITLE": "Marken & Gewichte anpassen",
+            "SCROLL_TEXT": "Verwenden Sie das Mausrad über einer Stelle, um die Markenanzahl zu erhöhen oder zu verringern. Scrollen Sie über eine Kante, um deren Gewicht zu ändern.",
+            "CONNECT_TITLE": "Elemente verbinden",
+            "CONNECT_TEXT": "Um eine Kante zu erstellen: Rechtsklicken Sie auf eine Stelle oder Transition, dann Rechtsklicken Sie auf ein Element des entgegengesetzten Typs, um die Kante abzuschließen.",
+            "UPLOAD_TITLE": "Petri-Netz importieren",
+            "UPLOAD_TEXT": "Klicken Sie auf diese Schaltfläche, um eine bestehende Petri-Netz-Datei (JSON oder PNML) von Ihrem Computer zu importieren.",
+            "SAVE_TITLE": "Petri-Netz exportieren",
+            "SAVE_TEXT": "Klicken Sie hier, um Ihr aktuelles Petri-Netz als Datei herunterzuladen.",
+            "CLEAR_TITLE": "Petri-Netz löschen",
+            "CLEAR_TEXT": "Diese Schaltfläche entfernt alle Elemente von der Zeichenfläche für einen Neuanfang.",
+            "LAYOUT_TITLE": "Automatisches Layout",
+            "LAYOUT_TEXT": "Klicken Sie auf diese Schaltfläche, um die Positionen aller Elemente automatisch mithilfe eines Layout-Algorithmus (Spring Embedder oder Sugiyama) neu anzuordnen.",
+            "EXAMPLE_TITLE": "Beispiel-Netze",
+            "EXAMPLE_TEXT": "Verwenden Sie dieses Menü, um vordefinierte Beispiel-Petri-Netze zu laden. Ideal zum Ausprobieren und Testen von Funktionen.",
+            "LANGUAGE_TITLE": "Sprachauswahl",
+            "LANGUAGE_TEXT": "Klicken Sie auf diese Schaltfläche, um die Sprache der Benutzeroberfläche zwischen Deutsch und Englisch zu wechseln.",
+            "FINISH_TITLE": "Alles bereit!",
+            "FINISH_TEXT": "Sie kennen nun die Grundlagen der Petri-Netz-Erstellung. Sie können diese Tour jederzeit über das Kompass-Symbol in der Seitenleiste neu starten."
         }
     },
     "PLAY": {

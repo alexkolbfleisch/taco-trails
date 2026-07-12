@@ -18,7 +18,6 @@ import { LayoutButtonComponent } from '../sidebar/layout-button/layout-button.co
 import { LanguageButtonComponent } from '../sidebar/language-button/language-button.component';
 import { ExampleMenuComponent } from '../sidebar/example-menu/example-menu.component';
 import { TranslateModule } from '@ngx-translate/core';
-import { TokenTrailTourService } from '../../services/token-trail-tour.service';
 
 @Component({
     selector: 'app-main-tab',
@@ -44,7 +43,6 @@ import { TokenTrailTourService } from '../../services/token-trail-tour.service';
     styleUrl: './main-tab.component.css',
 })
 export class MainTabComponent implements OnInit {
-    private tourService = inject(TokenTrailTourService);
     private _tabStateService: TabStateService = inject(TabStateService);
     private _sourcePetriNetService: SourcePetriNetService = inject(SourcePetriNetService);
     private _displayService: DisplayService = inject(DisplayService);
@@ -65,10 +63,6 @@ export class MainTabComponent implements OnInit {
     }
 
     protected startTour() {
-        if (this._tabStateService.activeTourService) {
-            this._tabStateService.activeTourService.startTour(true);
-        } else {
-            this.tourService.startTour(true);
-        }
+        this._tabStateService.activeTourService?.startTour(true);
     }
 }

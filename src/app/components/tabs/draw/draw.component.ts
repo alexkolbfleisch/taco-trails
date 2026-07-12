@@ -1,4 +1,15 @@
-import { AfterViewInit, Component, computed, ElementRef, inject, OnDestroy, OnInit, ViewChild } from '@angular/core';
+import {
+    AfterViewInit,
+    Component,
+    computed,
+    effect,
+    ElementRef,
+    inject,
+    OnDestroy,
+    OnInit,
+    ViewChild,
+    signal,
+} from '@angular/core';
 import { SvgNodeComponent } from '../../display/svg-node/svg-node.component';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -12,6 +23,12 @@ import {
     DrawToolbarInstruction,
 } from '../../draw-toolbar/draw-toolbar.component';
 import { DrawnElement } from '../../../classes/diagram/drawn-element';
+import { DragDropUtil } from '../../../utils/drag-drop.util';
+import { SHAPE } from '../../../classes/diagram/diagram-node';
+import { DisplayableNode } from '../../../classes/displayable-graph.interface';
+import { DrawTourService } from '../../../services/draw-tour.service';
+import { TabStateService } from '../../../services/tab-state.service';
+import { Tab } from '../../../classes/tabs';
 
 /**
  * DrawComponent
@@ -59,6 +76,10 @@ export class DrawComponent implements AfterViewInit, OnDestroy, OnInit {
     private _elementRef = inject(ElementRef);
     /** Service for display-related functionality and download requests */
     private _displayService = inject(DisplayService);
+    /** Service for the Draw tab guided tour */
+    private _tourService = inject(DrawTourService);
+    /** Service for tracking the active tab */
+    private _tabStateService = inject(TabStateService);
 
     // ===== Reactive State Signals from DrawService =====
     /** Observable array of all drawn elements (places, transitions, arcs) */
@@ -99,6 +120,17 @@ export class DrawComponent implements AfterViewInit, OnDestroy, OnInit {
     /** Parsed viewBox object containing x, y, width, and height values */
     readonly viewBoxObj = this.draw.viewBoxObj;
 
+    constructor() {
+        effect(() => {
+            if (this._tabStateService.currentTab() === Tab.DRAW) {
+                this._tabStateService.activeTourService = this._tourService;
+                setTimeout(() => {
+                    this._tourService.startTour();
+                }, 200);
+            }
+        });
+    }
+
     /**
      * Angular lifecycle hook: OnInit
      *
@@ -133,21 +165,35 @@ export class DrawComponent implements AfterViewInit, OnDestroy, OnInit {
 
     /**
      * Initiates a drag operation for a palette element (place or transition).
-     * Called when the user starts dragging from the element palette.
+     * Called when the user presses down on an element in the inline palette.
      *
-     * @param {DragEvent} event - The drag event
+     * @param {MouseEvent} event - The mousedown event
      * @param {'place' | 'transition'} type - The type of element being dragged
      */
-    startPaletteDrag(event: DragEvent, type: 'place' | 'transition') {
-        this.draw.startPaletteDrag(event, type);
+    onPaletteMouseDown(event: MouseEvent, type: 'place' | 'transition') {
+        const label = type === 'place' ? this.draw.getNextPlaceLabel() : this.draw.getNextTransitionLabel();
+        const simulatedNode: DisplayableNode = {
+            id: `__palette_${type}__`,
+            shape: type === 'place' ? SHAPE.CIRCLE : SHAPE.RECT,
+            displayLabel: label,
+            tokenCount: signal(0),
+            x: 0,
+            y: 0,
+        };
+        DragDropUtil.handleNodeMouseDown(event, simulatedNode);
     }
 
     /**
-     * Ends a drag operation for a palette element.
-     * Called when the user releases a dragged palette element.
+     * Handles the custom drop event from mouse-based dragging.
+     *
+     * @param {Event} event - The custom drop event
      */
-    endPaletteDrag() {
-        this.draw.endPaletteDrag();
+    onCustomDrop(event: Event) {
+        const customEvent = event as CustomEvent;
+        const dragData = customEvent.detail;
+        if (dragData) {
+            this.draw.onCustomDrop(dragData);
+        }
     }
 
     /**
@@ -351,16 +397,7 @@ export class DrawComponent implements AfterViewInit, OnDestroy, OnInit {
      * @returns {DrawToolbarAction[]} Array of toolbar action configurations
      */
     toolbarActions = computed<DrawToolbarAction[]>(() => {
-        const hasElements = this.drawnElements().length > 0;
-        return [
-            {
-                icon: 'delete',
-                tooltip: 'DRAW.ACTION.CLEAR_DRAWING',
-                color: 'warn',
-                isActive: hasElements,
-                action: () => this.draw.clearCanvas(false, true),
-            },
-        ];
+        return [];
     });
 
     /**

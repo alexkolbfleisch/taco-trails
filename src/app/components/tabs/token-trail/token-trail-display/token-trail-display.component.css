@@ -88,3 +88,68 @@ svg text {
     height: 18px;
     line-height: 18px;
 }
+
+.empty-place-container {
+    position: absolute;
+    top: 10px;
+    right: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.92);
+    border: 1px solid #d0d0d0;
+    border-radius: 6px;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+    width: 75px;
+    height: 75px;
+    box-sizing: border-box;
+    z-index: 10;
+}
+
+.empty-place-draggable {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    cursor: grab;
+    user-select: none;
+    outline: none;
+}
+
+.empty-place-draggable:active {
+    cursor: grabbing;
+}
+
+.empty-place-shape {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    border: 2.5px solid #64748b;
+    background: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    box-sizing: border-box;
+    transition:
+        border-color 0.2s ease,
+        box-shadow 0.2s ease,
+        transform 0.1s ease;
+}
+
+.empty-place-draggable:hover .empty-place-shape {
+    border-color: #1976d2;
+    box-shadow: 0 4px 8px -1px rgba(25, 118, 210, 0.3);
+    transform: scale(1.05);
+}
+
+.empty-place-symbol {
+    font-size: 18px;
+    font-weight: bold;
+    color: #64748b;
+    font-family: monospace;
+    transition: color 0.2s ease;
+}
+
+.empty-place-draggable:hover .empty-place-symbol {
+    color: #1976d2;
+}

@@ -35,7 +35,6 @@ export class TokenTrailGoalsService {
     // Goal Progression / Difficulty State
     readonly currentDifficulty = signal<LpnGenerationDifficulty>(LpnGenerationDifficulty.Easy);
     readonly unlockedPuzzle = signal<Set<LpnGenerationDifficulty>>(new Set([LpnGenerationDifficulty.Easy]));
-    readonly unlockedConstruction = signal<Set<LpnGenerationDifficulty>>(new Set([LpnGenerationDifficulty.Easy]));
 
     // Active goals list (with completed state)
     readonly activeGoals = signal<LpnGoal[]>([]);
@@ -44,6 +43,7 @@ export class TokenTrailGoalsService {
 
     private lastSourceNetSignature = '';
     private lastDifficulty: LpnGenerationDifficulty | null = null;
+    private isCurrentlySolved = false;
 
     // Tracking properties for seeding traces in LPN synthesis
     public selectedSequence: [string, string] | null = null;
@@ -73,6 +73,7 @@ export class TokenTrailGoalsService {
                 return;
             }
 
+            this.isCurrentlySolved = false;
             this.generateGoals(net, difficulty, true);
         });
 
@@ -81,39 +82,36 @@ export class TokenTrailGoalsService {
             this.activeGoals.set([]);
         });
 
-        // Handle validation results and show appropriate toaster notifications
-        this.validationService.explicitValidation$.subscribe(({ valid }) => {
-            if (this.stateService.showingSolution()) {
-                return;
-            }
-
+        // Handle live validation and auto-unlock next level for practice puzzle tab reactively
+        effect(() => {
             const displayMode = this.stateService.displayMode();
+            const validation = this.validationService.liveValidation();
+            const showingSolution = this.stateService.showingSolution();
+            const elements = this.stateService.drawnElements();
 
-            if (!valid) {
-                this.toaster.showError('TOKEN_TRAIL.VALIDATION_FAILED_TITLE', 'TOKEN_TRAIL.VALIDATION_FAILED_BODY');
-                return;
-            }
+            // Track changes to net or difficulty to re-evaluate
+            this.sourceNet();
+            this.currentDifficulty();
 
-            if (displayMode === LpnDisplayMode.Puzzle) {
-                this.toaster.showSuccess('TOKEN_TRAIL.VALIDATION_SUCCESS_TITLE', 'TOKEN_TRAIL.VALIDATION_SUCCESS_BODY');
-                const currentDiff = this.stateService.lpnGenerationDifficulty();
-                this.unlockNextDifficulty(LpnDisplayMode.Puzzle, currentDiff);
-            } else {
-                // Construction mode: check if all active goals are completed
-                const allGoalsMet = this.activeGoals().every((g) => g.completed);
-                if (allGoalsMet) {
-                    this.toaster.showSuccess(
-                        'TOKEN_TRAIL.VALIDATION_SUCCESS_TITLE',
-                        'TOKEN_TRAIL.VALIDATION_SUCCESS_BODY',
-                    );
-                    const currentDiff = this.currentDifficulty();
-                    this.unlockNextDifficulty(LpnDisplayMode.Construction, currentDiff);
-                } else {
-                    this.toaster.showWarning(
-                        'TOKEN_TRAIL.GOALS.VALIDATION_WARNING_TITLE',
-                        'TOKEN_TRAIL.GOALS.VALIDATION_WARNING_BODY',
-                    );
+            if (
+                displayMode === LpnDisplayMode.Puzzle &&
+                !showingSolution &&
+                elements.length > 0 &&
+                validation?.valid === true
+            ) {
+                if (!this.isCurrentlySolved) {
+                    this.isCurrentlySolved = true;
+                    const currentDiff = this.stateService.lpnGenerationDifficulty();
+                    setTimeout(() => {
+                        this.toaster.showSuccess(
+                            'TOKEN_TRAIL.VALIDATION_SUCCESS_TITLE',
+                            'TOKEN_TRAIL.VALIDATION_SUCCESS_BODY',
+                        );
+                        this.unlockNextDifficulty(currentDiff);
+                    }, 100);
                 }
+            } else {
+                this.isCurrentlySolved = false;
             }
         });
     }
@@ -125,11 +123,6 @@ export class TokenTrailGoalsService {
                 const diffs = JSON.parse(puzzleData) as LpnGenerationDifficulty[];
                 this.unlockedPuzzle.set(new Set(diffs));
             }
-            const constData = localStorage.getItem('token-trail-unlocked-construction');
-            if (constData) {
-                const diffs = JSON.parse(constData) as LpnGenerationDifficulty[];
-                this.unlockedConstruction.set(new Set(diffs));
-            }
         } catch (e) {
             console.error('Failed to load goal progress from localStorage', e);
         }
@@ -138,20 +131,13 @@ export class TokenTrailGoalsService {
     private saveProgress() {
         try {
             localStorage.setItem('token-trail-unlocked-puzzle', JSON.stringify(Array.from(this.unlockedPuzzle())));
-            localStorage.setItem(
-                'token-trail-unlocked-construction',
-                JSON.stringify(Array.from(this.unlockedConstruction())),
-            );
         } catch (e) {
             console.error('Failed to save goal progress to localStorage', e);
         }
     }
 
     setDifficulty(difficulty: LpnGenerationDifficulty) {
-        const isUnlocked =
-            this.stateService.displayMode() === LpnDisplayMode.Puzzle
-                ? this.unlockedPuzzle().has(difficulty)
-                : this.unlockedConstruction().has(difficulty);
+        const isUnlocked = this.unlockedPuzzle().has(difficulty);
 
         if (!isUnlocked) {
             this.toaster.showError('TOKEN_TRAIL.GOALS.LOCKED_TITLE', 'TOKEN_TRAIL.GOALS.LOCKED_BODY');
@@ -168,37 +154,39 @@ export class TokenTrailGoalsService {
     /**
      * Unlocks the next difficulty when the current one is solved
      */
-    unlockNextDifficulty(mode: LpnDisplayMode, currentDiff: LpnGenerationDifficulty) {
-        const unlockedSet = mode === LpnDisplayMode.Puzzle ? this.unlockedPuzzle : this.unlockedConstruction;
+    unlockNextDifficulty(currentDiff: LpnGenerationDifficulty) {
         let nextDiff: LpnGenerationDifficulty | null = null;
 
-        if (currentDiff === LpnGenerationDifficulty.Easy && !unlockedSet().has(LpnGenerationDifficulty.Medium)) {
+        if (
+            currentDiff === LpnGenerationDifficulty.Easy &&
+            !this.unlockedPuzzle().has(LpnGenerationDifficulty.Medium)
+        ) {
             nextDiff = LpnGenerationDifficulty.Medium;
-        } else if (currentDiff === LpnGenerationDifficulty.Medium && !unlockedSet().has(LpnGenerationDifficulty.Hard)) {
+        } else if (
+            currentDiff === LpnGenerationDifficulty.Medium &&
+            !this.unlockedPuzzle().has(LpnGenerationDifficulty.Hard)
+        ) {
             nextDiff = LpnGenerationDifficulty.Hard;
-        } else if (currentDiff === LpnGenerationDifficulty.Hard && !unlockedSet().has(LpnGenerationDifficulty.Expert)) {
+        } else if (
+            currentDiff === LpnGenerationDifficulty.Hard &&
+            !this.unlockedPuzzle().has(LpnGenerationDifficulty.Expert)
+        ) {
             nextDiff = LpnGenerationDifficulty.Expert;
         }
 
         if (nextDiff) {
-            unlockedSet.update((set) => {
+            this.unlockedPuzzle.update((set) => {
                 const nextSet = new Set(set);
                 nextSet.add(nextDiff!);
                 return nextSet;
             });
             this.saveProgress();
 
-            this.toaster.showSuccess(
-                'TOKEN_TRAIL.GOALS.CONGRATS_TITLE',
-                mode === 'puzzle'
-                    ? 'TOKEN_TRAIL.GOALS.CONGRATS_PUZZLE_BODY'
-                    : 'TOKEN_TRAIL.GOALS.CONGRATS_CONSTRUCTION_BODY',
-                {
-                    messageParams: {
-                        nextDifficulty: nextDiff.toUpperCase(),
-                    },
+            this.toaster.showSuccess('TOKEN_TRAIL.GOALS.CONGRATS_TITLE', 'TOKEN_TRAIL.GOALS.CONGRATS_PUZZLE_BODY', {
+                messageParams: {
+                    nextDifficulty: nextDiff.toUpperCase(),
                 },
-            );
+            });
         }
     }
 

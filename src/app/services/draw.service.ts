@@ -20,16 +20,6 @@ import { LabelEditDialogComponent } from '../components/shared/label-edit-dialog
 import { PLACE_RADIUS as DISPLAY_PLACE_RADIUS, TRANSITION_SIZE } from '../components/display/display.constants';
 import { TabStateService } from './tab-state.service';
 import { PetriNetLoaderService } from './petri-net-loader.service';
-import { DragDropUtil } from '../utils/drag-drop.util';
-
-interface GlobalDragData {
-    elementType: 'place' | 'transition';
-    elementId: string;
-    elementLabel: string;
-    elementTokens?: number;
-    clientX: number;
-    clientY: number;
-}
 
 export interface TuplePreview {
     places: string[];
@@ -37,9 +27,6 @@ export interface TuplePreview {
     arcs: { raw: string; source: string; target: string }[];
     marking: { raw: string; label: string }[];
 }
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-declare const window: any;
 
 /**
  * DrawService
@@ -316,36 +303,20 @@ export class DrawService implements OnDestroy {
     }
 
     /**
-     * Initiates a drag operation for a palette element (place or transition).
+     * Handles custom mouse-based drop events on the canvas.
      *
-     * Creates a custom SVG drag image and stores drag data in the global window object.
-     * Automatically generates a label for the new element based on existing elements.
-     *
-     * @param {DragEvent} event - The drag start event
-     * @param {'place' | 'transition'} type - The type of element being dragged
+     * @param {any} dragData - The data of the dropped element
      */
-    startPaletteDrag(event: DragEvent, type: 'place' | 'transition') {
-        const label = type === 'place' ? this.getNextPlaceLabel() : this.getNextTransitionLabel();
-        const id = `${type}-${Date.now()}`;
-        if (event.dataTransfer) {
-            event.dataTransfer.setData('element-type', type);
-            event.dataTransfer.effectAllowed = 'copy';
-            DragDropUtil.setPaletteDragImage(event, type);
-        }
-        window.__dragData = {
-            elementType: type,
-            elementId: id,
-            elementLabel: label,
-            clientX: 0,
-            clientY: 0,
-        } as GlobalDragData;
-    }
-
-    /**
-     * Ends a palette drag operation by cleaning up the global drag data.
-     */
-    endPaletteDrag() {
-        delete window.__dragData;
+    onCustomDrop(dragData: {
+        elementType: 'place' | 'transition';
+        elementLabel?: string;
+        clientX: number;
+        clientY: number;
+    }) {
+        const label =
+            dragData.elementLabel ||
+            (dragData.elementType === 'place' ? this.getNextPlaceLabel() : this.getNextTransitionLabel());
+        this.placeElementAtClient(dragData.elementType, label, dragData.clientX, dragData.clientY);
     }
 
     /**
@@ -389,20 +360,6 @@ export class DrawService implements OnDestroy {
             const file = event.dataTransfer.files[0];
             this._petriNetLoaderService.loadFile(file);
             return;
-        }
-
-        // Handle palette element drops
-        const dragData = window.__dragData as GlobalDragData | undefined;
-        if (dragData) {
-            this.placeElementAtClient(dragData.elementType, dragData.elementLabel, event.clientX, event.clientY);
-            delete window.__dragData;
-            return;
-        }
-
-        const elementType = event.dataTransfer?.getData('element-type');
-        if (elementType === 'place' || elementType === 'transition') {
-            const label = elementType === 'place' ? this.getNextPlaceLabel() : this.getNextTransitionLabel();
-            this.placeElement(event, elementType, label);
         }
     }
 
@@ -1297,9 +1254,8 @@ export class DrawService implements OnDestroy {
      * by checking against existing elements.
      *
      * @returns {string} A unique place label
-     * @private
      */
-    private getNextPlaceLabel(): string {
+    getNextPlaceLabel(): string {
         let candidate: string;
         do {
             candidate = `p${++this.placeLabelCounter}`;
@@ -1314,9 +1270,8 @@ export class DrawService implements OnDestroy {
      * by checking against existing elements.
      *
      * @returns {string} A unique transition label
-     * @private
      */
-    private getNextTransitionLabel(): string {
+    getNextTransitionLabel(): string {
         let candidate: string;
         do {
             candidate = `t${++this.transitionLabelCounter}`;
