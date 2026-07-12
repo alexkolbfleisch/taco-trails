@@ -4,14 +4,16 @@ import { Diagram } from '../classes/diagram/diagram';
 import { DisplayService } from './display.service';
 import { SourcePetriNetService } from './source-petri-net.service';
 
-import { TokenTrailTourService } from './token-trail-tour.service';
+export interface TourService {
+    startTour(restart?: boolean): void;
+}
 
 @Injectable({ providedIn: 'root' })
 export class TabStateService {
     private _displayService: DisplayService = inject(DisplayService);
     private _sourcePetriNetService: SourcePetriNetService = inject(SourcePetriNetService);
     readonly currentTab = signal<Tab>(Tab.DRAW);
-    activeTourService: TokenTrailTourService | null = null;
+    activeTourService: TourService | null = null;
 
     private _tabLastMarkings: Map<Tab, Record<string, number> | undefined> = new Map<
         Tab,

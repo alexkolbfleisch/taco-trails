@@ -10,6 +10,7 @@ import { TabStateService } from './tab-state.service';
 import { PanningService } from './panning.service';
 import { TokenTrailLpnService } from './token-trail-lpn.service';
 import { TokenTrailValidationService } from './token-trail-validation.service';
+import { LabeledNetNode, LabeledNetEdge } from '../classes/labeled-net.model';
 
 import { Tab } from '../classes/tabs';
 
@@ -30,6 +31,8 @@ export class TokenTrailTourService {
 
     private backedUpNet: Diagram | null = null;
     private backedUpText = '';
+    private backedUpDrawnElements: LabeledNetNode[] = [];
+    private backedUpConnections: LabeledNetEdge[] = [];
 
     readonly tokenCountChangedInTour = signal<boolean>(false);
     readonly elementDroppedInTour = signal<boolean>(false);
@@ -55,6 +58,10 @@ export class TokenTrailTourService {
         this.tokenCountChangedInTour.set(false);
         this.conditionMergedInTour.set(false);
         this.conditionUnmergedInTour.set(false);
+
+        // Back up current LPN elements and connections
+        this.backedUpDrawnElements = this.stateService.cloneDrawnElements(this.stateService.drawnElements());
+        this.backedUpConnections = this.stateService.cloneConnections(this.stateService.connections());
 
         // Back up the current net and text if they exist
         const currentNet = this.sourceNetService.getCurrentSourceNet();
@@ -96,6 +103,25 @@ export class TokenTrailTourService {
                 currentTab === Tab.TOKEN_TRAIL ? LpnDisplayMode.Construction : LpnDisplayMode.Puzzle,
             );
 
+            // Restore the user's backed up LPN elements and connections
+            this.stateService.clear(false);
+            if (this.backedUpDrawnElements.length > 0) {
+                for (const el of this.backedUpDrawnElements) {
+                    this.stateService.addDrawnElement(el);
+                }
+                for (const conn of this.backedUpConnections) {
+                    this.stateService.addConnection(conn);
+                }
+                this.stateService.updateDrawnElements((e) => [...e]);
+                this.stateService.updateConnections((c) => [...c]);
+                this.stateService.requestFitView();
+            }
+
+            // Reset backups
+            const hadLpnBackup = this.backedUpDrawnElements.length > 0;
+            this.backedUpDrawnElements = [];
+            this.backedUpConnections = [];
+
             // Restore the user's backed up net if it exists
             if (this.backedUpNet) {
                 this.sourceNetService.loadNewNet(this.backedUpNet, this.backedUpText);
@@ -109,8 +135,11 @@ export class TokenTrailTourService {
             } else {
                 // If there was no backed up net, regenerate LPN from the example net so puzzle mode functions correctly
                 const sourceNet = this.validationService.resolveSourceNetForValidation();
-                if (sourceNet) {
+                if (sourceNet && currentTab === Tab.PRACTICE) {
                     this.lpnService.createLPNWithSynthesis(sourceNet);
+                } else if (!hadLpnBackup) {
+                    // For Tab.TOKEN_TRAIL, since there was no backed up net and it's construction mode, we just clear the canvas
+                    this.stateService.clear();
                 }
             }
         };

@@ -159,14 +159,15 @@ export class DragDropUtil {
             clientX: event.clientX,
             clientY: event.clientY,
         };
-        this.showGhost(dragData.elementType, event.clientX, event.clientY);
+        const displayLabel = dragData.elementLabel || dragData.elementId;
+        this.showGhost(dragData.elementType, displayLabel, event.clientX, event.clientY);
     }
 
     /**
      * Creates and shows a floating SVG ghost element that follows the cursor
      * during a mouse-based custom drag operation.
      */
-    private static showGhost(type: 'place' | 'transition', clientX: number, clientY: number) {
+    private static showGhost(type: 'place' | 'transition', label: string, clientX: number, clientY: number) {
         this.removeGhost();
 
         const size = 48;
@@ -176,11 +177,32 @@ export class DragDropUtil {
         wrapper.style.position = 'fixed';
         wrapper.style.pointerEvents = 'none';
         wrapper.style.zIndex = '10000';
-        wrapper.style.opacity = '0.75';
+        wrapper.style.opacity = '0.85';
         wrapper.style.transform = 'translate(-50%, -50%)';
         wrapper.style.left = `${clientX}px`;
         wrapper.style.top = `${clientY}px`;
+        wrapper.style.display = 'flex';
+        wrapper.style.flexDirection = 'column';
+        wrapper.style.alignItems = 'center';
         wrapper.appendChild(svg);
+
+        // Render the label badge below the shape if available and not empty placeholder
+        if (label && label !== '__empty__' && !label.startsWith('__palette_')) {
+            const labelEl = document.createElement('span');
+            labelEl.textContent = label;
+            labelEl.style.fontSize = '12px';
+            labelEl.style.fontWeight = 'bold';
+            labelEl.style.color = '#333';
+            labelEl.style.marginTop = '4px';
+            labelEl.style.background = 'rgba(255, 255, 255, 0.92)';
+            labelEl.style.padding = '2px 6px';
+            labelEl.style.borderRadius = '4px';
+            labelEl.style.border = '1px solid #c0c0c0';
+            labelEl.style.boxShadow = '0 1px 3px rgba(0,0,0,0.15)';
+            labelEl.style.fontFamily = 'monospace';
+            wrapper.appendChild(labelEl);
+        }
+
         document.body.appendChild(wrapper);
 
         this.ghostElement = wrapper;

@@ -126,6 +126,38 @@
         "TOGGLE": {
             "SHOW_DRAWING": "Show Drawing",
             "SHOW_DRAWING_TOOLTIP": "Toggle to show or hide the drawing on the canvas. The tuple specification is always visible."
+        },
+        "TOUR": {
+            "BUTTON_NEXT": "Next",
+            "BUTTON_BACK": "Back",
+            "BUTTON_SKIP": "Skip",
+            "BUTTON_DONE": "Done",
+            "WELCOME_TITLE": "Welcome to the Drawing Tab!",
+            "WELCOME_TEXT": "This guided tour will show you how to create and edit Petri nets. You will learn about the palette, the tuple input, and all the tools at your disposal.",
+            "PALETTE_TITLE": "The Element Palette",
+            "PALETTE_TEXT": "Use this palette to create new elements. Drag the circle (place) or the rectangle (transition) from the palette onto the canvas to add them to your Petri net.",
+            "TUPLE_INPUT_TITLE": "Tuple Specification",
+            "TUPLE_INPUT_TEXT": "You can also define your Petri net as a formal tuple, just like in the course text. Type or paste a tuple in the format (P, T, F, m₀) and click 'Generate' to build the net.",
+            "CANVAS_TITLE": "The Drawing Canvas",
+            "CANVAS_TEXT": "This is your workspace. Elements you drag from the palette appear here. Left-click and drag to move elements around. Middle-click an element or connection to delete it. Double-click an element to rename its label.",
+            "SCROLL_TITLE": "Adjusting Tokens & Weights",
+            "SCROLL_TEXT": "Use the mouse wheel while hovering over a place to increase or decrease its token count. Scroll over a connection (arc) to change its weight.",
+            "CONNECT_TITLE": "Connecting Elements",
+            "CONNECT_TEXT": "To create a connection: right-click on a place or transition to start, then right-click on an element of the opposite type to complete the arc.",
+            "UPLOAD_TITLE": "Import Petri Net",
+            "UPLOAD_TEXT": "Click this button to import an existing Petri net file (JSON or PNML format) from your computer.",
+            "SAVE_TITLE": "Export Petri Net",
+            "SAVE_TEXT": "Click here to export and download your current Petri net as a file.",
+            "CLEAR_TITLE": "Clear Petri Net",
+            "CLEAR_TEXT": "This button removes all elements from the canvas, giving you a fresh start.",
+            "LAYOUT_TITLE": "Automatic Layout",
+            "LAYOUT_TEXT": "Click this button to automatically rearrange the positions of all elements using a layout algorithm (Spring Embedder or Sugiyama).",
+            "EXAMPLE_TITLE": "Example Nets",
+            "EXAMPLE_TEXT": "Use this menu to load predefined example Petri nets. This is great for getting started or testing features.",
+            "LANGUAGE_TITLE": "Language Switch",
+            "LANGUAGE_TEXT": "Click this button to switch the interface language between English and German.",
+            "FINISH_TITLE": "You're All Set!",
+            "FINISH_TEXT": "You now know the basics of creating Petri nets. You can restart this tour anytime using the compass icon in the sidebar."
         }
     },
     "PLAY": {
