@@ -1,5 +1,7 @@
 {
     "SWITCH_LANGUAGE": "Sprachwechsel auf Englisch",
+    "ENTER_PRESENTATION_MODE": "Präsentationsmodus starten",
+    "EXIT_PRESENTATION_MODE": "Präsentationsmodus beenden",
     "CLEAR_NET": "Petri-Netz löschen",
     "LAYOUT_SPRING_EMBEDDER": "Spring Embedder Layout",
     "LAYOUT_SUGIYAMA": "Sugiyama Layout",

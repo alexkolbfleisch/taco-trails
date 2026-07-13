@@ -1,4 +1,4 @@
-import { Component, inject, OnInit } from '@angular/core';
+import { Component, inject, OnInit, HostListener, effect } from '@angular/core';
 import { MatTabChangeEvent, MatTabsModule } from '@angular/material/tabs';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
@@ -43,18 +43,42 @@ import { TranslateModule } from '@ngx-translate/core';
     styleUrl: './main-tab.component.css',
 })
 export class MainTabComponent implements OnInit {
-    private _tabStateService: TabStateService = inject(TabStateService);
+    protected _tabStateService: TabStateService = inject(TabStateService);
     private _sourcePetriNetService: SourcePetriNetService = inject(SourcePetriNetService);
     private _displayService: DisplayService = inject(DisplayService);
     private readonly _tabs: Tab[] = [Tab.DRAW, Tab.TOKEN_TRAIL, Tab.PRACTICE];
 
     selectedIndex = Tab.DRAW; // Select which tab to show by default
 
+    constructor() {
+        effect(() => {
+            const isPresentation = this._tabStateService.isPresentationMode();
+            if (isPresentation) {
+                document.body.classList.add('presentation-mode');
+            } else {
+                document.body.classList.remove('presentation-mode');
+            }
+        });
+    }
+
+    @HostListener('document:keydown.escape')
+    onEscapePress() {
+        if (this._tabStateService.isPresentationMode()) {
+            this._tabStateService.isPresentationMode.set(false);
+        }
+    }
+
+    protected togglePresentationMode(event: Event) {
+        event.stopPropagation();
+        this._tabStateService.togglePresentationMode();
+    }
+
     ngOnInit(): void {
         this._tabStateService.switchTo(this._tabs[this.selectedIndex]);
     }
 
     onTabChange(event: MatTabChangeEvent) {
+        this.selectedIndex = event.index;
         this._tabStateService.switchTo(this._tabs[event.index]);
 
         const diagram = this._displayService.diagram;

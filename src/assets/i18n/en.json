@@ -1,5 +1,7 @@
 {
     "SWITCH_LANGUAGE": "Switch language to German",
+    "ENTER_PRESENTATION_MODE": "Enter presentation mode",
+    "EXIT_PRESENTATION_MODE": "Exit presentation mode",
     "CLEAR_NET": "Clear Petri Net",
     "LAYOUT_SPRING_EMBEDDER": "Spring Embedder Layout",
     "LAYOUT_SUGIYAMA": "Sugiyama Layout",

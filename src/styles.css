@@ -134,7 +134,9 @@ body {
     -ms-user-select: none;
     display: flex;
     flex-direction: column;
-    height: 600px;
+    height: 100% !important;
+    flex: 1 1 auto;
+    min-height: 0;
     overflow: visible;
 }
 
@@ -325,4 +327,185 @@ body {
 }
 .error-toast .accept-btn:hover {
     background-color: #c62828 !important;
+}
+
+/* --- Presentation Mode Styles --- */
+body.presentation-mode {
+    padding: 0 !important;
+    margin: 0 !important;
+    overflow: hidden !important;
+    height: 100vh !important;
+    width: 100vw !important;
+}
+
+body.presentation-mode .flexColumnAlignStartStretch {
+    height: 100vh !important;
+    display: flex !important;
+    flex-direction: column !important;
+}
+
+/* Hide header, subheader, line, footer, and sidebar in presentation mode */
+body.presentation-mode .flexColumnAlignStartStretch > div.flexRowAlignCenterCenter,
+body.presentation-mode .flexColumnAlignStartStretch > h2,
+body.presentation-mode .flexColumnAlignStartStretch > hr,
+body.presentation-mode .flexColumnAlignStartStretch > app-footer,
+body.presentation-mode .action-sidebar {
+    display: none !important;
+}
+
+/* Make sure the main content container fills the entire viewport */
+body.presentation-mode .flexColumnAlignStartStretch > div:nth-of-type(2) {
+    flex: 1 !important;
+    height: 100% !important;
+    min-height: 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+}
+
+body.presentation-mode app-main-tab {
+    flex: 1 !important;
+    height: 100% !important;
+    min-height: 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+}
+
+body.presentation-mode .editor-container {
+    flex: 1 !important;
+    height: 100% !important;
+    min-height: 0 !important;
+    border: none !important;
+}
+
+body.presentation-mode mat-tab-group,
+body.presentation-mode .flex-tab-group {
+    height: 100% !important;
+    display: flex !important;
+    flex-direction: column !important;
+}
+
+/* Hide the material tab header completely in presentation mode */
+body.presentation-mode mat-tab-header,
+body.presentation-mode .mat-mdc-tab-header {
+    display: none !important;
+}
+
+body.presentation-mode .mat-mdc-tab-body-wrapper {
+    flex: 1 !important;
+    height: 100% !important;
+    min-height: 0 !important;
+}
+
+body.presentation-mode mat-tab-body,
+body.presentation-mode .mat-mdc-tab-body {
+    height: 100% !important;
+}
+
+body.presentation-mode .mat-mdc-tab-body-active {
+    display: flex !important;
+    flex-direction: column !important;
+    height: 100% !important;
+}
+
+body.presentation-mode .tab-toolbar-container {
+    display: none !important;
+}
+
+/* Expand Draw Tab component with premium spacing/borders */
+body.presentation-mode app-draw {
+    display: block !important;
+    height: 100% !important;
+}
+
+body.presentation-mode .draw-layout {
+    height: calc(100vh - 32px) !important;
+    max-height: calc(100vh - 32px) !important;
+    width: auto !important;
+    margin: 16px !important;
+    border: 1px solid #e0e0e0 !important;
+    border-radius: 10px !important;
+    padding: 12px !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08) !important;
+    box-sizing: border-box !important;
+}
+
+/* Expand Token Trail / Practice split view with premium spacing/borders */
+body.presentation-mode app-token-trail,
+body.presentation-mode app-token-trail-practice {
+    display: block !important;
+    height: 100% !important;
+}
+
+body.presentation-mode .split-view-layout {
+    height: calc(100vh - 32px) !important;
+    max-height: calc(100vh - 32px) !important;
+    width: auto !important;
+    margin: 16px !important;
+    gap: 0.5rem !important;
+    box-sizing: border-box !important;
+    flex-direction: column !important; /* Stack vertically in presentation mode */
+}
+
+body.presentation-mode .split-view-panel {
+    min-height: 0 !important;
+    border: 1px solid #e0e0e0 !important;
+    border-radius: 10px !important;
+    padding: 12px !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08) !important;
+    display: flex !important;
+    flex-direction: column !important;
+    box-sizing: border-box !important;
+}
+
+body.presentation-mode .resizer {
+    width: 100% !important;
+    height: 12px !important;
+    cursor: row-resize !important;
+    margin: -4px 0 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    z-index: 10 !important;
+}
+
+body.presentation-mode .resizer-handle {
+    width: 40px !important;
+    height: 4px !important;
+    background-color: #ccc !important;
+    border-radius: 2px !important;
+}
+
+/* Resize displays inside the split view */
+body.presentation-mode app-token-trail-display,
+body.presentation-mode app-token-trail-display .display-container {
+    height: 100% !important;
+    display: flex !important;
+    flex-direction: column !important;
+}
+
+body.presentation-mode app-token-trail-display .canvas {
+    height: 100% !important;
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    border: 1px dashed lightgrey !important;
+    border-radius: 6px !important;
+}
+
+body.presentation-mode app-token-trail-draw-display,
+body.presentation-mode app-token-trail-draw-display .drawing-area-container {
+    height: 100% !important;
+    display: flex !important;
+    flex-direction: column !important;
+}
+
+body.presentation-mode app-token-trail-draw-display .drawing-canvas {
+    height: 100% !important;
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    border: 1px dashed #bdbdbd !important;
+    border-radius: 6px !important;
+}
+
+body.presentation-mode app-token-trail-draw-display .instruction-panel {
+    flex: 0 0 auto !important;
 }

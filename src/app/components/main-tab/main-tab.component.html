@@ -1,9 +1,27 @@
 <div class="editor-container">
+    @if (_tabStateService.isPresentationMode()) {
+        <button
+            mat-icon-button
+            class="exit-presentation-btn"
+            (click)="togglePresentationMode($event)"
+            [matTooltip]="'EXIT_PRESENTATION_MODE' | translate">
+            <mat-icon>fullscreen_exit</mat-icon>
+        </button>
+    }
     <mat-tab-group class="flex-tab-group" [selectedIndex]="selectedIndex" (selectedTabChange)="onTabChange($event)">
         <mat-tab>
             <ng-template mat-tab-label>
                 <mat-icon class="tab-icon">edit</mat-icon>
-                {{ 'TAB_DRAW' | translate }}
+                <span>{{ 'TAB_DRAW' | translate }}</span>
+                @if (selectedIndex === 0) {
+                    <button
+                        mat-icon-button
+                        class="tab-presentation-btn"
+                        (click)="togglePresentationMode($event)"
+                        [matTooltip]="'ENTER_PRESENTATION_MODE' | translate">
+                        <mat-icon>fullscreen</mat-icon>
+                    </button>
+                }
             </ng-template>
             <app-draw></app-draw>
         </mat-tab>
@@ -11,7 +29,16 @@
         <mat-tab>
             <ng-template mat-tab-label>
                 <mat-icon class="tab-icon">linear_scale</mat-icon>
-                {{ 'TAB_TOKEN_TRAIL' | translate }}
+                <span>{{ 'TAB_TOKEN_TRAIL' | translate }}</span>
+                @if (selectedIndex === 1) {
+                    <button
+                        mat-icon-button
+                        class="tab-presentation-btn"
+                        (click)="togglePresentationMode($event)"
+                        [matTooltip]="'ENTER_PRESENTATION_MODE' | translate">
+                        <mat-icon>fullscreen</mat-icon>
+                    </button>
+                }
             </ng-template>
             <app-token-trail></app-token-trail>
         </mat-tab>
@@ -19,7 +46,16 @@
         <mat-tab>
             <ng-template mat-tab-label>
                 <mat-icon class="tab-icon">extension</mat-icon>
-                {{ 'TAB_PRACTICE' | translate }}
+                <span>{{ 'TAB_PRACTICE' | translate }}</span>
+                @if (selectedIndex === 2) {
+                    <button
+                        mat-icon-button
+                        class="tab-presentation-btn"
+                        (click)="togglePresentationMode($event)"
+                        [matTooltip]="'ENTER_PRESENTATION_MODE' | translate">
+                        <mat-icon>fullscreen</mat-icon>
+                    </button>
+                }
             </ng-template>
             <app-token-trail-practice></app-token-trail-practice>
         </mat-tab>
