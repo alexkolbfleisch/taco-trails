@@ -6,6 +6,8 @@ import { PlayService } from '../../../services/play.service';
 import { DiagramTransition } from '../../../classes/diagram/diagram-transition';
 import { DiagramPlace } from '../../../classes/diagram/diagram-place';
 import { PLACE_RADIUS, TRANSITION_SIZE } from '../display.constants';
+import { Condition } from '../../../classes/labeled-net.model';
+import { TokenTrailStateService, LpnDisplayMode } from '../../../services/token-trail-state.service';
 
 @Component({
     selector: 'g[appSvgNode]',
@@ -24,6 +26,7 @@ export class SvgNodeComponent {
 
     readonly diagramNode = input<DisplayableNode>();
     private _playService = inject(PlayService);
+    private _tokenTrailStateService = inject(TokenTrailStateService, { optional: true });
 
     readonly showInnerLabel = input<boolean>(false);
     readonly transitionLabelPlacement = input<'inside' | 'below'>('inside');
@@ -104,7 +107,11 @@ export class SvgNodeComponent {
      * Truncated display label for the node, adding ellipsis if it exceeds MAX_CHARS.
      */
     readonly displayLabel = computed(() => {
-        const label = this.diagramNode()?.displayLabel || '';
+        const node = this.diagramNode();
+        if (node instanceof Condition && this._tokenTrailStateService?.displayMode() === LpnDisplayMode.Puzzle) {
+            return '';
+        }
+        const label = node?.displayLabel || '';
         if (label.length > this.MAX_CHARS) {
             return label.substring(0, this.MAX_CHARS) + '...';
         }
