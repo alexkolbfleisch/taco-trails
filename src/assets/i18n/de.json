@@ -138,7 +138,7 @@
             "PALETTE_TITLE": "Die Elementen-Palette",
             "PALETTE_TEXT": "Verwenden Sie diese Palette, um neue Elemente zu erstellen. Ziehen Sie den Kreis (Stelle) oder das Rechteck (Transition) aus der Palette auf die Zeichenfläche, um sie Ihrem Petri-Netz hinzuzufügen.",
             "TUPLE_INPUT_TITLE": "Tupel-Spezifikation",
-            "TUPLE_INPUT_TEXT": "Sie können Ihr Petri-Netz auch als formales Tupel definieren, genau wie im Vorlesungsskript. Geben Sie ein Tupel im Format (P, T, F, m₀) ein und klicken Sie auf 'Generieren', um das Netz zu erstellen.",
+            "TUPLE_INPUT_TEXT": "Sie können Ihr Petri-Netz auch als formales Tupel definieren, genau wie im Vorlesungsskript. Geben Sie ein Tupel im Format (P, T, W, m₀) ein und klicken Sie auf 'Generieren', um das Netz zu erstellen.",
             "CANVAS_TITLE": "Die Zeichenfläche",
             "CANVAS_TEXT": "Dies ist Ihr Arbeitsbereich. Elemente, die Sie aus der Palette ziehen, erscheinen hier. Linksklick und Ziehen zum Verschieben. Mittelklick zum Löschen eines Elements oder einer Kante. Doppelklick zum Umbenennen.",
             "SCROLL_TITLE": "Marken & Gewichte anpassen",
