@@ -73,7 +73,7 @@ export class SvgEventNodeComponent {
         let label = n?.displayLabel || '';
 
         if (n instanceof Condition && this.displayMode() === LpnDisplayMode.Puzzle) {
-            label = n.baseName || n.displayLabel || '';
+            label = '';
         }
 
         if (label.length > this.MAX_CHARS) {
