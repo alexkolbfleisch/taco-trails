@@ -252,7 +252,7 @@ export class TokenTrailStateService {
             }
         }
         const isStart = options?.isStartPlace ?? false;
-        const condition = new Condition(id, isStart ? 1 : initialTokens, label || generatedBaseName, {
+        const condition = new Condition(id, isStart ? 1 : initialTokens, label || '', {
             hideTokens: options?.hideTokens ?? !isStart,
             labelPlacement: options?.labelPlacement ?? 'below',
             isStartPlace: isStart,
