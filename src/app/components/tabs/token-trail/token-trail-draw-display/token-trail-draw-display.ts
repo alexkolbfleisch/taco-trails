@@ -333,7 +333,7 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
 
         if (mode === LpnDisplayMode.Construction) {
             actions.push({
-                icon: 'auto_fix_high',
+                icon: 'leopard',
                 tooltip: 'TOKEN_TRAIL.BUTTON_FILL_EMPTY_CONDITIONS',
                 color: 'accent',
                 isActive: !disabled,

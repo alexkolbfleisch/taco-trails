@@ -2,11 +2,7 @@
     <mat-expansion-panel class="pn-help-panel">
         <mat-expansion-panel-header class="pn-help-header">
             <div class="pn-help-header-title">
-                <span
-                    [matTooltip]="helpTooltip() | translate"
-                    style="font-size: 20px; cursor: pointer; user-select: none"
-                    >🐆</span
-                >
+                <mat-icon [matTooltip]="helpTooltip() | translate" color="primary">help_outline</mat-icon>
                 <mat-panel-title>{{ headerTitle() | translate }}</mat-panel-title>
             </div>
             @if (toggle(); as toggleConfig) {
@@ -35,13 +31,21 @@
                         [matMenuTriggerFor]="actionMenu"
                         (click)="$event.stopPropagation()"
                         [attr.data-tour]="action.icon">
-                        <mat-icon>{{ action.icon }}</mat-icon>
+                        @if (action.icon === 'leopard') {
+                            <span class="leopard-icon">🐆</span>
+                        } @else {
+                            <mat-icon>{{ action.icon }}</mat-icon>
+                        }
                     </button>
                     <mat-menu #actionMenu="matMenu">
                         @for (item of action.menu; track item.label) {
                             <button mat-menu-item [disabled]="item.disabled" (click)="item.action()">
                                 @if (item.icon) {
-                                    <mat-icon>{{ item.icon }}</mat-icon>
+                                    @if (item.icon === 'leopard') {
+                                        <span class="leopard-icon-menu">🐆</span>
+                                    } @else {
+                                        <mat-icon>{{ item.icon }}</mat-icon>
+                                    }
                                 }
                                 <span>{{ item.label | translate }}</span>
                             </button>
@@ -55,7 +59,11 @@
                         [matTooltip]="action.tooltip | translate"
                         (click)="action.action(); $event.stopPropagation()"
                         [attr.data-tour]="action.icon">
-                        <mat-icon>{{ action.icon }}</mat-icon>
+                        @if (action.icon === 'leopard') {
+                            <span class="leopard-icon">🐆</span>
+                        } @else {
+                            <mat-icon>{{ action.icon }}</mat-icon>
+                        }
                     </button>
                 }
             }
