@@ -2,6 +2,8 @@
     display: flex;
     flex-direction: row;
     gap: 0.5rem;
+    height: 650px;
+    box-sizing: border-box;
 }
 
 .split-view-panel {
@@ -13,6 +15,10 @@
     padding: 12px;
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
     overflow: hidden;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
 }
 
 .resizer {
@@ -45,15 +51,30 @@
     -ms-user-select: none;
 }
 
+.split-view-panel ::ng-deep app-token-trail-display,
+.split-view-panel ::ng-deep app-token-trail-draw-display,
+.split-view-panel ::ng-deep .display-container,
+.split-view-panel ::ng-deep .drawing-area-container {
+    height: 100% !important;
+    display: flex !important;
+    flex-direction: column !important;
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+}
+
 .split-view-panel ::ng-deep svg.canvas,
 .split-view-panel ::ng-deep svg.drawing-canvas {
     display: block;
     width: 100%;
+    height: 100% !important;
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
 }
 
 @media (max-width: 900px) {
     .split-view-layout {
         flex-direction: column;
+        height: 1200px;
     }
 
     .resizer {
@@ -61,6 +82,9 @@
         height: 12px;
         cursor: row-resize;
         margin: -4px 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
     }
 
     .resizer-handle {

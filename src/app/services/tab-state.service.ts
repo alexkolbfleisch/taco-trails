@@ -15,7 +15,12 @@ export class TabStateService {
     private _displayService: DisplayService = inject(DisplayService);
     private _sourcePetriNetService: SourcePetriNetService = inject(SourcePetriNetService);
     readonly currentTab = signal<Tab>(Tab.DRAW);
+    readonly isPresentationMode = signal<boolean>(false);
     activeTourService: TourService | null = null;
+
+    togglePresentationMode() {
+        this.isPresentationMode.update((val) => !val);
+    }
     activeTokenTrailStateService: TokenTrailStateService | null = null;
 
     private _tabLastMarkings: Map<Tab, Record<string, number> | undefined> = new Map<

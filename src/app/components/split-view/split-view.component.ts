@@ -1,4 +1,5 @@
 import { Component, ElementRef, HostListener, signal, inject } from '@angular/core';
+import { TabStateService } from '../../services/tab-state.service';
 
 @Component({
     selector: 'app-split-view',
@@ -8,6 +9,7 @@ import { Component, ElementRef, HostListener, signal, inject } from '@angular/co
 })
 export class SplitViewComponent {
     private el = inject(ElementRef);
+    private _tabStateService = inject(TabStateService);
     leftPanelFlex = signal<number>(50);
     isDragging = false;
     private isHorizontal = true;
@@ -15,7 +17,7 @@ export class SplitViewComponent {
     startDrag(event: MouseEvent) {
         this.isDragging = true;
         event.preventDefault();
-        this.isHorizontal = window.innerWidth > 900;
+        this.isHorizontal = !this._tabStateService.isPresentationMode() && window.innerWidth > 900;
     }
 
     @HostListener('window:mousemove', ['$event'])
