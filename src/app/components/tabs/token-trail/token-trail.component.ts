@@ -27,11 +27,13 @@ import { TokenTrailValidationService } from '../../../services/token-trail-valid
 export class TokenTrailComponent {
     private _tabStateService = inject(TabStateService);
     private _tourService = inject(TokenTrailTourService);
+    private _stateService = inject(TokenTrailStateService);
 
     constructor() {
         effect(() => {
             if (this._tabStateService.currentTab() === Tab.TOKEN_TRAIL) {
                 this._tabStateService.activeTourService = this._tourService;
+                this._tabStateService.activeTokenTrailStateService = this._stateService;
                 // Introduce a small timeout to ensure the tab DOM elements are fully rendered and layout settled
                 setTimeout(() => {
                     this._tourService.startTour();

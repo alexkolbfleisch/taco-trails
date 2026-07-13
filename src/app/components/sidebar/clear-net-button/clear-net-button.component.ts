@@ -6,6 +6,7 @@ import { DisplayService } from '../../../services/display.service';
 import { MatTooltip } from '@angular/material/tooltip';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { TranslateModule } from '@ngx-translate/core';
+import { TabStateService } from '../../../services/tab-state.service';
 import { TokenTrailStateService } from '../../../services/token-trail-state.service';
 
 @Component({
@@ -18,6 +19,7 @@ import { TokenTrailStateService } from '../../../services/token-trail-state.serv
 export class ClearNetButtonComponent {
     private _sourcePetriNetService = inject(SourcePetriNetService);
     private _displayService = inject(DisplayService);
+    private _tabStateService = inject(TabStateService);
     private _tokenTrailStateService = inject(TokenTrailStateService);
     private _diagramSignal = toSignal(this._displayService.diagram$);
     private _sourceNetSignal = toSignal(this._sourcePetriNetService.sourceNet$);
@@ -32,6 +34,7 @@ export class ClearNetButtonComponent {
     public clearNet(): void {
         this._sourcePetriNetService.clear();
         this._displayService.clear();
-        this._tokenTrailStateService.clear();
+        const stateService = this._tabStateService.activeTokenTrailStateService || this._tokenTrailStateService;
+        stateService.clear();
     }
 }

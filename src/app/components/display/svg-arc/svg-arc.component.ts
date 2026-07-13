@@ -4,7 +4,9 @@ import { Coords } from '../../../classes/json-petri-net';
 import { DisplayableEdge, DisplayableNode } from '../../../classes/displayable-graph.interface';
 import { PLACE_RADIUS, TRANSITION_SIZE } from '../display.constants';
 
-// Extend DisplayableEdge to allow startOffset/endOffset
+import { computeBendPointsForArc } from '../../../services/arc-parallel-offset.util';
+
+// Extend DisplayableEdge to allow startOffset/endOffset for close nodes
 export interface DisplayableEdgeWithOffset extends DisplayableEdge {
     startOffset?: Coords;
     endOffset?: Coords;
@@ -20,9 +22,11 @@ export class SvgArcComponent {
     readonly RADIUS = PLACE_RADIUS;
     readonly RECT_WIDTH = TRANSITION_SIZE;
     readonly RECT_HEIGHT = TRANSITION_SIZE;
+    private readonly CLOSE_DISTANCE_THRESHOLD = 120;
 
-    readonly diagramArc = input<DisplayableEdgeWithOffset>();
+    readonly diagramArc = input<DisplayableEdge>();
     readonly nodes = input<DisplayableNode[]>([]);
+    readonly edges = input<DisplayableEdge[]>([]);
 
     readonly sourceNode = computed(() => {
         const arc = this.diagramArc();
@@ -38,12 +42,50 @@ export class SvgArcComponent {
         return nodeList.find((node) => node.id === arc.target);
     });
 
+    readonly computedBendPoints = computed(() => {
+        const arc = this.diagramArc();
+        const edges = this.edges();
+        const nodes = this.nodes();
+
+        if (!arc || !edges || !nodes) return [];
+
+        if (arc.bendPoints && arc.bendPoints.length > 0) {
+            return arc.bendPoints;
+        }
+
+        // ponytail: compute self-loops symmetrically
+        if (arc.source === arc.target) {
+            const node = nodes.find((n) => n.id === arc.source);
+            if (node) {
+                return [
+                    { x: node.x - 20, y: node.y - 50 },
+                    { x: node.x + 20, y: node.y - 50 },
+                ];
+            }
+        }
+
+        // ponytail: if nodes are too close, fall back to straight line with start/end offset (no bend points)
+        const source = nodes.find((n) => n.id === arc.source);
+        const target = nodes.find((n) => n.id === arc.target);
+        if (source && target) {
+            const dx = target.x - source.x;
+            const dy = target.y - source.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            if (dist < this.CLOSE_DISTANCE_THRESHOLD) {
+                return [];
+            }
+        }
+
+        // ponytail: use the same parallel offsets logic as in LPN for normal distances
+        return computeBendPointsForArc(arc, edges, nodes);
+    });
+
     /**
-     * Returns the connection point on the node's edge, with optional parallel offset.
+     * Returns the connection point on the node's edge.
      */
     private getOffsetConnectionPoint(
         node: DisplayableNode | undefined,
-        otherNode: DisplayableNode | undefined,
+        otherNode: Coords | undefined,
         offset = 0,
     ): Coords {
         if (!node || !otherNode) return { x: 0, y: 0 };
@@ -83,21 +125,37 @@ export class SvgArcComponent {
     }
 
     readonly sourceConnectionPoint = computed(() => {
-        const arc = this.diagramArc();
         const source = this.sourceNode();
         const target = this.targetNode();
-        // Use startOffset if present (for parallel arcs)
-        const offset = arc && arc.startOffset ? this.getOffsetFromCenters(source, target, arc.startOffset) : 0;
-        return this.getOffsetConnectionPoint(source, target, offset);
+        const bendPoints = this.computedBendPoints();
+        const arc = this.diagramArc() as DisplayableEdgeWithOffset;
+
+        if (!source || !target) return { x: 0, y: 0 };
+
+        if (bendPoints.length > 0) {
+            const targetPoint = bendPoints[0];
+            return this.getOffsetConnectionPoint(source, targetPoint, 0);
+        } else {
+            const offset = arc && arc.startOffset ? this.getOffsetFromCenters(source, target, arc.startOffset) : 0;
+            return this.getOffsetConnectionPoint(source, target, offset);
+        }
     });
 
     readonly targetConnectionPoint = computed(() => {
-        const arc = this.diagramArc();
         const source = this.sourceNode();
         const target = this.targetNode();
-        // Use endOffset if present (for parallel arcs)
-        const offset = arc && arc.endOffset ? this.getOffsetFromCenters(target, source, arc.endOffset) : 0;
-        return this.getOffsetConnectionPoint(target, source, offset);
+        const bendPoints = this.computedBendPoints();
+        const arc = this.diagramArc() as DisplayableEdgeWithOffset;
+
+        if (!source || !target) return { x: 0, y: 0 };
+
+        if (bendPoints.length > 0) {
+            const sourcePoint = bendPoints[bendPoints.length - 1];
+            return this.getOffsetConnectionPoint(target, sourcePoint, 0);
+        } else {
+            const offset = arc && arc.endOffset ? this.getOffsetFromCenters(target, source, arc.endOffset) : 0;
+            return this.getOffsetConnectionPoint(target, source, offset);
+        }
     });
 
     /**
@@ -105,7 +163,7 @@ export class SvgArcComponent {
      */
     private getOffsetFromCenters(
         node: DisplayableNode | undefined,
-        otherNode: DisplayableNode | undefined,
+        otherNode: Coords | undefined,
         offsetPoint: Coords,
     ): number {
         if (!node || !otherNode) return 0;
@@ -127,11 +185,9 @@ export class SvgArcComponent {
     readonly pathData = computed(() => {
         const sourcePoint = this.sourceConnectionPoint();
         const targetPoint = this.targetConnectionPoint();
-        const arc = this.diagramArc();
+        const bendPoints = this.computedBendPoints();
 
-        if (!arc) return '';
-
-        const bendPoints = arc.bendPoints;
+        if (!this.diagramArc()) return '';
 
         let path = `M ${sourcePoint.x} ${sourcePoint.y}`;
 
@@ -154,7 +210,11 @@ export class SvgArcComponent {
 
         if (!source || !target || !arc) return { x: 0, y: 0 };
 
-        const points: Coords[] = [{ x: source.x, y: source.y }, ...arc.bendPoints, { x: target.x, y: target.y }];
+        const points: Coords[] = [
+            { x: source.x, y: source.y },
+            ...this.computedBendPoints(),
+            { x: target.x, y: target.y },
+        ];
 
         const segmentLengths: number[] = [];
         let total = 0;

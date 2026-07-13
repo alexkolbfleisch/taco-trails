@@ -5,6 +5,12 @@ import { GeometryUtil } from '../../../utils/geometry.util';
 import { computeBendPointsForArc } from '../../../services/arc-parallel-offset.util';
 import { VIEW_MODES, ViewMode } from '../display.constants';
 
+// Extend DisplayableEdge to allow startOffset/endOffset for close nodes
+export interface DisplayableEdgeWithOffset extends DisplayableEdge {
+    startOffset?: Coords;
+    endOffset?: Coords;
+}
+
 @Component({
     selector: 'g[appSvgLabeledNetArc]',
     imports: [],
@@ -15,6 +21,7 @@ export class SvgLabeledNetArcComponent {
     private readonly FALLBACK_LABEL_OFFSET_X = 10;
     private readonly FALLBACK_LABEL_OFFSET_Y = -10;
     private readonly LABEL_NORMAL_OFFSET = 15;
+    private readonly CLOSE_DISTANCE_THRESHOLD = 120;
 
     readonly RADIUS = 7; // Matching SvgStateNodeComponent radius
 
@@ -58,6 +65,18 @@ export class SvgLabeledNetArcComponent {
             }
         }
 
+        // ponytail: if nodes are too close, fall back to straight line with start/end offset (no bend points)
+        const source = nodes.find((n) => n.id === arc.source);
+        const target = nodes.find((n) => n.id === arc.target);
+        if (source && target) {
+            const dx = target.x - source.x;
+            const dy = target.y - source.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            if (dist < this.CLOSE_DISTANCE_THRESHOLD) {
+                return [];
+            }
+        }
+
         return computeBendPointsForArc(arc, edges, nodes);
     });
 
@@ -65,22 +84,42 @@ export class SvgLabeledNetArcComponent {
         const source = this.sourceNode();
         const target = this.targetNode();
         const bendPoints = this.computedBendPoints();
+        const arc = this.diagramArc() as DisplayableEdgeWithOffset;
 
         if (!source || !target) return { x: 0, y: 0 };
 
-        const targetPoint = bendPoints.length > 0 ? bendPoints[0] : { x: target.x, y: target.y };
-        return this.getConnectionPoint(source, targetPoint);
+        if (bendPoints.length > 0) {
+            const targetPoint = bendPoints[0];
+            return this.getConnectionPoint(source, targetPoint);
+        } else {
+            const startX = arc && arc.startOffset ? arc.startOffset.x : source.x;
+            const startY = arc && arc.startOffset ? arc.startOffset.y : source.y;
+            const endX = arc && arc.endOffset ? arc.endOffset.x : target.x;
+            const endY = arc && arc.endOffset ? arc.endOffset.y : target.y;
+            const offsetPoint = { x: endX, y: endY };
+            return this.getConnectionPoint({ ...source, x: startX, y: startY }, offsetPoint);
+        }
     });
 
     readonly targetConnectionPoint = computed(() => {
         const source = this.sourceNode();
         const target = this.targetNode();
         const bendPoints = this.computedBendPoints();
+        const arc = this.diagramArc() as DisplayableEdgeWithOffset;
 
         if (!source || !target) return { x: 0, y: 0 };
 
-        const sourcePoint = bendPoints.length > 0 ? bendPoints[bendPoints.length - 1] : { x: source.x, y: source.y };
-        return this.getConnectionPoint(target, sourcePoint);
+        if (bendPoints.length > 0) {
+            const sourcePoint = bendPoints[bendPoints.length - 1];
+            return this.getConnectionPoint(target, sourcePoint);
+        } else {
+            const startX = arc && arc.startOffset ? arc.startOffset.x : source.x;
+            const startY = arc && arc.startOffset ? arc.startOffset.y : source.y;
+            const endX = arc && arc.endOffset ? arc.endOffset.x : target.x;
+            const endY = arc && arc.endOffset ? arc.endOffset.y : target.y;
+            const offsetPoint = { x: startX, y: startY };
+            return this.getConnectionPoint({ ...target, x: endX, y: endY }, offsetPoint);
+        }
     });
 
     readonly pathData = computed(() => {
