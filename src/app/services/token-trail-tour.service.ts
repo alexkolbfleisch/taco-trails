@@ -473,7 +473,7 @@ export class TokenTrailTourService {
             {
                 id: 'step-solve-fill',
                 attachTo: {
-                    element: 'button[data-tour="auto_fix_high"]',
+                    element: 'button[data-tour="leopard"]',
                     on: 'bottom' as const,
                 },
                 title: this.translate.instant('TOKEN_TRAIL.TOUR.SOLVE_FILL_TITLE'),

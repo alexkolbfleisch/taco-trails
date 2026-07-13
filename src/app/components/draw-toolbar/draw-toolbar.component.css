@@ -152,3 +152,22 @@
 .pn-toggle-switch:hover .pn-toggle-slider {
     box-shadow: 0 0 8px rgba(25, 118, 210, 0.3);
 }
+
+.leopard-icon {
+    display: inline-block;
+    font-size: 24px;
+    line-height: 1;
+    transform: translateY(-2px);
+    transition: transform 0.2s ease-in-out;
+}
+
+button[data-tour='leopard']:hover .leopard-icon {
+    transform: translateY(-2px) scale(1.25);
+}
+
+.leopard-icon-menu {
+    display: inline-block;
+    font-size: 24px;
+    margin-right: 16px;
+    line-height: 1;
+}
