@@ -13,6 +13,8 @@ import { DrawService } from '../../../services/draw.service';
 import { TabStateService } from '../../../services/tab-state.service';
 import { Tab } from '../../../classes/tabs';
 import { CanvasDiagram } from '../../../classes/diagram/canvas-diagram';
+import { TokenTrailStateService } from '../../../services/token-trail-state.service';
+import { LabeledNetGraph } from '../../../classes/labeled-net.model';
 
 @Component({
     selector: 'app-layout-button',
@@ -27,6 +29,7 @@ export class LayoutButtonComponent {
     private _displayService = inject(DisplayService);
     private _drawService = inject(DrawService);
     private _tabStateService = inject(TabStateService);
+    private _tokenTrailStateService = inject(TokenTrailStateService);
 
     private _diagramSignal = toSignal(this._displayService.diagram$);
     private _isCalculating = signal(false);
@@ -43,17 +46,31 @@ export class LayoutButtonComponent {
     calculateSpringEmbedderLayout() {
         this._isCalculating.set(true);
         let layoutPromise: Promise<void>;
+        const currentTab = this._tabStateService.currentTab();
+        const stateService = this._tabStateService.activeTokenTrailStateService || this._tokenTrailStateService;
 
-        if (this._tabStateService.currentTab() === Tab.DRAW) {
+        // ponytail: apply layout on drawn Petri net for DRAW, LPN for TOKEN_TRAIL, and source Petri net otherwise.
+        if (currentTab === Tab.DRAW) {
             const drawnGraph = new CanvasDiagram(this._drawService.drawnElements, this._drawService.connections);
             this._displayService.display(drawnGraph);
             layoutPromise = this._springEmbedderService.calculateLayout(drawnGraph);
+        } else if (currentTab === Tab.TOKEN_TRAIL) {
+            const lpnGraph = new LabeledNetGraph();
+            lpnGraph.nodes = stateService.drawnElements();
+            lpnGraph.edges = stateService.connections();
+            layoutPromise = this._springEmbedderService.calculateLayout(lpnGraph);
         } else {
             layoutPromise = this._springEmbedderService.calculateLayout();
         }
 
         layoutPromise
-            .then(() => this._isCalculating.set(false))
+            .then(() => {
+                if (currentTab === Tab.TOKEN_TRAIL) {
+                    stateService.drawnElements.set([...stateService.drawnElements()]);
+                    stateService.connections.set([...stateService.connections()]);
+                }
+                this._isCalculating.set(false);
+            })
             .catch((error) => {
                 this._isCalculating.set(false);
                 console.error('Error during layout calculation:', error);
@@ -64,10 +81,18 @@ export class LayoutButtonComponent {
         this._isCalculating.set(true);
         try {
             const currentTab = this._tabStateService.currentTab();
+            const stateService = this._tabStateService.activeTokenTrailStateService || this._tokenTrailStateService;
+            // ponytail: apply layout on drawn Petri net for DRAW, LPN for TOKEN_TRAIL, and source Petri net otherwise.
             if (currentTab === Tab.DRAW) {
                 const drawnGraph = new CanvasDiagram(this._drawService.drawnElements, this._drawService.connections);
                 this._sugiyamaService.calculateLayout(drawnGraph.getNodes(), drawnGraph.getEdges());
                 this._displayService.display(drawnGraph);
+            } else if (currentTab === Tab.TOKEN_TRAIL) {
+                const nodes = stateService.drawnElements();
+                const edges = stateService.connections();
+                this._sugiyamaService.calculateLayout(nodes, edges);
+                stateService.drawnElements.set([...nodes]);
+                stateService.connections.set([...edges]);
             } else {
                 const diagram = this._sourceNetService.getCurrentSourceNet();
                 if (diagram) {

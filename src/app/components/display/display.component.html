@@ -19,7 +19,7 @@
         </marker>
     </defs>
     @for (edge of diagram()?.getEdges(); track edge.id) {
-        <g appSvgArc [diagramArc]="edge" [nodes]="diagram()?.getNodes() || []" />
+        <g appSvgArc [diagramArc]="edge" [nodes]="diagram()?.getNodes() || []" [edges]="diagram()?.getEdges() || []" />
     }
 
     @for (node of diagram()?.getNodes(); track node.id) {

@@ -20,7 +20,11 @@
         </defs>
 
         @for (arc of diagram()?.getEdges(); track arc.id) {
-            <g appSvgArc [diagramArc]="arc" [nodes]="diagram()?.getNodes() || []" />
+            <g
+                appSvgArc
+                [diagramArc]="arc"
+                [nodes]="diagram()?.getNodes() || []"
+                [edges]="diagram()?.getEdges() || []" />
         }
 
         @for (node of diagram()?.getNodes(); track node.id) {

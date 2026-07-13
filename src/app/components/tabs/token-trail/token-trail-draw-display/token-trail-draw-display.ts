@@ -19,6 +19,7 @@ import {
     LabeledNetNode,
     LabeledNetEdge,
 } from '../../../../classes/labeled-net.model';
+import { Coords } from '../../../../classes/json-petri-net';
 import { DisplayService } from '../../../../services/display.service';
 import { TokenTrailValidationService, ValidationIssue } from '../../../../services/token-trail-validation.service';
 import { PanningService } from '../../../../services/panning.service';
@@ -231,8 +232,7 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
                 const b = nodeMap.get(c.target);
                 if (!a || !b) return null;
 
-                // Compute bend points for the arc to separate parallel edges,
-                // matching the approach used in SvgStateArcComponent.
+                const CLOSE_DISTANCE_THRESHOLD = 120;
                 let bendPoints = c.bendPoints && c.bendPoints.length > 0 ? c.bendPoints : [];
                 if (bendPoints.length === 0) {
                     if (c.source === c.target) {
@@ -241,7 +241,13 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
                             { x: a.x + 20, y: a.y - 50 },
                         ];
                     } else {
-                        bendPoints = computeBendPointsForArc(c, conns, elements);
+                        // ponytail: if nodes are too close, fall back to straight line with start/end offset (no bend points)
+                        const dx = b.x - a.x;
+                        const dy = b.y - a.y;
+                        const dist = Math.sqrt(dx * dx + dy * dy);
+                        if (dist >= CLOSE_DISTANCE_THRESHOLD) {
+                            bendPoints = computeBendPointsForArc(c, conns, elements);
+                        }
                     }
                 }
 
@@ -265,9 +271,19 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
                     x2 = endTrim.x2;
                     y2 = endTrim.y2;
                 } else {
+                    interface EdgeWithOffset {
+                        startOffset?: Coords;
+                        endOffset?: Coords;
+                    }
+                    const edgeWithOffset = c as unknown as EdgeWithOffset;
+                    const startX = edgeWithOffset.startOffset ? edgeWithOffset.startOffset.x : a.x;
+                    const startY = edgeWithOffset.startOffset ? edgeWithOffset.startOffset.y : a.y;
+                    const endX = edgeWithOffset.endOffset ? edgeWithOffset.endOffset.x : b.x;
+                    const endY = edgeWithOffset.endOffset ? edgeWithOffset.endOffset.y : b.y;
+
                     const trim = this.drawingDisplayService.computeTrimmedLine(
-                        { x: a.x, y: a.y, isPlace: a instanceof Condition },
-                        { x: b.x, y: b.y, isPlace: b instanceof Condition },
+                        { x: startX, y: startY, isPlace: a instanceof Condition },
+                        { x: endX, y: endY, isPlace: b instanceof Condition },
                     );
                     x1 = trim.x1;
                     y1 = trim.y1;
