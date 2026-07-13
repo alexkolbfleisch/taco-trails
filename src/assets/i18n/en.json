@@ -137,7 +137,7 @@
             "PALETTE_TITLE": "The Element Palette",
             "PALETTE_TEXT": "Use this palette to create new elements. Drag the circle (place) or the rectangle (transition) from the palette onto the canvas to add them to your Petri net.",
             "TUPLE_INPUT_TITLE": "Tuple Specification",
-            "TUPLE_INPUT_TEXT": "You can also define your Petri net as a formal tuple, just like in the course text. Type or paste a tuple in the format (P, T, F, m₀) and click 'Generate' to build the net.",
+            "TUPLE_INPUT_TEXT": "You can also define your Petri net as a formal tuple, just like in the course text. Type or paste a tuple in the format (P, T, W, m₀) and click 'Generate' to build the net.",
             "CANVAS_TITLE": "The Drawing Canvas",
             "CANVAS_TEXT": "This is your workspace. Elements you drag from the palette appear here. Left-click and drag to move elements around. Middle-click an element or connection to delete it. Double-click an element to rename its label.",
             "SCROLL_TITLE": "Adjusting Tokens & Weights",
