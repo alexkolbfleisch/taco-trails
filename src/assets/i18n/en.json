@@ -351,6 +351,8 @@
             "MINIMAL_SOLUTION_BODY": "Your previous solution was already correct, but we found a more minimal one. Would you like to apply it?",
             "MOST_MINIMAL_TITLE": "Most Minimal Trail Found",
             "MOST_MINIMAL_BODY": "For this structure, you have already found the most minimal trail.",
+            "ALREADY_VALID_TITLE": "Already Valid",
+            "ALREADY_VALID_BODY": "You already have a valid structure and there is nothing to do here.",
             "ACCEPT": "Accept",
             "DISMISS": "Dismiss",
             "REARRANGED_ACCEPTED_TITLE": "Rearrangement Accepted",

@@ -426,7 +426,7 @@ export class TokenTrailValidationService {
 
     public solveEmptyConditions(): void {
         const sourceNet = this.resolveSourceNetForValidation();
-        if (!sourceNet || !(sourceNet instanceof Diagram)) {
+        if (!sourceNet) {
             this.toaster.showWarning('TOKEN_TRAIL.NO_SOURCE_NET_TITLE', 'TOKEN_TRAIL.NO_SOURCE_NET_BODY');
             return;
         }
@@ -444,6 +444,16 @@ export class TokenTrailValidationService {
                 'TOKEN_TRAIL.SOLVER.NO_START_PLACE_TITLE',
                 'TOKEN_TRAIL.SOLVER.NO_START_PLACE_BODY',
             );
+            return;
+        }
+
+        // Check if the current structure is already valid
+        const valData = this.buildValidationInput();
+        const wasAlreadyValid =
+            !!valData && this.validateTokenTrail(valData.petri, valData.elements, valData.connections).valid;
+
+        if (wasAlreadyValid) {
+            this.toaster.showInfo('TOKEN_TRAIL.SOLVER.ALREADY_VALID_TITLE', 'TOKEN_TRAIL.SOLVER.ALREADY_VALID_BODY');
             return;
         }
 
@@ -566,10 +576,6 @@ export class TokenTrailValidationService {
         solver$: Observable<GLPK>,
         drawnElements: LabeledNetNode[],
     ): void {
-        const valData = this.buildValidationInput();
-        const wasAlreadyValid =
-            !!valData && this.validateTokenTrail(valData.petri, valData.elements, valData.connections).valid;
-
         const secondValidator = new CustomTokenTrailValidator(ilpnSource, ilpnSpec, solver$, {});
         this.loadingService.show();
         secondValidator.validate().subscribe({
@@ -595,7 +601,7 @@ export class TokenTrailValidationService {
                     }
                 }
 
-                this.applyRearrangedSolution(solvedTrailsMap, originalMarkings, wasAlreadyValid);
+                this.applyRearrangedSolution(solvedTrailsMap, originalMarkings);
             },
             error: (err) => {
                 this.loadingService.hide();
@@ -608,31 +614,7 @@ export class TokenTrailValidationService {
     private applyRearrangedSolution(
         solvedTrailsMap: Map<string, Record<string, number>>,
         originalMarkings: Record<string, Record<string, number>>,
-        wasAlreadyValid: boolean,
     ): void {
-        let anyMarkingChanged = false;
-        for (const el of this.stateService.drawnElements()) {
-            if (el instanceof Condition) {
-                const oldMarkings = originalMarkings[el.id] || {};
-                const newMarkings: Record<string, number> = {};
-                for (const [placeId, markingRecord] of solvedTrailsMap.entries()) {
-                    const val = markingRecord[el.id] ?? 0;
-                    if (val > 0) {
-                        newMarkings[placeId] = val;
-                    }
-                }
-                if (areMarkingsDifferent(oldMarkings, newMarkings)) {
-                    anyMarkingChanged = true;
-                    break;
-                }
-            }
-        }
-
-        if (wasAlreadyValid && !anyMarkingChanged) {
-            this.toaster.showInfo('TOKEN_TRAIL.SOLVER.MOST_MINIMAL_TITLE', 'TOKEN_TRAIL.SOLVER.MOST_MINIMAL_BODY');
-            return;
-        }
-
         // Apply markings to ALL conditions and set highlight color if changed
         this.stateService.updateDrawnElements((elements) => {
             return elements.map((node) => {
@@ -671,12 +653,8 @@ export class TokenTrailValidationService {
             });
         });
 
-        const titleKey = wasAlreadyValid
-            ? 'TOKEN_TRAIL.SOLVER.MINIMAL_SOLUTION_TITLE'
-            : 'TOKEN_TRAIL.SOLVER.REARRANGED_TITLE';
-        const bodyKey = wasAlreadyValid
-            ? 'TOKEN_TRAIL.SOLVER.MINIMAL_SOLUTION_BODY'
-            : 'TOKEN_TRAIL.SOLVER.REARRANGED_BODY';
+        const titleKey = 'TOKEN_TRAIL.SOLVER.REARRANGED_TITLE';
+        const bodyKey = 'TOKEN_TRAIL.SOLVER.REARRANGED_BODY';
 
         // Show toast with Accept and Dismiss buttons
         this.toaster.showInfo(titleKey, bodyKey, {

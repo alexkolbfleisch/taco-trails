@@ -352,6 +352,8 @@
             "MINIMAL_SOLUTION_BODY": "Ihre vorherige Markenverteilung war bereits korrekt, aber wir haben eine minimalere Lösung gefunden. Möchten Sie diese anwenden?",
             "MOST_MINIMAL_TITLE": "Minimalster Trail bereits gefunden",
             "MOST_MINIMAL_BODY": "Für diese Struktur haben Sie bereits den minimalsten Trail gefunden.",
+            "ALREADY_VALID_TITLE": "Bereits gültig",
+            "ALREADY_VALID_BODY": "Sie haben bereits eine gültige Struktur und es gibt hier nichts zu tun.",
             "ACCEPT": "Akzeptieren",
             "DISMISS": "Verwerfen",
             "REARRANGED_ACCEPTED_TITLE": "Markenverteilung akzeptiert",
