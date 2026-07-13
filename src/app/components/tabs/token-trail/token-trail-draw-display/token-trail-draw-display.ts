@@ -649,6 +649,8 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
     private readonly _tokenPreviewEffect = effect(() => {
         const displayMode = this.stateService.displayMode();
         const selectedPlaceId = this.stateService.selectedPetriPlaceId();
+        const heldPlaceId = this.stateService.heldPetriPlaceId();
+        const activePlaceId = heldPlaceId || selectedPlaceId;
         const isExam = this._modeService.isExamMode(this.tabStateService.currentTab());
         const showSolution = this.stateService.showingSolution();
         const solvedTrails = this.stateService.solvedTokenTrails();
@@ -660,17 +662,19 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
             }
             const showStartPlaceTokens = node.isStartPlace && !isExam;
             const isConstruction = displayMode === LpnDisplayMode.Construction;
+            const overrideShowTokens = !!heldPlaceId;
 
             const desiredTokens =
-                isConstruction || !selectedPlaceId
+                (isConstruction && !overrideShowTokens) || !activePlaceId
                     ? showStartPlaceTokens
                         ? 1
                         : 0
                     : showSolution
-                      ? (solvedTrails.get(selectedPlaceId)?.[node.id] ?? 0)
-                      : node.getTrailTokens(selectedPlaceId);
+                      ? (solvedTrails.get(activePlaceId)?.[node.id] ?? 0)
+                      : node.getTrailTokens(activePlaceId);
 
-            const desiredHideTokens = isConstruction || !selectedPlaceId ? !showStartPlaceTokens : false;
+            const desiredHideTokens =
+                (isConstruction && !overrideShowTokens) || !activePlaceId ? !showStartPlaceTokens : false;
 
             if (node.tokenCount() !== desiredTokens || node.hideTokens !== desiredHideTokens) {
                 hasChanges = true;
@@ -691,17 +695,19 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
 
                 const showStartPlaceTokens = node.isStartPlace && !isExam;
                 const isConstruction = displayMode === LpnDisplayMode.Construction;
+                const overrideShowTokens = !!heldPlaceId;
 
-                node.hideTokens = isConstruction || !selectedPlaceId ? !showStartPlaceTokens : false;
+                node.hideTokens =
+                    (isConstruction && !overrideShowTokens) || !activePlaceId ? !showStartPlaceTokens : false;
 
                 node.tokens =
-                    isConstruction || !selectedPlaceId
+                    (isConstruction && !overrideShowTokens) || !activePlaceId
                         ? showStartPlaceTokens
                             ? 1
                             : 0
                         : showSolution
-                          ? (solvedTrails.get(selectedPlaceId)?.[node.id] ?? 0)
-                          : node.getTrailTokens(selectedPlaceId);
+                          ? (solvedTrails.get(activePlaceId)?.[node.id] ?? 0)
+                          : node.getTrailTokens(activePlaceId);
 
                 node.updateDynamicLabel(); // Always compute the correct string based on trailMarkings first
 

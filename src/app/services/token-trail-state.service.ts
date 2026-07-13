@@ -37,6 +37,7 @@ export class TokenTrailStateService {
 
     readonly viewBox = signal<{ minX: number; minY: number; width: number; height: number }>(viewBoxValues);
     readonly selectedPetriPlaceId = signal<string | null>(null);
+    readonly heldPetriPlaceId = signal<string | null>(null);
 
     readonly displayMode = signal<LpnDisplayMode>(LpnDisplayMode.Puzzle);
     readonly lpnGenerationDifficulty = signal<LpnGenerationDifficulty>(LpnGenerationDifficulty.Easy);
@@ -108,6 +109,7 @@ export class TokenTrailStateService {
         this.drawnElements.set([]);
         this.connections.set([]);
         this.selectedPetriPlaceId.set(null);
+        this.heldPetriPlaceId.set(null);
         this.resetCounters();
         this.showingSolution.set(false);
         this.solvedTokenTrails.set(new Map());
