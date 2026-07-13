@@ -27,6 +27,7 @@ export class TokenTrailDisplayComponent extends DisplayComponent {
     private _toaster = inject(ToasterNotificationService);
 
     readonly selectedPetriPlaceId = this._tokenTrailStateService.selectedPetriPlaceId;
+    readonly heldPetriPlaceId = this._tokenTrailStateService.heldPetriPlaceId;
     readonly validPetriPlaceIds = this._validationService.validPetriPlaceIds;
     readonly invalidPetriPlaceIds = this._validationService.invalidPetriPlaceIds;
 
@@ -82,6 +83,18 @@ export class TokenTrailDisplayComponent extends DisplayComponent {
 
         // Keep place selection responsive even when no drag is started.
         if (node.shape === SHAPE.CIRCLE) {
+            // Set the held place ID
+            this._tokenTrailStateService.heldPetriPlaceId.set(node.id);
+
+            // Register global listeners to release the held place
+            const onGlobalMouseUp = () => {
+                this._tokenTrailStateService.heldPetriPlaceId.set(null);
+                document.removeEventListener('mouseup', onGlobalMouseUp);
+                window.removeEventListener('blur', onGlobalMouseUp);
+            };
+            document.addEventListener('mouseup', onGlobalMouseUp);
+            window.addEventListener('blur', onGlobalMouseUp);
+
             if (this._tokenTrailStateService.displayMode() === LpnDisplayMode.Puzzle) {
                 if (this._tokenTrailStateService.selectedPetriPlaceId() === node.id) {
                     this._tokenTrailStateService.setSelectedPetriPlaceId(null);

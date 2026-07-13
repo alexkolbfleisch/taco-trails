@@ -27,7 +27,7 @@
             <g
                 appSvgNode
                 [diagramNode]="node"
-                [selected]="selectedPetriPlaceId() === node.id"
+                [selected]="selectedPetriPlaceId() === node.id || heldPetriPlaceId() === node.id"
                 [fillColorOverride]="getNodeFillColor(node)"
                 (mousedown)="onNodeMouseDown($event, node)"
                 style="cursor: grab"
