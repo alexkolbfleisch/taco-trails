@@ -40,7 +40,7 @@ export class Condition extends DiagramPlace {
             }
         }
 
-        this.label = parts.length > 0 ? parts.join(' + ') : '∅';
+        this.label = parts.length > 0 ? parts.join(' + ') : '';
     }
 }
 
