@@ -457,24 +457,6 @@ body.presentation-mode .split-view-panel {
     box-sizing: border-box !important;
 }
 
-body.presentation-mode .resizer {
-    width: 100% !important;
-    height: 12px !important;
-    cursor: row-resize !important;
-    margin: -4px 0 !important;
-    display: flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-    z-index: 10 !important;
-}
-
-body.presentation-mode .resizer-handle {
-    width: 40px !important;
-    height: 4px !important;
-    background-color: #ccc !important;
-    border-radius: 2px !important;
-}
-
 /* Resize displays inside the split view */
 body.presentation-mode app-token-trail-display,
 body.presentation-mode app-token-trail-display .display-container {
