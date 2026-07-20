@@ -196,8 +196,8 @@ export class SerializationService {
             },
             graphics: {
                 position: {
-                    '@_x': place.x,
-                    '@_y': place.y,
+                    '@_x': Math.round(place.x),
+                    '@_y': Math.round(place.y),
                 },
             },
             initialMarking: {
@@ -211,8 +211,8 @@ export class SerializationService {
             '@_id': transition.id,
             graphics: {
                 position: {
-                    '@_x': transition.x,
-                    '@_y': transition.y,
+                    '@_x': Math.round(transition.x),
+                    '@_y': Math.round(transition.y),
                 },
             },
             name: {
@@ -235,8 +235,8 @@ export class SerializationService {
         if (arc.bendPoints && arc.bendPoints.length > 0) {
             arcObj.graphics.position = arc.bendPoints.map(
                 (bp): PnmlPosition => ({
-                    '@_x': bp.x,
-                    '@_y': bp.y,
+                    '@_x': Math.round(bp.x),
+                    '@_y': Math.round(bp.y),
                 }),
             );
         }

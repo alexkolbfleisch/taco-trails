@@ -62,15 +62,18 @@ export class TokenTrailLpnService {
      * @param sourceNet The original Petri net diagram to synthesize the LPN from.
      * @param overrideDifficulty Optional difficulty level to override the default setting.
      * @param onFailure Optional callback when synthesis fails completely after all attempts.
+     * @param force
      */
     public createLPNWithSynthesis(
         sourceNet: Diagram,
         overrideDifficulty?: LpnGenerationDifficulty,
         onFailure?: () => void,
+        force = false,
     ) {
         const finalDifficulty = this.goalsService.generateGoals(
             sourceNet,
             this.getEffectiveDifficulty(overrideDifficulty),
+            force,
         );
 
         this.stateService.setLpnGenerationDifficulty(finalDifficulty);
@@ -291,7 +294,7 @@ export class TokenTrailLpnService {
         loopLabel: string,
         occurrences: number,
     ): FiringEntry | null {
-        const placeIds = sourceNet.places.map((p) => p.id);
+        const placeIds = sourceNet.places.map((p) => p.id).sort();
         const originalMarking = { ...sourceNet.marking };
 
         sourceNet.resetMarking();
@@ -303,6 +306,7 @@ export class TokenTrailLpnService {
         const visited = new Set<string>();
         const maxDepth = 50; // counts all fired transitions, including silent ones
         let resultEntry: FiringEntry | null = null;
+        let fallbackEntry: FiringEntry | null = null;
 
         const isSink = (m: Record<string, number>) =>
             sourceNet.transitions.every((t) => {
@@ -314,9 +318,13 @@ export class TokenTrailLpnService {
             const { marking, sequence, depth } = queue.shift()!;
             const count = sequence.filter((l) => l === loopLabel).length;
 
-            if (count === occurrences && isSink(marking)) {
-                resultEntry = new FiringEntry(-1, sequence.join(' '), sequence.length, marking, true, true);
-                break;
+            if (count === occurrences) {
+                if (isSink(marking)) {
+                    resultEntry = new FiringEntry(-1, sequence.join(' '), sequence.length, marking, true, true);
+                    break;
+                } else if (!fallbackEntry) {
+                    fallbackEntry = new FiringEntry(-1, sequence.join(' '), sequence.length, marking, true, true);
+                }
             }
 
             if (depth >= maxDepth) continue;
@@ -332,7 +340,7 @@ export class TokenTrailLpnService {
                     const nextCount = nextSequence.filter((l) => l === loopLabel).length;
 
                     if (nextCount <= occurrences) {
-                        const stateKey = `${nextSequence.join(' ')}::${placeIds.map((p) => nextMarking[p] ?? 0).join(',')}`;
+                        const stateKey = `${nextCount}::${placeIds.map((p) => nextMarking[p] ?? 0).join(',')}`;
                         if (!visited.has(stateKey)) {
                             visited.add(stateKey);
                             queue.push({ marking: nextMarking, sequence: nextSequence, depth: depth + 1 });
@@ -340,6 +348,10 @@ export class TokenTrailLpnService {
                     }
                 }
             }
+        }
+
+        if (!resultEntry && fallbackEntry) {
+            resultEntry = fallbackEntry;
         }
 
         sourceNet.marking = originalMarking;

@@ -20,7 +20,6 @@ import {
     LabeledNetEdge,
 } from '../../../../classes/labeled-net.model';
 import { Coords } from '../../../../classes/json-petri-net';
-import { DisplayService } from '../../../../services/display.service';
 import { TokenTrailValidationService, ValidationIssue } from '../../../../services/token-trail-validation.service';
 import { PanningService } from '../../../../services/panning.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -520,7 +519,6 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
     private backedUpConnections: LabeledNetEdge[] = [];
 
     private customDropListener: ((event: Event) => void) | null = null;
-    private displayService = inject(DisplayService);
     private panningService = inject(PanningService);
     private sourceNetSub?: Subscription;
     private fitViewSub?: Subscription;
@@ -1528,16 +1526,6 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
         return this.drawnElements().find((e) => e.id === id);
     }
 
-    private getCurrentStartConditionCount(conditionId: string, excludeConditionId?: string): number {
-        return this.drawnElements().reduce((count, el) => {
-            if (el instanceof Condition && el.isStartPlace && el.id !== excludeConditionId) {
-                const markingCount = el.trailMarkings[conditionId] ?? 0;
-                return count + markingCount;
-            }
-            return count;
-        }, 0);
-    }
-
     private shouldMarkAsStartCondition(conditionId: string, excludeConditionId?: string): boolean {
         void conditionId;
         void excludeConditionId;
@@ -1548,14 +1536,14 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
         if (this.stateService.displayMode() === LpnDisplayMode.Construction) return;
         const sourceNet = this.validationService.resolveSourceNetForValidation();
         if (!sourceNet) return;
-        this.lpnService.createLPNWithSynthesis(sourceNet, difficulty);
+        this.lpnService.createLPNWithSynthesis(sourceNet, difficulty, undefined, true);
     }
 
     private createNewLPNWithSynthesis() {
         if (this.stateService.displayMode() === LpnDisplayMode.Construction) return;
         const sourceNet = this.validationService.resolveSourceNetForValidation();
         if (!sourceNet) return;
-        this.lpnService.createLPNWithSynthesis(sourceNet);
+        this.lpnService.createLPNWithSynthesis(sourceNet, undefined, undefined, true);
     }
 
     private toggleSolution(): void {

@@ -63,11 +63,21 @@
     min-height: 0 !important;
 }
 
-.split-view-panel ::ng-deep svg.canvas,
-.split-view-panel ::ng-deep svg.drawing-canvas {
+.split-view-panel ::ng-deep svg.canvas {
     display: block;
     width: 100%;
     height: 100% !important;
     flex: 1 1 auto !important;
     min-height: 0 !important;
+}
+
+.split-view-panel ::ng-deep svg.drawing-canvas {
+    display: block;
+    width: 100%;
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+}
+
+.split-view-panel ::ng-deep .pn-help-content {
+    max-height: 180px !important;
 }
