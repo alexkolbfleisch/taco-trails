@@ -353,7 +353,7 @@ export class TokenTrailTourService {
                     on: 'bottom' as const,
                 },
                 title: this.translate.instant('TOKEN_TRAIL.TOUR.LAYOUT_TITLE'),
-                text: this.translate.instant('TOKEN_TRAIL.TOUR.LAYOUT_TEXT'),
+                text: this.translate.instant('TOKEN_TRAIL.TOUR.LAYOUT_TEXT_CONSTRUCTION'),
                 buttons: [
                     {
                         type: 'cancel',
@@ -579,7 +579,7 @@ export class TokenTrailTourService {
                     on: 'bottom' as const,
                 },
                 title: this.translate.instant('TOKEN_TRAIL.TOUR.LAYOUT_TITLE'),
-                text: this.translate.instant('TOKEN_TRAIL.TOUR.LAYOUT_TEXT'),
+                text: this.translate.instant('TOKEN_TRAIL.TOUR.LAYOUT_TEXT_PRACTICE'),
                 buttons: [
                     {
                         type: 'cancel',
