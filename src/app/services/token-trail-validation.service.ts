@@ -199,7 +199,7 @@ export class TokenTrailValidationService {
             };
         });
 
-        const connections: TokenTrailConnection[] = this.stateService.connections().map((c) => ({
+        const connections: TokenTrailConnection[] = this.stateService.activeConnections().map((c) => ({
             id: c.id,
             from: c.source,
             to: c.target,
@@ -432,7 +432,7 @@ export class TokenTrailValidationService {
         }
 
         const drawnElements = this.stateService.drawnElements();
-        const connections = this.stateService.connections();
+        const connections = this.stateService.activeConnections();
 
         // Clear any previous highlights
         this.clearHighlights(drawnElements);

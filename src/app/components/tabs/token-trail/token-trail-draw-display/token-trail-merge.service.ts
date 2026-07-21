@@ -202,33 +202,10 @@ export class TokenTrailMergeService implements OnDestroy {
         );
 
         this.stateService.updateConnections((connections) => {
-            const remapped = connections
-                .map((connection) => {
-                    const mappedSource = removedConditionIdSet.has(connection.source)
-                        ? anchorConditionId
-                        : connection.source;
-                    const mappedTarget = removedConditionIdSet.has(connection.target)
-                        ? anchorConditionId
-                        : connection.target;
-                    return {
-                        ...connection,
-                        source: mappedSource,
-                        target: mappedTarget,
-                    };
-                })
-                .filter(
-                    (connection) =>
-                        !(connection.source === anchorConditionId && connection.target === anchorConditionId),
-                );
-
-            const uniqueByDirection = new Map<string, (typeof remapped)[number]>();
-            for (const connection of remapped) {
-                const key = `${connection.source}->${connection.target}`;
-                if (!uniqueByDirection.has(key)) {
-                    uniqueByDirection.set(key, connection);
-                }
-            }
-            return Array.from(uniqueByDirection.values());
+            return connections.filter(
+                (connection) =>
+                    !removedConditionIdSet.has(connection.source) && !removedConditionIdSet.has(connection.target),
+            );
         });
 
         this.playMergeAnimation(anchorConditionId);
@@ -665,22 +642,5 @@ export class TokenTrailMergeService implements OnDestroy {
             clone.bendPoints = connection.bendPoints.map((point) => ({ x: point.x, y: point.y }));
             return clone;
         });
-    }
-
-    public getMergeStateSnapshot(): {
-        mergedConditionAnchorById: Record<string, string>;
-        lastPhysicalMergeSnapshot: unknown;
-    } {
-        return {
-            mergedConditionAnchorById: {},
-            lastPhysicalMergeSnapshot: this.lastPhysicalMergeSnapshot(),
-        };
-    }
-
-    public restoreMergeStateSnapshot(snapshot: {
-        mergedConditionAnchorById: Record<string, string>;
-        lastPhysicalMergeSnapshot: unknown;
-    }) {
-        this.lastPhysicalMergeSnapshot.set(snapshot.lastPhysicalMergeSnapshot as LastPhysicalMergeSnapshot | null);
     }
 }

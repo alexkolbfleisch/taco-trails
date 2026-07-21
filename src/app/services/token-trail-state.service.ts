@@ -1,4 +1,4 @@
-import { Injectable, signal } from '@angular/core';
+import { computed, Injectable, signal } from '@angular/core';
 import { DiagramPlaceLabelPlacement } from '../classes/diagram/diagram-place';
 import {
     Condition,
@@ -29,6 +29,24 @@ export class TokenTrailStateService {
     // Connectors for backwards compatibility/easier refactoring in components
     readonly drawnElements = signal<LabeledNetNode[]>([]);
     readonly connections = signal<LabeledNetEdge[]>([]);
+
+    readonly activeConnections = computed(() => {
+        const conns = this.connections();
+        const elements = this.drawnElements();
+
+        const nodeMap = new Map<string, LabeledNetNode>();
+        for (const el of elements) {
+            nodeMap.set(el.id, el);
+        }
+
+        return conns.filter((c) => {
+            const a = nodeMap.get(c.source);
+            const b = nodeMap.get(c.target);
+            const aParent = a instanceof Condition ? a.parentId : null;
+            const bParent = b instanceof Condition ? b.parentId : null;
+            return !aParent && !bParent;
+        });
+    });
 
     private conditionCounter = 0;
     private releasedConditionNumbers = new Set<number>();
