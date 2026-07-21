@@ -217,7 +217,7 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
     readonly isDragOver = signal<boolean>(false);
     // Derived lines with coordinates for rendering
     readonly connectionLines = computed(() => {
-        const conns = this.connections();
+        const conns = this.stateService.activeConnections();
         const elements = this.drawnElements();
 
         const nodeMap = new Map<string, LabeledNetNode>();
@@ -1615,7 +1615,7 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
             const ilpnSource = convertSourceNetToIlpn(sourceNet, this.serializationService, this.jsonParser);
             const ilpnSpec = convertLpnToIlpn(
                 this.drawnElements(),
-                this.connections(),
+                this.stateService.activeConnections(),
                 this.serializationService,
                 this.jsonParser,
             );
@@ -1704,7 +1704,11 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
     }
 
     private exportLpn(format: 'json' | 'pnml'): void {
-        const content = this.serializationService.serializeLpn(this.drawnElements(), this.connections(), format);
+        const content = this.serializationService.serializeLpn(
+            this.drawnElements(),
+            this.stateService.activeConnections(),
+            format,
+        );
         const fileName = `lpn.${format}`;
         const fileType = format === 'pnml' ? 'application/xml' : 'application/json';
 
