@@ -158,6 +158,11 @@ body {
     padding: 18px !important;
 }
 
+.shepherd-element .shepherd-arrow,
+.shepherd-element.shepherd-theme-custom .shepherd-arrow {
+    display: none !important;
+}
+
 .shepherd-element.shepherd-theme-custom .shepherd-header {
     background: transparent !important;
     padding: 0 0 10px 0 !important;

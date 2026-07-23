@@ -24,6 +24,7 @@ export class DrawTourService {
         // Configure shepherd options
         this.shepherdService.defaultStepOptions = {
             classes: 'shepherd-theme-custom',
+            arrow: false,
             scrollTo: { behavior: 'smooth', block: 'center' },
             cancelIcon: {
                 enabled: true,
@@ -176,6 +177,16 @@ export class DrawTourService {
                 },
                 title: this.translate.instant('DRAW.TOUR.LANGUAGE_TITLE'),
                 text: this.translate.instant('DRAW.TOUR.LANGUAGE_TEXT'),
+                buttons: this.getDefaultButtons(),
+            },
+            {
+                id: 'draw-step-focus-mode',
+                attachTo: {
+                    element: '.tab-presentation-btn',
+                    on: 'bottom' as const,
+                },
+                title: this.translate.instant('DRAW.TOUR.FOCUS_MODE_TITLE'),
+                text: this.translate.instant('DRAW.TOUR.FOCUS_MODE_TEXT'),
                 buttons: this.getDefaultButtons(),
             },
             {

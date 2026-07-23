@@ -158,6 +158,8 @@
             "EXAMPLE_TEXT": "Use this menu to load predefined example Petri nets. This is great for getting started or testing features.",
             "LANGUAGE_TITLE": "Language Switch",
             "LANGUAGE_TEXT": "Click this button to switch the interface language between English and German.",
+            "FOCUS_MODE_TITLE": "Activate Focus Mode",
+            "FOCUS_MODE_TEXT": "Click the fullscreen icon next to the tab name to activate focus mode. This hides non-essential UI elements to maximize your workspace.",
             "FINISH_TITLE": "You're All Set!",
             "FINISH_TEXT": "You now know the basics of creating Petri nets. You can restart this tour anytime using the compass icon in the sidebar."
         }
@@ -318,6 +320,8 @@
             "STEP_SYNTHESIZE_TEXT": "Click the Synthesis button to regenerate the LPN automatically. You can choose between Easy, Medium, Hard, and Expert difficulties. Successfully solving a puzzle on the current difficulty unlocks the next level!",
             "STEP_PUZZLE_SOLUTION_TITLE": "Show Solution",
             "STEP_PUZZLE_SOLUTION_TEXT": "Stuck? Click this lightbulb button to view the correct token markings for the selected place.",
+            "FOCUS_MODE_TITLE": "Activate Focus Mode",
+            "FOCUS_MODE_TEXT": "Click the fullscreen icon next to the tab name to activate focus mode. This hides non-essential UI elements to maximize your workspace.",
             "FINISH_TITLE": "All Set!",
             "FINISH_TEXT": "You are ready to explore! You can restart this tour anytime using the help icon (explore compass) in the side-toolbar."
         },

@@ -79,6 +79,7 @@ export class TokenTrailTourService {
         // Configure shepherd options
         this.shepherdService.defaultStepOptions = {
             classes: 'shepherd-theme-custom',
+            arrow: false,
             scrollTo: { behavior: 'smooth', block: 'center' },
             cancelIcon: {
                 enabled: true,
@@ -539,6 +540,40 @@ export class TokenTrailTourService {
                 ],
             },
             {
+                id: 'step-focus-mode',
+                attachTo: {
+                    element: '.tab-presentation-btn',
+                    on: 'bottom' as const,
+                },
+                title: this.translate.instant('TOKEN_TRAIL.TOUR.FOCUS_MODE_TITLE'),
+                text: this.translate.instant('TOKEN_TRAIL.TOUR.FOCUS_MODE_TEXT'),
+                beforeShowPromise: () => {
+                    return new Promise<void>((resolve) => {
+                        this.stateService.setDisplayMode(LpnDisplayMode.Construction);
+                        setTimeout(() => {
+                            resolve();
+                        }, 50);
+                    });
+                },
+                buttons: [
+                    {
+                        type: 'cancel',
+                        classes: 'shepherd-button-secondary',
+                        text: this.translate.instant('TOKEN_TRAIL.TOUR.BUTTON_SKIP'),
+                    },
+                    {
+                        type: 'back',
+                        classes: 'shepherd-button-secondary',
+                        text: this.translate.instant('TOKEN_TRAIL.TOUR.BUTTON_BACK'),
+                    },
+                    {
+                        type: 'next',
+                        classes: 'shepherd-button-primary',
+                        text: this.translate.instant('TOKEN_TRAIL.TOUR.BUTTON_NEXT'),
+                    },
+                ],
+            },
+            {
                 id: 'step-finish',
                 title: this.translate.instant('TOKEN_TRAIL.TOUR.FINISH_TITLE'),
                 text: this.translate.instant('TOKEN_TRAIL.TOUR.FINISH_TEXT'),
@@ -713,6 +748,40 @@ export class TokenTrailTourService {
                 },
                 title: this.translate.instant('TOKEN_TRAIL.TOUR.HIDE_TIPS_TITLE'),
                 text: this.translate.instant('TOKEN_TRAIL.TOUR.HIDE_TIPS_TEXT'),
+                beforeShowPromise: () => {
+                    return new Promise<void>((resolve) => {
+                        this.stateService.setDisplayMode(LpnDisplayMode.Puzzle);
+                        setTimeout(() => {
+                            resolve();
+                        }, 50);
+                    });
+                },
+                buttons: [
+                    {
+                        type: 'cancel',
+                        classes: 'shepherd-button-secondary',
+                        text: this.translate.instant('TOKEN_TRAIL.TOUR.BUTTON_SKIP'),
+                    },
+                    {
+                        type: 'back',
+                        classes: 'shepherd-button-secondary',
+                        text: this.translate.instant('TOKEN_TRAIL.TOUR.BUTTON_BACK'),
+                    },
+                    {
+                        type: 'next',
+                        classes: 'shepherd-button-primary',
+                        text: this.translate.instant('TOKEN_TRAIL.TOUR.BUTTON_NEXT'),
+                    },
+                ],
+            },
+            {
+                id: 'step-focus-mode',
+                attachTo: {
+                    element: '.tab-presentation-btn',
+                    on: 'bottom' as const,
+                },
+                title: this.translate.instant('TOKEN_TRAIL.TOUR.FOCUS_MODE_TITLE'),
+                text: this.translate.instant('TOKEN_TRAIL.TOUR.FOCUS_MODE_TEXT'),
                 beforeShowPromise: () => {
                     return new Promise<void>((resolve) => {
                         this.stateService.setDisplayMode(LpnDisplayMode.Puzzle);
