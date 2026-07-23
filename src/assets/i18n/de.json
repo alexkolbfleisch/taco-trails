@@ -159,6 +159,8 @@
             "EXAMPLE_TEXT": "Verwenden Sie dieses Menü, um vordefinierte Beispiel-Petri-Netze zu laden. Ideal zum Ausprobieren und Testen von Funktionen.",
             "LANGUAGE_TITLE": "Sprachauswahl",
             "LANGUAGE_TEXT": "Klicken Sie auf diese Schaltfläche, um die Sprache der Benutzeroberfläche zwischen Deutsch und Englisch zu wechseln.",
+            "FOCUS_MODE_TITLE": "Fokusmodus aktivieren",
+            "FOCUS_MODE_TEXT": "Klicken Sie auf das Vollbild-Symbol neben dem Tab-Namen, um den Fokusmodus zu aktivieren. Dadurch werden nicht benötigte Elemente ausgeblendet, um die Arbeitsfläche zu maximieren.",
             "FINISH_TITLE": "Alles bereit!",
             "FINISH_TEXT": "Sie kennen nun die Grundlagen der Petri-Netz-Erstellung. Sie können diese Tour jederzeit über das Kompass-Symbol in der Seitenleiste neu starten."
         }
@@ -319,6 +321,8 @@
             "STEP_SYNTHESIZE_TEXT": "Klicken Sie auf die Schaltfläche 'Synthetisieren', um das gelabelte Netz automatisch zu regenerieren. Wählen Sie aus den Stufen Leicht, Mittel, Schwer und Experte. Das Lösen eines Puzzles schaltet die nächste Stufe frei!",
             "STEP_PUZZLE_SOLUTION_TITLE": "Lösung anzeigen",
             "STEP_PUZZLE_SOLUTION_TEXT": "Sollten Sie einmal nicht weiterkommen: Diese Glühbirnen-Schaltfläche zeigt Ihnen die korrekte Lösung für die ausgewählte Stelle.",
+            "FOCUS_MODE_TITLE": "Fokusmodus aktivieren",
+            "FOCUS_MODE_TEXT": "Klicken Sie auf das Vollbild-Symbol neben dem Tab-Namen, um den Fokusmodus zu aktivieren. Dadurch werden nicht benötigte Elemente ausgeblendet, um die Arbeitsfläche zu maximieren.",
             "FINISH_TITLE": "Alles bereit!",
             "FINISH_TEXT": "Sie können jetzt loslegen! Sie können diese Tour jederzeit über das Kompass-Symbol in der Seitenleiste neu starten."
         },
