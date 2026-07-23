@@ -25,36 +25,6 @@ export class FiringEntry {
             .split(this._delimiters)
             .filter((label) => label.length > 0);
     }
-
-    /**
-     * Returns the formatted end marking as a string.
-     * @return The formatted end marking string.
-     */
-    get formattedEndMarking(): string {
-        return this._formatMarking(this.endMarking);
-    }
-
-    /**
-     * Sets the validity of the sequence and optionally an associated error.
-     * @param isValid - The validity status.
-     * @param error - Error details, if the sequence is invalid.
-     */
-    setValidity(isValid: boolean | undefined, error: FiringSequenceError | null) {
-        this.isValid = isValid;
-        this.error = error;
-    }
-
-    /**
-     * Formats a marking into a string representation.
-     * @param marking - The marking to be formatted.
-     * @returns The formatted marking string.
-     */
-    private _formatMarking(marking: Record<string, number | undefined>): string {
-        return Object.entries(marking)
-            .filter(([, value]) => value !== 0)
-            .map(([key, value]) => (value === 1 ? key : `${value}*${key}`))
-            .join(' + ');
-    }
 }
 
 /**

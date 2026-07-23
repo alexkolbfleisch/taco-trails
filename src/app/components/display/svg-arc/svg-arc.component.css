@@ -5,3 +5,18 @@
     fill: black;
     pointer-events: none;
 }
+
+.bendpoint-handle {
+    fill: #2196f3;
+    stroke: #ffffff;
+    stroke-width: 2px;
+    cursor: move;
+    transition:
+        r 0.15s ease,
+        fill 0.15s ease;
+}
+
+.bendpoint-handle:hover {
+    r: 8px;
+    fill: #1565c0;
+}

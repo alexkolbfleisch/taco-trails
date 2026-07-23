@@ -146,6 +146,21 @@ svg text {
     cursor: pointer;
 }
 
+.bendpoint-handle {
+    fill: #2196f3;
+    stroke: #ffffff;
+    stroke-width: 2px;
+    cursor: move;
+    transition:
+        r 0.15s ease,
+        fill 0.15s ease;
+}
+
+.bendpoint-handle:hover {
+    r: 8px;
+    fill: #1565c0;
+}
+
 .element-wrapper.merge-anchor {
     filter: drop-shadow(0 0 5px rgba(21, 101, 192, 0.45));
 }
@@ -244,150 +259,6 @@ svg text {
 .node-bubble-fo,
 .connection-bubble-fo {
     overflow: visible !important;
-}
-
-/* Goals Panel inside canvas UI */
-.goals-panel {
-    position: absolute;
-    top: 12px;
-    right: 12px;
-    z-index: 10;
-    width: 290px;
-    background: rgba(255, 255, 255, 0.9);
-    backdrop-filter: blur(10px);
-    border: 1px solid rgba(0, 0, 0, 0.08);
-    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.06);
-    border-radius: 12px;
-    padding: 12px;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    max-height: 250px;
-    overflow-y: auto;
-    transition: all 0.2s ease-in-out;
-}
-
-.goals-panel.minimized {
-    max-height: 48px;
-    overflow: hidden;
-}
-
-.goals-panel,
-.goals-panel *:not(mat-icon):not(.material-icons) {
-    font-family: 'Courier New', sans-serif !important;
-}
-
-.goals-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    border-bottom: 1px solid rgba(0, 0, 0, 0.05);
-    padding-bottom: 8px;
-    cursor: pointer;
-    user-select: none;
-    background: none;
-    border: none;
-    padding: 0;
-    width: 100%;
-    text-align: left;
-}
-
-.goals-panel.minimized .goals-header {
-    border-bottom: none;
-    padding-bottom: 0;
-}
-
-.goals-header-actions {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-}
-
-.minimize-icon {
-    font-size: 20px;
-    width: 20px;
-    height: 20px;
-    line-height: 20px;
-    color: #757575;
-}
-
-.goals-title {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 14px;
-    font-weight: 600;
-    color: #333;
-}
-
-.goals-title mat-icon {
-    color: #ffb300;
-    font-size: 20px;
-    width: 20px;
-    height: 20px;
-}
-
-.difficulty-badge {
-    font-size: 10px;
-    font-weight: 600;
-    text-transform: uppercase;
-    padding: 2px 6px;
-    border-radius: 12px;
-}
-
-.difficulty-badge.easy {
-    background-color: #e8f5e9;
-    color: #2e7d32;
-}
-
-.difficulty-badge.medium {
-    background-color: #fff3e0;
-    color: #ef6c00;
-}
-
-.difficulty-badge.hard {
-    background-color: #ffebee;
-    color: #c62828;
-}
-
-.goals-content {
-    padding-top: 4px;
-}
-
-.goals-list {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-}
-
-.goal-item {
-    display: flex;
-    align-items: flex-start;
-    gap: 8px;
-    font-size: 12px;
-    color: #555;
-    line-height: 1.4;
-    transition: color 0.2s ease;
-}
-
-.goal-item.completed {
-    color: #2e7d32;
-}
-
-.goal-item .status-icon {
-    font-size: 16px;
-    width: 16px;
-    height: 16px;
-    margin-top: 2px;
-    color: #757575;
-}
-
-.goal-item.completed .status-icon {
-    color: #4caf50;
-}
-
-.goal-description {
-    flex: 1;
 }
 
 /* Scroll Animation Helper for guided tour */
