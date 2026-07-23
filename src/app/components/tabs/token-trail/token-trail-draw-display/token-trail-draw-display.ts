@@ -215,6 +215,9 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
     }
 
     readonly isDragOver = signal<boolean>(false);
+    readonly hoveredConnectionId = signal<string | null>(null);
+    readonly activeDraggingConnectionId = signal<string | null>(null);
+
     // Derived lines with coordinates for rendering
     readonly connectionLines = computed(() => {
         const conns = this.stateService.activeConnections();
@@ -298,7 +301,7 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
                 }
                 pathData += ` L ${x2} ${y2}`;
 
-                return { id: c.id, x1, y1, x2, y2, weight: c.weight, pathData };
+                return { id: c.id, x1, y1, x2, y2, weight: c.weight, pathData, bendPoints };
             })
             .filter(
                 (
@@ -311,6 +314,7 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
                     y2: number;
                     weight: number;
                     pathData: string;
+                    bendPoints: Coords[];
                 } => v !== null,
             );
     });
@@ -1231,6 +1235,79 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
             this.deleteConnection(connectionId);
             return;
         }
+    }
+
+    /**
+     * Handles double-click events on connection lines to add a bendpoint if none exists, or delete bendpoints if present.
+     */
+    onConnectionDoubleClick(event: MouseEvent, connectionId: string) {
+        if (this.stateService.showingSolution()) return;
+
+        event.stopPropagation();
+        event.preventDefault();
+
+        const svgElement = this.drawingArea?.nativeElement as SVGSVGElement | null;
+        const coords = this.drawingDisplayService.getSvgCoordinates(event, svgElement);
+
+        this.stateService.updateConnections((cs) =>
+            cs.map((c) => {
+                if (c.id !== connectionId) return c;
+                if (c.bendPoints && c.bendPoints.length > 0) {
+                    return { ...c, bendPoints: [] } as LabeledNetEdge;
+                } else if (coords) {
+                    return {
+                        ...c,
+                        bendPoints: [{ x: Math.round(coords.x), y: Math.round(coords.y) }],
+                    } as LabeledNetEdge;
+                }
+                return c;
+            }),
+        );
+    }
+
+    /**
+     * Handles mouse down on a bendpoint handle to start dragging it to a new location.
+     */
+    onBendpointMouseDown(event: MouseEvent, connectionId: string, pointIndex: number) {
+        event.stopPropagation();
+        event.preventDefault();
+
+        if (this.stateService.showingSolution()) return;
+
+        this.activeDraggingConnectionId.set(connectionId);
+        const svgElement = this.drawingArea?.nativeElement as SVGSVGElement | null;
+        const line = this.connectionLines().find((l) => l?.id === connectionId);
+        if (!line) return;
+
+        const onMouseMove = (e: MouseEvent) => {
+            const coords = this.drawingDisplayService.getSvgCoordinates(e, svgElement);
+            if (!coords) return;
+            const newX = Math.round(coords.x);
+            const newY = Math.round(coords.y);
+
+            this.stateService.updateConnections((cs) =>
+                cs.map((c) => {
+                    if (c.id !== connectionId) return c;
+                    const currentPoints =
+                        c.bendPoints && c.bendPoints.length > 0
+                            ? [...c.bendPoints]
+                            : line.bendPoints.map((p) => ({ ...p }));
+                    if (pointIndex >= 0 && pointIndex < currentPoints.length) {
+                        currentPoints[pointIndex] = { x: newX, y: newY };
+                    }
+                    return { ...c, bendPoints: currentPoints } as LabeledNetEdge;
+                }),
+            );
+        };
+
+        const onMouseUp = () => {
+            this.activeDraggingConnectionId.set(null);
+            window.removeEventListener('mousemove', onMouseMove);
+            window.removeEventListener('mouseup', onMouseUp);
+        };
+
+        window.addEventListener('mousemove', onMouseMove);
+        window.addEventListener('mouseup', onMouseUp);
     }
 
     /**

@@ -38,11 +38,14 @@
         <g
             class="connection-group"
             [class.invalid-connection]="isConnectionInvalid(line.id)"
-            [attr.data-connection-id]="line.id">
+            [attr.data-connection-id]="line.id"
+            (mouseenter)="hoveredConnectionId.set(line.id)"
+            (mouseleave)="hoveredConnectionId.set(null)">
             <path
                 class="connection-hit-target"
                 [attr.d]="line.pathData"
                 (mousedown)="onConnectionMouseDown($event, line.id)"
+                (dblclick)="onConnectionDoubleClick($event, line.id)"
                 (wheel)="onConnectionWheel($event, line.id)" />
             <path
                 class="connection-line"
@@ -51,7 +54,18 @@
                 stroke-width="2"
                 fill="none"
                 marker-end="url(#arrowhead-draw)" />
-            @if (line.weight > 1) {
+            @if (line.bendPoints && line.bendPoints.length > 0 && (hoveredConnectionId() === line.id ||
+            activeDraggingConnectionId() === line.id)) { @for (point of line.bendPoints; track $index) {
+            <circle
+                class="bendpoint-handle"
+                [attr.cx]="point.x"
+                [attr.cy]="point.y"
+                r="6"
+                (mouseenter)="hoveredConnectionId.set(line.id)"
+                (mouseleave)="hoveredConnectionId.set(null)"
+                (mousedown)="onBendpointMouseDown($event, line.id, $index)"
+                (dblclick)="$event.stopPropagation(); $event.preventDefault()" />
+            } } @if (line.weight > 1) {
             <text
                 [attr.x]="(line.x1 + line.x2) / 2"
                 [attr.y]="(line.y1 + line.y2) / 2 - 10"
