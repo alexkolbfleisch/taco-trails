@@ -669,7 +669,6 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
         const selectedPlaceId = this.stateService.selectedPetriPlaceId();
         const heldPlaceId = this.stateService.heldPetriPlaceId();
         const activePlaceId = heldPlaceId || selectedPlaceId;
-        const isExam = this._modeService.isExamMode(this.tabStateService.currentTab());
         const showSolution = this.stateService.showingSolution();
         const solvedTrails = this.stateService.solvedTokenTrails();
 
@@ -678,7 +677,7 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
             if (!(node instanceof Condition)) {
                 continue;
             }
-            const showStartPlaceTokens = node.isStartPlace && !isExam;
+            const showStartPlaceTokens = node.isStartPlace;
             const isConstruction = displayMode === LpnDisplayMode.Construction;
             const overrideShowTokens = !!heldPlaceId;
 
@@ -711,7 +710,7 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
                     return node;
                 }
 
-                const showStartPlaceTokens = node.isStartPlace && !isExam;
+                const showStartPlaceTokens = node.isStartPlace;
                 const isConstruction = displayMode === LpnDisplayMode.Construction;
                 const overrideShowTokens = !!heldPlaceId;
 
