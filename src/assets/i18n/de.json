@@ -289,7 +289,7 @@
         "INSTRUCTION_AUTO_FIRING_TEXT": "Im Lernmodus erstellt das Klicken auf aktivierte Transitionen im Petrinetz automatisch das Prozessnetz."
     },
     "TOKEN_TRAIL": {
-        "EMPTY_PLACE_TOOLTIP": "Ziehe diese leere Stelle auf die Leinwand des gelabelten Netzes, um eine Stelle ohne Trail-Markierung hinzuzufügen",
+        "EMPTY_PLACE_TOOLTIP": "Ziehe diese leere Stelle auf die Zeichenbereich des gelabelten Netzes, um eine Stelle ohne Trail-Markierung hinzuzufügen",
         "TOUR": {
             "START_BUTTON": "Tour starten",
             "RESTART_BUTTON": "Tour neu starten",
