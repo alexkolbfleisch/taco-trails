@@ -1,10 +1,10 @@
 import { Injectable, inject, signal, effect } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
+import { TranslateService } from '@ngx-translate/core';
 import { TokenTrailStateService, LpnGenerationDifficulty, LpnDisplayMode } from './token-trail-state.service';
 import { SourcePetriNetService } from './source-petri-net.service';
 import { TokenTrailValidationService } from './token-trail-validation.service';
 import { ToasterNotificationService } from './toaster-notification.service';
-import { ModeService } from './mode.service';
 import { PlayService } from './play.service';
 import { PlayValidationService } from './play-validation.service';
 import { FiringEntry } from '../classes/firing-entry';
@@ -25,13 +25,20 @@ import { DiagramArc } from '../classes/diagram/diagram-arc';
     providedIn: 'root',
 })
 export class TokenTrailGoalsService {
+    public static readonly DIFFICULTY_TRANSLATION_KEYS: Record<LpnGenerationDifficulty, string> = {
+        [LpnGenerationDifficulty.Easy]: 'TOKEN_TRAIL.LPN_DIFFICULTY_EASY',
+        [LpnGenerationDifficulty.Medium]: 'TOKEN_TRAIL.LPN_DIFFICULTY_MEDIUM',
+        [LpnGenerationDifficulty.Hard]: 'TOKEN_TRAIL.LPN_DIFFICULTY_HARD',
+        [LpnGenerationDifficulty.Expert]: 'TOKEN_TRAIL.LPN_DIFFICULTY_EXPERT',
+    };
+
     private stateService = inject(TokenTrailStateService);
     private sourceNetService = inject(SourcePetriNetService);
     private validationService = inject(TokenTrailValidationService);
     private toaster = inject(ToasterNotificationService);
-    private modeService = inject(ModeService);
     private playService = inject(PlayService);
     private playValidationService = inject(PlayValidationService);
+    private translate = inject(TranslateService);
     // Goal Progression / Difficulty State
     readonly currentDifficulty = signal<LpnGenerationDifficulty>(LpnGenerationDifficulty.Easy);
     readonly unlockedPuzzle = signal<Set<LpnGenerationDifficulty>>(new Set([LpnGenerationDifficulty.Easy]));
@@ -182,9 +189,13 @@ export class TokenTrailGoalsService {
             });
             this.saveProgress();
 
+            const nextDiffKey =
+                TokenTrailGoalsService.DIFFICULTY_TRANSLATION_KEYS[nextDiff] ?? 'TOKEN_TRAIL.LPN_DIFFICULTY_EASY';
+            const translatedNextDiff = this.translate.instant(nextDiffKey);
+
             this.toaster.showSuccess('TOKEN_TRAIL.GOALS.CONGRATS_TITLE', 'TOKEN_TRAIL.GOALS.CONGRATS_PUZZLE_BODY', {
                 messageParams: {
-                    nextDifficulty: nextDiff.toUpperCase(),
+                    nextDifficulty: translatedNextDiff,
                 },
             });
         }
