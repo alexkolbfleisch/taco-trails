@@ -55,8 +55,10 @@ export class MainTabComponent implements OnInit {
             const isPresentation = this._tabStateService.isPresentationMode();
             if (isPresentation) {
                 document.body.classList.add('presentation-mode');
+                document.documentElement.classList.add('presentation-mode');
             } else {
                 document.body.classList.remove('presentation-mode');
+                document.documentElement.classList.remove('presentation-mode');
             }
         });
     }

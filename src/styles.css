@@ -335,6 +335,7 @@ body {
 }
 
 /* --- Presentation Mode Styles --- */
+html.presentation-mode,
 body.presentation-mode {
     padding: 0 !important;
     margin: 0 !important;
@@ -343,10 +344,87 @@ body.presentation-mode {
     width: 100vw !important;
 }
 
+/* Hide scrollbars on main page containers in focus mode */
+html.presentation-mode,
+body.presentation-mode,
+body.presentation-mode .flexColumnAlignStartStretch,
+body.presentation-mode app-main-tab,
+body.presentation-mode .editor-container,
+body.presentation-mode mat-tab-group,
+body.presentation-mode .flex-tab-group,
+body.presentation-mode .mat-mdc-tab-body-wrapper,
+body.presentation-mode .mat-mdc-tab-body,
+body.presentation-mode .mat-mdc-tab-body-content,
+body.presentation-mode .mat-mdc-tab-body-active,
+body.presentation-mode app-draw,
+body.presentation-mode app-token-trail,
+body.presentation-mode app-token-trail-practice,
+body.presentation-mode .split-view-layout,
+body.presentation-mode .split-view-panel,
+body.presentation-mode app-token-trail-display,
+body.presentation-mode app-token-trail-draw-display {
+    scrollbar-width: none !important;
+    -ms-overflow-style: none !important;
+}
+
+html.presentation-mode::-webkit-scrollbar,
+body.presentation-mode::-webkit-scrollbar,
+body.presentation-mode .flexColumnAlignStartStretch::-webkit-scrollbar,
+body.presentation-mode app-main-tab::-webkit-scrollbar,
+body.presentation-mode .editor-container::-webkit-scrollbar,
+body.presentation-mode mat-tab-group::-webkit-scrollbar,
+body.presentation-mode .flex-tab-group::-webkit-scrollbar,
+body.presentation-mode .mat-mdc-tab-body-wrapper::-webkit-scrollbar,
+body.presentation-mode .mat-mdc-tab-body::-webkit-scrollbar,
+body.presentation-mode .mat-mdc-tab-body-content::-webkit-scrollbar,
+body.presentation-mode .mat-mdc-tab-body-active::-webkit-scrollbar,
+body.presentation-mode app-draw::-webkit-scrollbar,
+body.presentation-mode app-token-trail::-webkit-scrollbar,
+body.presentation-mode app-token-trail-practice::-webkit-scrollbar,
+body.presentation-mode .split-view-layout::-webkit-scrollbar,
+body.presentation-mode .split-view-panel::-webkit-scrollbar,
+body.presentation-mode app-token-trail-display::-webkit-scrollbar,
+body.presentation-mode app-token-trail-draw-display::-webkit-scrollbar {
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
+}
+
+/* Allow scrollbars for toolbar panels and instruction areas in focus mode */
+body.presentation-mode .pn-help-content,
+body.presentation-mode .bubble-content {
+    scrollbar-width: thin !important;
+    -ms-overflow-style: auto !important;
+}
+
+body.presentation-mode .pn-help-content::-webkit-scrollbar,
+body.presentation-mode .bubble-content::-webkit-scrollbar {
+    display: block !important;
+    width: 6px !important;
+    height: 6px !important;
+}
+
+body.presentation-mode .pn-help-content::-webkit-scrollbar-thumb,
+body.presentation-mode .bubble-content::-webkit-scrollbar-thumb {
+    background: #cbd5e1 !important;
+    border-radius: 4px !important;
+}
+
+body.presentation-mode .pn-help-content::-webkit-scrollbar-thumb:hover,
+body.presentation-mode .bubble-content::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8 !important;
+}
+
+body.presentation-mode .pn-help-content::-webkit-scrollbar-track,
+body.presentation-mode .bubble-content::-webkit-scrollbar-track {
+    background: transparent !important;
+}
+
 body.presentation-mode .flexColumnAlignStartStretch {
     height: 100vh !important;
     display: flex !important;
     flex-direction: column !important;
+    overflow: hidden !important;
 }
 
 /* Hide header, subheader, line, footer, and sidebar in presentation mode */
@@ -365,6 +443,7 @@ body.presentation-mode .flexColumnAlignStartStretch > div:nth-of-type(2) {
     min-height: 0 !important;
     display: flex !important;
     flex-direction: column !important;
+    overflow: hidden !important;
 }
 
 body.presentation-mode app-main-tab {
@@ -373,6 +452,7 @@ body.presentation-mode app-main-tab {
     min-height: 0 !important;
     display: flex !important;
     flex-direction: column !important;
+    overflow: hidden !important;
 }
 
 body.presentation-mode .editor-container {
@@ -380,6 +460,7 @@ body.presentation-mode .editor-container {
     height: 100% !important;
     min-height: 0 !important;
     border: none !important;
+    overflow: hidden !important;
 }
 
 body.presentation-mode mat-tab-group,
@@ -387,6 +468,7 @@ body.presentation-mode .flex-tab-group {
     height: 100% !important;
     display: flex !important;
     flex-direction: column !important;
+    overflow: hidden !important;
 }
 
 /* Hide the material tab header completely in presentation mode */
@@ -399,17 +481,27 @@ body.presentation-mode .mat-mdc-tab-body-wrapper {
     flex: 1 !important;
     height: 100% !important;
     min-height: 0 !important;
+    overflow: hidden !important;
 }
 
 body.presentation-mode mat-tab-body,
 body.presentation-mode .mat-mdc-tab-body {
     height: 100% !important;
+    overflow: hidden !important;
+}
+
+body.presentation-mode .mat-mdc-tab-body-content {
+    height: 100% !important;
+    overflow: hidden !important;
+    display: flex !important;
+    flex-direction: column !important;
 }
 
 body.presentation-mode .mat-mdc-tab-body-active {
     display: flex !important;
     flex-direction: column !important;
     height: 100% !important;
+    overflow: hidden !important;
 }
 
 body.presentation-mode .tab-toolbar-container {

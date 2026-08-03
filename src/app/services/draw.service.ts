@@ -672,7 +672,7 @@ export class DrawService implements OnDestroy {
         event.stopImmediatePropagation();
         event.preventDefault();
         if (element.node instanceof DiagramTransition) {
-            const currentLabel = element.node.displayLabel ?? element.node.id;
+            const currentLabel = element.node.displayLabel ?? element.node.label ?? element.node.id;
             this.promptForLabel('DRAW.PROMPT_EDIT_TRANSITION_TITLE', currentLabel).then((newLabel) => {
                 if (!newLabel || newLabel === currentLabel) return;
                 if (this.isLabelTaken(newLabel, element.id)) {
@@ -680,26 +680,16 @@ export class DrawService implements OnDestroy {
                     return;
                 }
 
-                const oldId = element.id;
+                const transitionId = element.node.id;
                 this.drawnElements.update((elements) =>
                     elements.map((el) => {
-                        if (el.id !== oldId) return el;
-                        const updated = this.buildTransition(newLabel, newLabel, { innerLabel: newLabel });
+                        if (el.id !== transitionId) return el;
+                        const updated = this.buildTransition(transitionId, newLabel, { innerLabel: newLabel });
                         updated.x = el.node.x;
                         updated.y = el.node.y;
-                        return { id: newLabel, node: updated };
+                        return { id: transitionId, node: updated };
                     }),
                 );
-                this.connections.update((cs) =>
-                    cs.map((c) => ({
-                        ...c,
-                        aId: c.aId === oldId ? newLabel : c.aId,
-                        bId: c.bId === oldId ? newLabel : c.bId,
-                    })),
-                );
-                if (this.selectedElementId() === oldId) {
-                    this.selectedElementId.set(newLabel);
-                }
                 this.syncSourceNetFromCanvas();
             });
             return;
@@ -841,21 +831,6 @@ export class DrawService implements OnDestroy {
         document.removeEventListener('mouseup', this.onDocumentMouseUp, true);
         this.syncSourceNetFromCanvas();
     };
-
-    /**
-     * Places an element on the canvas from a drag event.
-     * Converts drag event coordinates to SVG coordinates and adds the element.
-     *
-     * @param {DragEvent} event - The drop event
-     * @param {'place' | 'transition'} type - The type of element to place
-     * @param {string} label - The label for the new element
-     * @private
-     */
-    private placeElement(event: DragEvent, type: 'place' | 'transition', label: string) {
-        const svgPoint = this.getSvgCoordinates(event);
-        if (!svgPoint) return;
-        this.addElement(type, label, svgPoint.x, svgPoint.y);
-    }
 
     /**
      * Places an element on the canvas from client coordinates.
