@@ -483,6 +483,10 @@
     "EXAMPLE_MENU": {
         "TOOLTIP": "Klausuraufgaben öffnen",
         "EXAMPLE_NET": "Beispielnetz",
+        "COFFEE_NET": "Kaffeeautomat",
+        "WORKBOOK": "Übungsheft",
+        "AUFGABE_2_14": "Aufgabe 2.14",
+        "AUFGABE_8_7": "Aufgabe 8.7",
         "MK": "MK",
         "SS24": "SS24",
         "SS25": "SS25",
