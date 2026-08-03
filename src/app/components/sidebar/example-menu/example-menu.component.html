@@ -13,6 +13,18 @@
         <mat-icon matMenuItemIcon>description</mat-icon>
         {{ 'EXAMPLE_MENU.EXAMPLE_NET' | translate }}
     </button>
+    <button mat-menu-item (click)="loadExample('coffee.json')">
+        <mat-icon matMenuItemIcon>description</mat-icon>
+        {{ 'EXAMPLE_MENU.COFFEE_NET' | translate }}
+    </button>
+    <button
+        mat-menu-item
+        [matMenuTriggerFor]="menuUebungsheft"
+        (mouseenter)="setActiveMenu('WORKBOOK')"
+        (mouseleave)="setActiveMenu(null)">
+        <mat-icon matMenuItemIcon>{{ getFolderIcon('WORKBOOK') }}</mat-icon>
+        {{ 'EXAMPLE_MENU.WORKBOOK' | translate }}
+    </button>
     <button
         mat-menu-item
         [matMenuTriggerFor]="menuMK"
@@ -88,5 +100,16 @@
     <button mat-menu-item (click)="loadExampleFromCategory('SS25', 'task2.json')">
         <mat-icon matMenuItemIcon>description</mat-icon>
         {{ 'EXAMPLE_MENU.TASK2' | translate }}
+    </button>
+</mat-menu>
+
+<mat-menu #menuUebungsheft="matMenu">
+    <button mat-menu-item (click)="loadExample('Aufgabe2.14Uebungsheft.json')">
+        <mat-icon matMenuItemIcon>description</mat-icon>
+        {{ 'EXAMPLE_MENU.AUFGABE_2_14' | translate }}
+    </button>
+    <button mat-menu-item (click)="loadExample('Aufgabe8.7Uebungsheft.json')">
+        <mat-icon matMenuItemIcon>description</mat-icon>
+        {{ 'EXAMPLE_MENU.AUFGABE_8_7' | translate }}
     </button>
 </mat-menu>

@@ -484,6 +484,10 @@
     "EXAMPLE_MENU": {
         "TOOLTIP": "Open exam files",
         "EXAMPLE_NET": "Example Net",
+        "COFFEE_NET": "Coffee Machine",
+        "WORKBOOK": "Workbook",
+        "AUFGABE_2_14": "Exercise 2.14",
+        "AUFGABE_8_7": "Exercise 8.7",
         "MK": "MK",
         "SS24": "SS24",
         "SS25": "SS25",
