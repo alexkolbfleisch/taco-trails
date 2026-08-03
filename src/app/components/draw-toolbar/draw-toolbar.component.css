@@ -1,3 +1,10 @@
+:host {
+    display: block;
+    width: 100%;
+    box-sizing: border-box;
+    padding: 2px 2px 6px 2px;
+}
+
 .pn-toolbar {
     display: flex;
     gap: 8px;
