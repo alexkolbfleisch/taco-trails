@@ -16,7 +16,11 @@
         "p4,t3": 1
     },
     "actions": ["A", "B", "C", "D"],
-    "marking": {},
+    "marking": {
+        "p1": 1,
+        "key": 1,
+        "p4": 1
+    },
     "labels": {
         "t1": "A",
         "t2": "B",
