@@ -1,0 +1,4 @@
+Interaktive Verifikation und Konstruktion von Token Trails: Untersuchung explorativer Lernansätze zur Vermittlung komplexer Petri-Netz Semantiken
+
+Masterarbeit SoSe26
+Autor: Alexander K.

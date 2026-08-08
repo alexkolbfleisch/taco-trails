@@ -180,6 +180,7 @@
     },
     "HEADER_SUBTITLE": "Masterarbeit SoSe26 von",
     "HEADER_SUBTITLE_NAMES": "Alexander K.",
+    "HEADER_SUBTITLE_THESIS_TITLE": "Interaktive Verifikation und Konstruktion von Token Trails: Untersuchung explorativer Lernansätze zur Vermittlung komplexer Petri-Netz Semantiken",
     "TOASTER": {
         "HEADER": {
             "SAVE_IMPOSSIBLE": "Speichern nicht möglich",
