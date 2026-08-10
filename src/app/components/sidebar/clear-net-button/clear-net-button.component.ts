@@ -6,8 +6,7 @@ import { DisplayService } from '../../../services/display.service';
 import { MatTooltip } from '@angular/material/tooltip';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { TranslateModule } from '@ngx-translate/core';
-import { TabStateService } from '../../../services/tab-state.service';
-import { TokenTrailStateService } from '../../../services/token-trail-state.service';
+import { ClearNetService } from '../../../services/clear-net.service';
 
 @Component({
     selector: 'app-clear-net-button',
@@ -17,13 +16,14 @@ import { TokenTrailStateService } from '../../../services/token-trail-state.serv
     styleUrls: ['./clear-net-button.component.css'],
 })
 export class ClearNetButtonComponent {
+    private _clearNetService = inject(ClearNetService);
     private _sourcePetriNetService = inject(SourcePetriNetService);
     private _displayService = inject(DisplayService);
-    private _tabStateService = inject(TabStateService);
-    private _tokenTrailStateService = inject(TokenTrailStateService);
+
     private _diagramSignal = toSignal(this._displayService.diagram$);
     private _sourceNetSignal = toSignal(this._sourcePetriNetService.sourceNet$);
     private _sourceTextSignal = toSignal(this._sourcePetriNetService.sourceText$);
+
     public isDisabled = computed(() => {
         const hasDiagram = !!this._diagramSignal();
         const hasSourceNet = !!this._sourceNetSignal();
@@ -32,9 +32,6 @@ export class ClearNetButtonComponent {
     });
 
     public clearNet(): void {
-        this._sourcePetriNetService.clear();
-        this._displayService.clear();
-        const stateService = this._tabStateService.activeTokenTrailStateService || this._tokenTrailStateService;
-        stateService.clear();
+        this._clearNetService.clearNet();
     }
 }

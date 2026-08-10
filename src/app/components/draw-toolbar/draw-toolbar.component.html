@@ -5,68 +5,70 @@
                 <mat-icon [matTooltip]="helpTooltip() | translate" color="primary">help_outline</mat-icon>
                 <mat-panel-title>{{ headerTitle() | translate }}</mat-panel-title>
             </div>
-            @if (toggle(); as toggleConfig) {
-                <div
-                    class="pn-toggle-container"
-                    [matTooltip]="toggleConfig.tooltip | translate"
-                    (click)="$event.stopPropagation()"
-                    tabindex="0">
-                    <span class="pn-toggle-label">{{ toggleConfig.label | translate }}</span>
-                    <label class="pn-toggle-switch">
-                        <input
-                            type="checkbox"
-                            [checked]="toggleConfig.checked"
-                            (change)="toggleConfig.onChange($any($event.target).checked)" />
-                        <span class="pn-toggle-slider"></span>
-                    </label>
-                </div>
-            }
-            @for (action of actions(); track $index) {
-                @if (action.menu) {
-                    <button
-                        mat-icon-button
-                        [disabled]="!action.isActive"
-                        [color]="action.color ?? 'primary'"
-                        [matTooltip]="action.tooltip | translate"
-                        [matMenuTriggerFor]="actionMenu"
+            <div class="pn-header-actions">
+                @if (toggle(); as toggleConfig) {
+                    <div
+                        class="pn-toggle-container"
+                        [matTooltip]="toggleConfig.tooltip | translate"
                         (click)="$event.stopPropagation()"
-                        [attr.data-tour]="action.icon">
-                        @if (action.icon === 'leopard') {
-                            <span class="leopard-icon">🐆</span>
-                        } @else {
-                            <mat-icon>{{ action.icon }}</mat-icon>
-                        }
-                    </button>
-                    <mat-menu #actionMenu="matMenu">
-                        @for (item of action.menu; track item.label) {
-                            <button mat-menu-item [disabled]="item.disabled" (click)="item.action()">
-                                @if (item.icon) {
-                                    @if (item.icon === 'leopard') {
-                                        <span class="leopard-icon-menu">🐆</span>
-                                    } @else {
-                                        <mat-icon>{{ item.icon }}</mat-icon>
-                                    }
-                                }
-                                <span>{{ item.label | translate }}</span>
-                            </button>
-                        }
-                    </mat-menu>
-                } @else {
-                    <button
-                        mat-icon-button
-                        [disabled]="!action.isActive"
-                        [color]="action.color ?? 'primary'"
-                        [matTooltip]="action.tooltip | translate"
-                        (click)="action.action(); $event.stopPropagation()"
-                        [attr.data-tour]="action.icon">
-                        @if (action.icon === 'leopard') {
-                            <span class="leopard-icon">🐆</span>
-                        } @else {
-                            <mat-icon>{{ action.icon }}</mat-icon>
-                        }
-                    </button>
+                        tabindex="0">
+                        <span class="pn-toggle-label">{{ toggleConfig.label | translate }}</span>
+                        <label class="pn-toggle-switch">
+                            <input
+                                type="checkbox"
+                                [checked]="toggleConfig.checked"
+                                (change)="toggleConfig.onChange($any($event.target).checked)" />
+                            <span class="pn-toggle-slider"></span>
+                        </label>
+                    </div>
                 }
-            }
+                @for (action of actions(); track $index) {
+                    @if (action.menu) {
+                        <button
+                            mat-icon-button
+                            [disabled]="!action.isActive"
+                            [color]="action.color ?? 'primary'"
+                            [matTooltip]="action.tooltip | translate"
+                            [matMenuTriggerFor]="actionMenu"
+                            (click)="$event.stopPropagation()"
+                            [attr.data-tour]="action.icon">
+                            @if (action.icon === 'leopard') {
+                                <span class="leopard-icon">🐆</span>
+                            } @else {
+                                <mat-icon>{{ action.icon }}</mat-icon>
+                            }
+                        </button>
+                        <mat-menu #actionMenu="matMenu">
+                            @for (item of action.menu; track item.label) {
+                                <button mat-menu-item [disabled]="item.disabled" (click)="item.action()">
+                                    @if (item.icon) {
+                                        @if (item.icon === 'leopard') {
+                                            <span class="leopard-icon-menu">🐆</span>
+                                        } @else {
+                                            <mat-icon>{{ item.icon }}</mat-icon>
+                                        }
+                                    }
+                                    <span>{{ item.label | translate }}</span>
+                                </button>
+                            }
+                        </mat-menu>
+                    } @else {
+                        <button
+                            mat-icon-button
+                            [disabled]="!action.isActive"
+                            [color]="action.color ?? 'primary'"
+                            [matTooltip]="action.tooltip | translate"
+                            (click)="action.action(); $event.stopPropagation()"
+                            [attr.data-tour]="action.icon">
+                            @if (action.icon === 'leopard') {
+                                <span class="leopard-icon">🐆</span>
+                            } @else {
+                                <mat-icon>{{ action.icon }}</mat-icon>
+                            }
+                        </button>
+                    }
+                }
+            </div>
         </mat-expansion-panel-header>
         <div class="pn-help-content">
             @for (instruction of instructions(); track instruction.label) {

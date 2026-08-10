@@ -19,6 +19,7 @@ import {
     LabeledNetNode,
     LabeledNetEdge,
 } from '../../../../classes/labeled-net.model';
+import { LayoutCalculationService } from '../../../../services/layout-calculation.service';
 import { Coords } from '../../../../classes/json-petri-net';
 import { TokenTrailValidationService, ValidationIssue } from '../../../../services/token-trail-validation.service';
 import { PanningService } from '../../../../services/panning.service';
@@ -53,6 +54,7 @@ import { Diagram } from '../../../../classes/diagram/diagram';
 import { LoadingService } from '../../../../services/loading.service';
 import { ModeService } from '../../../../services/mode.service';
 import { TabStateService } from '../../../../services/tab-state.service';
+import { Tab } from '../../../../classes/tabs';
 import { PetriNetLoaderService } from '../../../../services/petri-net-loader.service';
 import { TokenTrailValidatorService } from '../../../../../../ilpn-components/src/lib/algorithms/pn/validation/token-trails/token-trail-validator.service';
 import { TokenTrailValidationResult } from '../../../../../../ilpn-components/src/lib/algorithms/pn/validation/classes/validation-result';
@@ -129,6 +131,7 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
     protected tourService = inject(TokenTrailTourService);
     protected tabStateService = inject(TabStateService);
     private loaderService = inject(PetriNetLoaderService);
+    private _layoutService = inject(LayoutCalculationService);
 
     // Bind to service state
     readonly drawnElements = this.stateService.drawnElements;
@@ -329,6 +332,32 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
 
         const actions: DrawToolbarAction[] = [];
 
+        if (this.tabStateService.isPresentationMode() && this.tabStateService.currentTab() !== Tab.PRACTICE) {
+            actions.push({
+                icon: 'mediation',
+                tooltip: 'LAYOUT_SELECT',
+                color: 'primary',
+                isActive: !disabled && !showingSolution && !this._layoutService.isCalculating(),
+                action: () => {
+                    /* empty because we trigger the menu */
+                },
+                menu: [
+                    {
+                        label: 'LAYOUT_SPRING_EMBEDDER',
+                        icon: 'bubble_chart',
+                        action: () => this._layoutService.calculateSpringEmbedderLayout(),
+                        disabled: this._layoutService.isCalculating(),
+                    },
+                    {
+                        label: 'LAYOUT_SUGIYAMA',
+                        icon: 'schema',
+                        action: () => this._layoutService.calculateSugiyamaLayout(),
+                        disabled: this._layoutService.isCalculating(),
+                    },
+                ],
+            });
+        }
+
         // 2. Solution Action (Puzzle mode only)
         if (mode === LpnDisplayMode.Puzzle) {
             actions.push({
@@ -341,6 +370,7 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
         }
 
         const sourceNet = this.goalsService.sourceNet();
+        const hasSourceNet = !!sourceNet && sourceNet.getNodes().length > 0;
         const hasConcurrency = sourceNet ? this.goalsService.hasConcurrencyInNet(sourceNet) : false;
         const hasConflict = sourceNet ? this.goalsService.hasConflictInNet(sourceNet) : false;
         const hasLoop = sourceNet ? this.goalsService.hasLoopInNet(sourceNet) : false;
@@ -389,7 +419,7 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
                 icon: 'science',
                 tooltip: 'TOKEN_TRAIL.BUTTON_SYNTHESIZE_LPN',
                 color: 'accent',
-                isActive: !showingSolution,
+                isActive: !showingSolution && hasSourceNet,
                 action: () => {
                     /* empty because we trigger the menu */
                 },

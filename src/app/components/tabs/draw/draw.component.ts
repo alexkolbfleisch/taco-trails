@@ -29,6 +29,8 @@ import { DisplayableNode } from '../../../classes/displayable-graph.interface';
 import { DrawTourService } from '../../../services/draw-tour.service';
 import { TabStateService } from '../../../services/tab-state.service';
 import { Tab } from '../../../classes/tabs';
+import { LayoutCalculationService } from '../../../services/layout-calculation.service';
+import { ClearNetService } from '../../../services/clear-net.service';
 
 /**
  * DrawComponent
@@ -80,6 +82,8 @@ export class DrawComponent implements AfterViewInit, OnDestroy, OnInit {
     private _tourService = inject(DrawTourService);
     /** Service for tracking the active tab */
     private _tabStateService = inject(TabStateService);
+    private _layoutService = inject(LayoutCalculationService);
+    private _clearNetService = inject(ClearNetService);
 
     // ===== Reactive State Signals from DrawService =====
     /** Observable array of all drawn elements (places, transitions, arcs) */
@@ -397,7 +401,42 @@ export class DrawComponent implements AfterViewInit, OnDestroy, OnInit {
      * @returns {DrawToolbarAction[]} Array of toolbar action configurations
      */
     toolbarActions = computed<DrawToolbarAction[]>(() => {
-        return [];
+        const actions: DrawToolbarAction[] = [];
+        if (this._tabStateService.isPresentationMode()) {
+            actions.push(
+                {
+                    icon: 'mediation',
+                    tooltip: 'LAYOUT_SELECT',
+                    color: 'primary',
+                    isActive: this.draw.drawnElements().length > 0 && !this._layoutService.isCalculating(),
+                    action: () => {
+                        /* empty because we trigger the menu */
+                    },
+                    menu: [
+                        {
+                            label: 'LAYOUT_SPRING_EMBEDDER',
+                            icon: 'bubble_chart',
+                            action: () => this._layoutService.calculateSpringEmbedderLayout(),
+                            disabled: this._layoutService.isCalculating(),
+                        },
+                        {
+                            label: 'LAYOUT_SUGIYAMA',
+                            icon: 'schema',
+                            action: () => this._layoutService.calculateSugiyamaLayout(),
+                            disabled: this._layoutService.isCalculating(),
+                        },
+                    ],
+                },
+                {
+                    icon: 'delete_outline',
+                    tooltip: 'CLEAR_NET',
+                    color: 'warn',
+                    isActive: this.draw.drawnElements().length > 0 || !!this._displayService.diagram,
+                    action: () => this._clearNetService.clearNet(),
+                },
+            );
+        }
+        return actions;
     });
 
     /**
