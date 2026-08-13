@@ -620,9 +620,13 @@ export class TokenTrailDrawDisplayComponent implements OnInit, OnDestroy, AfterV
             if (element instanceof Condition && displayMode === LpnDisplayMode.Puzzle) {
                 tooltipText = element.baseName || element.displayLabel || '';
             }
+            const isLpnPlace = element instanceof Condition;
+            const isFocusMode = this.tabStateService.isPresentationMode();
             const labelLength = tooltipText.length;
             let shouldShowTooltip = false;
-            if (labelLength > 15) {
+            if (isLpnPlace && isFocusMode) {
+                shouldShowTooltip = false;
+            } else if (labelLength > 15) {
                 shouldShowTooltip = true;
             } else if (displayMode === LpnDisplayMode.Puzzle) {
                 shouldShowTooltip = labelLength > 5;

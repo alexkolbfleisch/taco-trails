@@ -8,6 +8,7 @@ import { DiagramPlace } from '../../../classes/diagram/diagram-place';
 import { PLACE_RADIUS, TRANSITION_SIZE } from '../display.constants';
 import { Condition } from '../../../classes/labeled-net.model';
 import { TokenTrailStateService, LpnDisplayMode } from '../../../services/token-trail-state.service';
+import { TabStateService } from '../../../services/tab-state.service';
 
 @Component({
     selector: 'g[appSvgNode]',
@@ -27,6 +28,7 @@ export class SvgNodeComponent {
     readonly diagramNode = input<DisplayableNode>();
     private _playService = inject(PlayService);
     private _tokenTrailStateService = inject(TokenTrailStateService, { optional: true });
+    private _tabStateService = inject(TabStateService);
 
     readonly showInnerLabel = input<boolean>(false);
     readonly transitionLabelPlacement = input<'inside' | 'below'>('inside');
@@ -112,6 +114,10 @@ export class SvgNodeComponent {
             return '';
         }
         const label = node?.displayLabel || '';
+        const isLpnPlace = node instanceof Condition;
+        if (isLpnPlace && this._tabStateService.isPresentationMode()) {
+            return label;
+        }
         if (label.length > this.MAX_CHARS) {
             return label.substring(0, this.MAX_CHARS) + '...';
         }

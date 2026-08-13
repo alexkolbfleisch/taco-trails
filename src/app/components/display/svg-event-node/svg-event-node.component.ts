@@ -76,6 +76,11 @@ export class SvgEventNodeComponent {
             label = '';
         }
 
+        const isLpnPlace = n instanceof Condition || this.isCondition();
+        if (isLpnPlace && this._tabStateService.isPresentationMode()) {
+            return label;
+        }
+
         if (label.length > this.MAX_CHARS) {
             return label.substring(0, this.MAX_CHARS) + '...';
         }
@@ -84,13 +89,19 @@ export class SvgEventNodeComponent {
 
     /**
      * Untruncated full display label for the node, used for hover tooltips.
+     * Returns empty string if the whole label is already shown, avoiding redundant tooltips.
      */
     readonly fullLabel = computed(() => {
         const n = this.diagramNode();
         if (n instanceof Condition && this.displayMode() === LpnDisplayMode.Puzzle) {
             return n.baseName || n.displayLabel || '';
         }
-        return n?.displayLabel || '';
+        const full = n?.displayLabel || '';
+        const displayed = this.displayLabel();
+        if (displayed === full) {
+            return '';
+        }
+        return full;
     });
 
     readonly conditionLabelClass = computed(() => 'node-label');
